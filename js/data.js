@@ -286,7 +286,8 @@ const SkinImages = {};
 function preloadSkins() {
   for (const s of SKINS) if (s.kind === 'img') {
     const im = new Image();
-    im.src = s.src;
+    // 优先用内联 data-URI（纯文本、无外部依赖）；缺失时回退到 assets/ 下的 png
+    im.src = (typeof SKIN_DATA_URI !== 'undefined' && SKIN_DATA_URI[s.id]) ? SKIN_DATA_URI[s.id] : s.src;
     SkinImages[s.id] = im;
   }
 }
