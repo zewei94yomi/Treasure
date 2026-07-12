@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>惊魂寻宝鸭 · 搜打撤</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ======== 主菜单 ======== -->
+<div id="screen-menu" class="screen active">
+  <div class="menu-fog"></div>
+  <div class="menu-ghost g1">👻</div>
+  <div class="menu-ghost g2">🦇</div>
+  <div id="save-warning" style="display:none" class="save-warning">⚠️ 检测到浏览器阻止了存档写入——请改用 <code>python3 -m http.server</code> 方式游玩，否则进度无法保存！</div>
+  <div class="menu-box">
+    <h1 class="game-title">惊魂寻宝鸭</h1>
+    <div class="game-subtitle">搜宝箱 · 躲怪物 · 活着撤离 🦆</div>
+    <div id="menu-info" class="menu-info"></div>
+    <div class="menu-buttons">
+      <button class="btn big primary" onclick="UI.showSetup()">🗺️ 开始寻宝</button>
+      <button class="btn big" onclick="UI.showCodex()">📖 宝物图鉴 <span id="menu-codex-badge" class="new-badge float"></span></button>
+      <button class="btn big" onclick="UI.showShop()">🛒 鸭可夫商店</button>
+      <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
+      <button class="btn big" onclick="document.getElementById('help-overlay').style.display='flex'">❓ 操作说明</button>
+      <button class="btn" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 出发准备 ======== -->
+<div id="screen-setup" class="screen">
+  <div class="panel wide">
+    <h2>出发准备</h2>
+    <h3 class="section-label">选择模式</h3>
+    <div id="setup-modes" class="card-row"></div>
+    <h3 class="section-label">选择地图</h3>
+    <div id="setup-maps" class="card-row"></div>
+    <h3 class="section-label">选择难度</h3>
+    <div id="setup-diffs" class="card-row"></div>
+    <h3 class="section-label">装备与皮肤</h3>
+    <div id="setup-loadout" class="loadout-box"></div>
+    <div class="panel-actions">
+      <button class="btn" onclick="UI.showMenu()">← 返回</button>
+      <button class="btn" onclick="UI.showShop()">🛒 先去商店</button>
+      <button class="btn primary" onclick="UI.startRun()">🚀 出发！</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 商店 ======== -->
+<div id="screen-shop" class="screen">
+  <div class="panel wide">
+    <div class="panel-head">
+      <h2>🛒 鸭可夫商店</h2>
+      <span id="shop-gold" class="gold-chip big"></span>
+    </div>
+    <h3 class="section-label">武器</h3>
+    <div id="shop-weapons" class="shop-grid"></div>
+    <h3 class="section-label">弹药</h3>
+    <div id="shop-ammo" class="shop-grid"></div>
+    <h3 class="section-label">补给与药剂</h3>
+    <div id="shop-supplies" class="shop-grid"></div>
+    <h3 class="section-label">护甲与装备</h3>
+    <div id="shop-armor" class="shop-grid"></div>
+    <h3 class="section-label">🔧 我的军械库（维修）</h3>
+    <div id="shop-armory" class="shop-grid"></div>
+    <div class="panel-actions">
+      <button class="btn" onclick="UI.showMenu()">← 返回菜单</button>
+      <button class="btn primary" onclick="UI.showSetup()">去出发 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 宝物图鉴 ======== -->
+<div id="screen-codex" class="screen">
+  <div class="panel wide">
+    <div class="panel-head">
+      <h2>📖 宝物图鉴</h2>
+      <div id="codex-summary" class="codex-summary"></div>
+    </div>
+    <div id="codex-body"></div>
+    <div class="panel-actions">
+      <button class="btn" onclick="UI.showMenu()">← 返回菜单</button>
+    </div>
+  </div>
+  <div id="codex-modal" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeDetail()">
+    <div class="modal-box">
+      <div id="codex-modal-body"></div>
+      <button class="btn small" onclick="UI.closeDetail()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 奖杯陈列室 ======== -->
+<div id="screen-trophies" class="screen">
+  <div class="panel wide">
+    <div class="panel-head">
+      <h2>🏆 奖杯陈列室</h2>
+      <span id="trophy-count" class="codex-chip"></span>
+    </div>
+    <div id="trophy-body" class="trophy-grid"></div>
+    <div class="panel-actions">
+      <button class="btn" onclick="UI.showMenu()">← 返回菜单</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 游戏 ======== -->
+<div id="screen-game" class="screen game-screen">
+  <div class="game-wrap">
+    <canvas id="game-canvas" width="1280" height="720"></canvas>
+    <div id="hud">
+      <!-- 全部玩家状态统一置于正下方（背包栏上方） -->
+      <div id="hud-bottom">
+        <div class="bottom-bar" id="hud-bot-p1">
+          <div class="bb-left">
+            <div class="bb-head"><span class="bb-name">1P</span><span class="hud-status"></span></div>
+            <div class="hp-bar"><div class="hp-fill"></div></div>
+            <div class="armor-bar"><div class="armor-fill"></div></div>
+            <div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div>
+          </div>
+          <div class="bb-right">
+            <div class="bag-strip"></div>
+            <div class="bb-meta"><span class="hud-consum"></span><span class="hud-weight"></span><span class="hud-bag-info"></span></div>
+            <div class="hud-fx"></div>
+          </div>
+        </div>
+        <div class="bottom-bar" id="hud-bot-p2">
+          <div class="bb-left">
+            <div class="bb-head"><span class="bb-name">2P</span><span class="hud-status"></span></div>
+            <div class="hp-bar"><div class="hp-fill"></div></div>
+            <div class="armor-bar"><div class="armor-fill"></div></div>
+            <div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div>
+          </div>
+          <div class="bb-right">
+            <div class="bag-strip"></div>
+            <div class="bb-meta"><span class="hud-consum"></span><span class="hud-weight"></span><span class="hud-bag-info"></span></div>
+            <div class="hud-fx"></div>
+          </div>
+        </div>
+      </div>
+      <div id="hud-supplies"></div>
+      <div id="hud-toasts"></div>
+      <div id="vignette"></div>
+      <div id="hurt-flash"></div>
+    </div>
+    <div id="merchant-overlay" class="modal-mask" style="display:none">
+      <div class="modal-box merchant">
+        <div class="merchant-head">
+          <h3>🏮 神秘商人</h3>
+          <span id="merchant-gold" class="gold-chip"></span>
+        </div>
+        <p class="merchant-tip">"呱……看看货吧，旅行者。宝物换现钱，概不赊账。"</p>
+        <h4 class="section-label">出售</h4>
+        <div id="merchant-buy" class="shop-grid dense"></div>
+        <h4 class="section-label">收购你的宝物（55% 价值，不计入图鉴）</h4>
+        <div id="merchant-sell" class="shop-grid dense"></div>
+        <button class="btn small" onclick="Game.current&&Game.current.closeMerchant()">离开（Esc）</button>
+      </div>
+    </div>
+    <div id="pause-overlay" class="modal-mask" style="display:none">
+      <div class="modal-box">
+        <h3>⏸ 暂停</h3>
+        <p class="pause-tip">怪物也在等你……</p>
+        <button class="btn primary" onclick="Game.current&&Game.current.togglePause()">继续游戏</button>
+        <button class="btn" onclick="Game.current&&Game.current.abandonRun()">🏳️ 放弃本局（丢失身上宝物）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 结算 ======== -->
+<div id="screen-result" class="screen">
+  <div class="panel">
+    <h2 id="result-title"></h2>
+    <div id="result-stats" class="result-stats"></div>
+    <div id="result-body"></div>
+    <div class="panel-actions">
+      <button class="btn" onclick="UI.showMenu()">返回菜单</button>
+      <button class="btn" onclick="UI.showCodex()">📖 查看图鉴</button>
+      <button class="btn primary" onclick="UI.retry()">🔄 再来一局</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 操作说明 ======== -->
+<div id="help-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box help">
+    <h3>操作说明</h3>
+    <table class="help-table">
+      <tr><th></th><th style="color:#ffd93d">1P 🟡</th><th style="color:#9fd8ff">2P 🔵</th></tr>
+      <tr><td>移动</td><td>W A S D</td><td>方向键 ↑↓←→</td></tr>
+      <tr><td>射击 / 挥击</td><td>F 或 空格</td><td>.（句点）</td></tr>
+      <tr><td>互动（开箱/救人/交易）</td><td>按住 E</td><td>按住 ,（逗号）</td></tr>
+      <tr><td>切换武器（主/副）</td><td>R</td><td>L</td></tr>
+      <tr><td>使用药品</td><td>Q</td><td>M</td></tr>
+      <tr><td>切换药品</td><td>Tab</td><td>K</td></tr>
+      <tr><td>潜行（按住）</td><td>左 Shift</td><td>右 Shift</td></tr>
+      <tr><td>暂停</td><td colspan="2">Esc</td></tr>
+    </table>
+    <div class="help-rules">
+      <p>🎯 <b>目标</b>：开宝箱搜刮宝物，走到撤离点站稳 2 秒，活着带出去的宝物才会收录进图鉴、换成金币。</p>
+      <p>💀 <b>阵亡惩罚</b>：宝物散落原地（图鉴记为"目击"），携带的武器、护甲、腰包永久丢失。</p>
+      <p>🔫 <b>武器</b>：可带主副两把。枪有弹药、耐久和有效射程；命中会击退怪物（石巨魁免疫）。</p>
+      <p>🤫 <b>潜行</b>：按住 Shift 缓步移动——无脚步声、更难被看见。影袭匕首背刺未察觉的怪物造成 3 倍伤害；静音鹅弩射击不引怪。</p>
+      <p>⚖️ <b>负重</b>：宝物、武器、护甲都有重量。轻装跑得快还安静，超载又慢又吵还显眼。</p>
+      <p>👂 <b>动静</b>：枪声和脚步声会引来怪物。怪物起手有前摇硬直，看到红圈就跑！</p>
+      <p>🏮 <b>神秘商人</b>：困难/地狱模式出没，卖稀罕货，也按 55% 价值收宝物（换现钱但不计图鉴）。</p>
+    </div>
+    <button class="btn small" onclick="document.getElementById('help-overlay').style.display='none'">知道了</button>
+  </div>
+</div>
+
+<script src="js/sfx.js"></script>
+<script src="js/music.js"></script>
+<script src="js/data.js"></script>
+<script src="js/save.js"></script>
+<script src="js/map.js"></script>
+<script src="js/vision.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
