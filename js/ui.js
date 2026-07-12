@@ -4,7 +4,7 @@
 const UI = (() => {
   const $ = id => document.getElementById(id);
   let setupState = {
-    mode: 1, diff: 'normal', map: 'manor',
+    mode: 1, diff: 'normal', map: 'manor', gameplay: 'classic',
     loadouts: [{ w1: null, w2: null, armor: null, pouch: false }, { w1: null, w2: null, armor: null, pouch: false }],
     skins: ['duck_yellow', 'duck_blue'],
   };
@@ -116,6 +116,22 @@ const UI = (() => {
       </div>`;
     $('setup-maps').innerHTML = mapCards;
 
+    // 玩法：经典搜打撤 / 无双割草
+    $('setup-gameplay').innerHTML = `
+      <div class="card ${setupState.gameplay === 'classic' ? 'sel' : ''}" onclick="UI.setGameplay('classic')">
+        <div class="card-icon">🗺️</div>
+        <div class="card-title">经典搜打撤</div>
+        <div class="card-desc">搜宝箱、躲怪物、活着撤离。图鉴与财富之路。</div>
+      </div>
+      <div class="card ${setupState.gameplay === 'horde' ? 'sel' : ''}" onclick="UI.setGameplay('horde')">
+        <div class="card-icon">🌾</div>
+        <div class="card-title">无双割草</div>
+        <div class="card-desc">怪山怪海，撑过 10 分钟！击杀掉经验，升级三选一，弹药无限、阵亡不丢装备。${SAVE.hordeBest ? `<br>最佳：${Math.floor(SAVE.hordeBest.time/60)}:${String(SAVE.hordeBest.time%60).padStart(2,'0')} · ${SAVE.hordeBest.kills}杀 · Lv.${SAVE.hordeBest.level}` : ''}</div>
+      </div>`;
+    const hordeSel = setupState.gameplay === 'horde';
+    $('setup-diffs-label').style.display = hordeSel ? 'none' : '';
+    $('setup-diffs').style.display = hordeSel ? 'none' : '';
+
     // 双武器 + 护甲 + 腰包 + 皮肤
     let html = '';
     const allTakenW = [], allTakenA = [];
@@ -186,6 +202,7 @@ const UI = (() => {
   }
 
   function setMode(m) { setupState.mode = m; renderSetup(); }
+  function setGameplay(g) { setupState.gameplay = g; renderSetup(); }
   function setDiff(d) { setupState.diff = d; renderSetup(); }
   function setMap(m) { setupState.map = m; renderSetup(); }
   function setGear(i, slot, v) {
@@ -217,7 +234,30 @@ const UI = (() => {
     SAVE.settings.skins = setupState.skins.slice();
     persistSave();
     showScreen('screen-game');
-    new Game(setupState.mode, setupState.diff, setupState.loadouts.slice(0, setupState.mode), mapId, setupState.skins);
+    new Game(setupState.mode, setupState.diff, setupState.loadouts.slice(0, setupState.mode), mapId, setupState.skins,
+             { horde: setupState.gameplay === 'horde' });
+  }
+
+  // ---------- 无双割草：升级三选一 ----------
+  function renderLevelup(game, choices) {
+    const H = game.hordeState;
+    $('levelup-cards').innerHTML = choices.map((u, i) => {
+      const cur = u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id]) || 0;
+      return `
+      <div class="levelup-card" onclick="UI.chooseLevelup(${i})">
+        <span class="lv-icon">${u.icon}</span>
+        <span class="lv-name">${u.name}</span>
+        <span class="lv-level">Lv.${cur} → Lv.${cur + 1}${cur + 1 >= u.max ? '（满级）' : ''}</span>
+        <span class="lv-desc">${u.desc}</span>
+        <span class="lv-key">按 ${i + 1}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('levelup-overlay').style.display = 'flex';
+  }
+  function chooseLevelup(i) {
+    const g = Game.current;
+    if (!g || !g.levelupOpen || !g.levelupChoices || !g.levelupChoices[i]) return;
+    g.applyUpgrade(g.levelupChoices[i]);
   }
 
   // ---------- 奖杯陈列室 ----------
@@ -498,6 +538,24 @@ const UI = (() => {
   // ---------- 结算 ----------
   function showResult(res) {
     showScreen('screen-result');
+    if (res.horde) {
+      $('result-title').textContent = res.victory ? '🌾 割草大捷！撑过了十分钟！' : '💀 被怪潮吞没……';
+      $('result-title').className = res.victory ? 'ok' : 'fail';
+      const mm = Math.floor(res.time / 60), ss = Math.floor(res.time % 60);
+      $('result-stats').innerHTML =
+        `【${res.mapName}】无双割草 · 存活 ${mm}:${String(ss).padStart(2, '0')} · 等级 Lv.${res.level} · 击杀 <b class="gold-text">${res.kills}</b>` +
+        ` · 战利现金 <b class="gold-text">💰${res.cash}</b>${res.bonus ? ` · 通关奖金 <b class="gold-text">💰${res.bonus}</b>` : ''}`;
+      let hordeHtml = `<div class="result-player"><div class="result-player-head" style="color:#ffd93d">📈 历史最佳：存活 ${Math.floor(res.best.time/60)}:${String(res.best.time%60).padStart(2,'0')} · ${res.best.kills} 杀 · Lv.${res.best.level}</div>`;
+      if (res.mode === 2) {
+        hordeHtml += res.players.map(pr => `<div style="color:${pr.idx === 0 ? '#ffd93d' : '#9fd8ff'}">${pr.idx + 1}P 击杀 ${pr.kills}</div>`).join('');
+      }
+      hordeHtml += '</div>';
+      if (res.newTrophies && res.newTrophies.length) {
+        hordeHtml += `<div class="result-rewards">${res.newTrophies.map(t => `<div>🏆 新奖杯：${t.icon} ${t.name}</div>`).join('')}</div>`;
+      }
+      $('result-body').innerHTML = hordeHtml;
+      return;
+    }
     $('result-title').textContent = res.success ? '🎉 撤离成功！' : '💀 全员折损……';
     $('result-title').className = res.success ? 'ok' : 'fail';
     const mm = Math.floor(res.time / 60), ss = Math.floor(res.time % 60);
@@ -546,7 +604,8 @@ const UI = (() => {
   }
 
   return { showScreen, showMenu, showSetup, showShop, showCodex, showResult, showDetail, closeDetail,
-           setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, startRun, retry, toggleMusic,
+           setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
+           renderLevelup, chooseLevelup,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell };

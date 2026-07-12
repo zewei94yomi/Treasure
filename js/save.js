@@ -24,6 +24,7 @@ function defaultSave() {
     mercTrials: { guard: 2, vet: 2, ace: 2 },   // 雇佣兵免费试玩次数
     trophies: {},              // 奖杯 id -> 解锁时间戳
     settings: { music: true, skins: ['duck_yellow', 'duck_blue'], lastMap: 'manor', lastDiff: 'normal', lastMode: 1 },
+    hordeBest: null,           // 无双割草最佳战绩 { time, kills, level }
     stats: { runs: 0, extractions: 0, goldEarned: 0, kills: 0, chestsOpened: 0, deaths: 0 },
   };
 }

@@ -401,5 +401,48 @@ const TROPHIES = [
   { id:'collector_36',  name:'半部图鉴', icon:'📖', desc:'图鉴收录 36 件宝物' },
   { id:'collector_all', name:'午夜馆长', icon:'👑', desc:'收录全部 72 件宝物' },
   { id:'tycoon',        name:'富甲一方', icon:'🏦', desc:'持有金币达到 10000' },
+  { id:'horde_win',     name:'无双割草王', icon:'🌾', desc:'无双割草模式存活满 10 分钟' },
+  { id:'horde_slayer',  name:'千军辟易', icon:'💥', desc:'无双割草单局击杀 150 只怪物' },
 ];
 const TROPHY_BY_ID = Object.fromEntries(TROPHIES.map(t => [t.id, t]));
+
+// ============ 无双割草模式 ============
+// 怪物基准（数值随时间在局内继续膨胀）
+const HORDE_CFG = {
+  id:'horde', name:'割草', icon:'🌾',
+  mHp:42, mDmg:15, chaseSpeed:98, patrolSpeed:70, vision:9999, hear:9999, memory:99,
+  smart:1, huntInterval:0, lurkerGuard:false, merchant:false,
+  spawn:{}, chests:{ wood:0, silver:0, gold:0, mystery:0 },
+};
+const HORDE_DURATION = 600;        // 存活 10 分钟即大胜利
+const HORDE_CAP = 80;              // 同屏怪物上限（性能与可读性）
+const HORDE_BOSS_AT = [150, 330, 510];  // Boss 波时间点
+
+// 随时间解锁的刷怪池
+function hordeSpawnPool(t) {
+  if (t < 60)  return ['shade', 'shade', 'skitter'];
+  if (t < 180) return ['shade', 'skitter', 'slime', 'wisp'];
+  if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'skeleton', 'brute'];
+  return ['shade', 'skitter', 'slime', 'wisp', 'skeleton', 'brute', 'lurker', 'banshee', 'mimic'];
+}
+
+// 升级三选一的池子：mods 数值强化 + skill 奇招技能（可重复选升级）
+const HORDE_UPGRADES = [
+  { id:'dmg',    name:'狂怒弹头',   icon:'💢', max:5, desc:'全部伤害 +25%',        mod:m => m.dmg *= 1.25 },
+  { id:'rate',   name:'嘎特林之魂', icon:'🌀', max:5, desc:'攻击速度 +22%',        mod:m => m.rate *= 1.22 },
+  { id:'multi',  name:'分裂弹道',   icon:'🎯', max:3, desc:'每次射击 +1 发弹道',   mod:m => m.multi += 1 },
+  { id:'pierce', name:'贯穿之力',   icon:'📌', max:3, desc:'子弹穿透 +1 个目标',   mod:m => m.pierce += 1 },
+  { id:'range',  name:'鹰眼延伸',   icon:'🔭', max:3, desc:'射程 +18%',            mod:m => m.range *= 1.18 },
+  { id:'knock',  name:'重锤冲击',   icon:'🔨', max:3, desc:'击退力 +45%',          mod:m => m.knock *= 1.45 },
+  { id:'speed',  name:'疾风鸭步',   icon:'💨', max:4, desc:'移动速度 +9%',         mod:m => m.speed *= 1.09 },
+  { id:'maxhp',  name:'钢铁鸭躯',   icon:'❤️', max:4, desc:'最大生命 +30%，并回复一半', special:'maxhp' },
+  { id:'magnet', name:'贪婪磁场',   icon:'🧲', max:4, desc:'经验/金币拾取范围 +45%', mod:m => m.magnet *= 1.45 },
+  { id:'steal',  name:'嗜血之喙',   icon:'🩸', max:3, desc:'每次击杀回复 2 点生命', mod:m => m.lifesteal += 2 },
+  { id:'regen',  name:'再生羽毛',   icon:'🪶', max:3, desc:'每秒回复 2 点生命',     mod:m => m.regen += 2 },
+  { id:'orbit',     name:'环绕飞锅', icon:'🍳', max:5, skill:'orbit',     desc:'+1 只环绕身边的平底锅，撞飞怪物' },
+  { id:'missile',   name:'追踪鸭雷', icon:'🦆', max:5, skill:'missile',   desc:'周期发射自动追踪的爆走鸭' },
+  { id:'nova',      name:'寒冰新星', icon:'❄️', max:5, skill:'nova',      desc:'周期冻结并炸伤身边的怪物' },
+  { id:'trail',     name:'火焰足迹', icon:'🔥', max:5, skill:'trail',     desc:'跑动时身后留下灼烧路径' },
+  { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'周期劈出在怪群中弹跳的连锁闪电' },
+];
+const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));

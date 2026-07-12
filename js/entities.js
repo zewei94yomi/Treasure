@@ -183,6 +183,12 @@ class Monster {
     const cfg = this.cfg;
     const visRange = cfg.vision * this.type.visMul * (MapData.mods.monsterVision || 1);
 
+    // —— 无双割草：无脑集群冲锋（跳过蹲守/凝视/尖啸/巡逻感知） ——
+    if (game.horde) {
+      const prey = game.nearestActivePlayer(this.x, this.y);
+      if (prey) { this.state = 'chase'; this.target = prey; this.lastKnown = { x: prey.x, y: prey.y }; this.memoryT = 99; }
+      else { this.state = 'patrol'; this.target = null; }
+    } else {
     // —— 潜伏者蹲守 ——
     if (this.state === 'ambush') {
       for (const p of game.players) {
@@ -267,6 +273,7 @@ class Monster {
         }
       }
     }
+    }  // 结束 非割草模式感知分支
 
     // —— 行动 ——
     const baseSpd = this.type.spdMul;
@@ -342,7 +349,7 @@ class Monster {
       // 幽火吐弹
       if (this.target && this.target.active) {
         const a = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-        game.monsterOrbs.push(new MonsterOrb(this.x, this.y, a, Math.round(this.cfg.mDmg * this.type.dmgMul)));
+        game.monsterOrbs.push(new MonsterOrb(this.x, this.y, a, Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1))));
         Sfx.wisp();
       }
       return;
@@ -357,8 +364,9 @@ class Monster {
     }
     if (!victim) return;
     if (vd < PLAYER_R + this.r + 16) {
-      if (victim.isMerc) victim.hurt(Math.round(this.cfg.mDmg * this.type.dmgMul), game);
-      else game.damagePlayer(victim, Math.round(this.cfg.mDmg * this.type.dmgMul), this);
+      const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1));
+      if (victim.isMerc) victim.hurt(hitDmg, game);
+      else game.damagePlayer(victim, hitDmg, this);
     } else {
       game.floater(this.x, this.y - 20, '挥空！', '#9fd8ff');
     }
@@ -448,6 +456,8 @@ class Bullet {
     this.laser = def.id === 'laser';
     this.frost = def.id === 'frost';
     this.homing = !def.pellets;   // 散射类武器不追踪
+    this.turn = def.turn || 3.2;  // 追踪转向速率（弧度/秒）
+    this.duck = !!def.duck;       // 追踪鸭雷外观
     this.hitSet = new Set();
   }
   update(dt, game) {
@@ -465,7 +475,7 @@ class Bullet {
       if (best) {
         let da = Math.atan2(best.y - this.y, best.x - this.x) - this.angle;
         da = Math.atan2(Math.sin(da), Math.cos(da));
-        const turn = 3.2 * dt;
+        const turn = this.turn * dt;
         this.angle += Math.max(-turn, Math.min(turn, da));
       }
     }
@@ -616,5 +626,15 @@ class Merchant {
     this.anim = 0;
     this.stock = merchantStock();
     this.sold = new Set();      // 已售出的货位下标
+  }
+}
+
+// 无双割草：经验宝石（磁吸拾取）
+class XPGem {
+  constructor(x, y, v) {
+    this.x = x; this.y = y;
+    this.v = v;                    // 经验值
+    this.anim = Math.random() * 10;
+    this.vx = 0; this.vy = 0;
   }
 }

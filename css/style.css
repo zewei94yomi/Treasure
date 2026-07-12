@@ -385,3 +385,25 @@ body {
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- 无双割草：升级三选一 ---------- */
+.levelup-box {
+  background: var(--panel); border: 3px solid var(--gold); border-radius: 22px;
+  padding: 26px 30px; text-align: center;
+  box-shadow: 0 0 60px rgba(255, 217, 61, .25), 0 18px 60px rgba(0,0,0,.6);
+  animation: pop-in .22s ease-out;
+}
+.levelup-box h3 { color: var(--gold); font-size: 24px; margin-bottom: 4px; }
+.levelup-tip { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+.levelup-cards { display: flex; gap: 14px; }
+.levelup-card {
+  width: 176px; background: var(--panel2); border: 3px solid var(--line); border-radius: 16px;
+  padding: 18px 14px; cursor: pointer; transition: all .12s;
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.levelup-card:hover { border-color: var(--gold); transform: translateY(-4px); box-shadow: 0 8px 24px rgba(255,217,61,.25); }
+.levelup-card .lv-icon { font-size: 42px; }
+.levelup-card .lv-name { font-weight: 800; font-size: 17px; }
+.levelup-card .lv-level { font-size: 12px; color: var(--gold); }
+.levelup-card .lv-desc { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+.levelup-card .lv-key { font-size: 11px; color: #8b7fb3; }

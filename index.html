@@ -37,7 +37,9 @@
     <div id="setup-modes" class="card-row"></div>
     <h3 class="section-label">选择地图</h3>
     <div id="setup-maps" class="card-row"></div>
-    <h3 class="section-label">选择难度</h3>
+    <h3 class="section-label">选择玩法</h3>
+    <div id="setup-gameplay" class="card-row"></div>
+    <h3 class="section-label" id="setup-diffs-label">选择难度</h3>
     <div id="setup-diffs" class="card-row"></div>
     <h3 class="section-label">装备与皮肤</h3>
     <div id="setup-loadout" class="loadout-box"></div>
@@ -158,6 +160,13 @@
         <h4 class="section-label">收购你的宝物（55% 价值，不计入图鉴）</h4>
         <div id="merchant-sell" class="shop-grid dense"></div>
         <button class="btn small" onclick="Game.current&&Game.current.closeMerchant()">离开（Esc）</button>
+      </div>
+    </div>
+    <div id="levelup-overlay" class="modal-mask" style="display:none">
+      <div class="levelup-box">
+        <h3>⬆️ 升级！选择一项强化</h3>
+        <p class="levelup-tip">点击卡片，或按 1 / 2 / 3</p>
+        <div id="levelup-cards" class="levelup-cards"></div>
       </div>
     </div>
     <div id="pause-overlay" class="modal-mask" style="display:none">
