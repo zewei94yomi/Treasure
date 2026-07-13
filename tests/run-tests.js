@@ -113,7 +113,7 @@ check('军械库持久化：addWeapon/addArmor 立即落盘', run(`
 // —— 第四轮新增 ——
 check('宝箱怪概率降至 35%', run('CHEST_TIERS.mystery.mimicChance') === 0.35);
 check('隐身药剂 10 秒', run('CONSUMABLES.stealth.invis') === 10);
-check('奖杯 14 个定义完整', run(`TROPHIES.length === 14 && TROPHIES.every(t => t.name && t.desc && t.icon)`));
+check('奖杯 15 个定义完整', run(`TROPHIES.length === 15 && TROPHIES.every(t => t.name && t.desc && t.icon)`));
 check('雇佣兵 3 档且新存档各 2 次试用', run(`
   Object.keys(MERCS).length === 3 &&
   (() => { localStorage.setItem(SAVE_KEY, ''); loadSave(); return SAVE.mercTrials.guard === 2 && SAVE.mercTrials.ace === 2; })()`));
@@ -166,7 +166,7 @@ check('rollWeather 只返回合法天气', run(`
   (() => { for (let i = 0; i < 200; i++) { const w = rollWeather(); if (!WEATHERS[w.id]) return false; } return true; })()`));
 check('道具 12 种定义完整', run(`POWERUP_KEYS.length === 12 && POWERUP_KEYS.every(k => POWERUPS[k].name && POWERUPS[k].icon && POWERUPS[k].desc)`));
 check('追踪弹全局参数强化(转向≥5)', run(`HOMING.turn >= 5 && HOMING.cone >= 0.7 && HOMING.dist >= 400`));
-check('奖杯 14 个定义完整', run(`TROPHIES.length === 14 && TROPHIES.every(t => t.name && t.desc && t.icon)`));
+check('奖杯 15 个含大逃亡', run(`TROPHIES.length === 15 && TROPHY_BY_ID.escape_dawn`));
 
 
 // ==================== 第六轮：键位/新怪/商人V2 ====================
@@ -204,8 +204,8 @@ check('新怪 6 种带贴图与机制字段', run(`
   MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
 check('3 个 Boss 定义与轮换表', run(`
   HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
-check('贴图数据 10 张（9怪+火球）且为 dataURI', run(`
-  Object.keys(MONSTER_SPRITES).length === 10 && MONSTER_SPRITES.fx_fireball && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('贴图数据 11 张（9怪+火球+圣剑）且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 11 && MONSTER_SPRITES.fx_fireball && MONSTER_SPRITES.fx_sword && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
 check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
 check('攻击%升级已削弱为加算', run(`
   (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
@@ -240,14 +240,53 @@ check('升级池扩至 42 项', run(`HORDE_UPGRADES.length === 42`));
     gameSrc.includes('rollCut'));
   const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
   check('horde.js 接入：无人机增强/鸭灵5秒复活/精绘地雷陨石',
-    hordeSrc.includes('15 + S.drone * 7') && hordeSrc.includes('ex.petRespawnT = 5') &&
+    hordeSrc.includes('24 + S.drone * 10') && hordeSrc.includes('ex.petRespawnT = 5') &&
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=11') && html.includes('monsterdex-overlay') && !html.includes('?v=10'));
+    html.includes('js/fx.js?v=14') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=14') && !html.includes('?v=13'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
+}
+
+// ==================== 第九轮：大逃亡/地图放大/图鉴/修复 ====================
+check('地图放大器：唯一点位不重复、密度点位翻倍', run(`
+  (() => { const s = scaleAscii(['#####', '#1cm#', '#####']);
+    const all = s.join('');
+    return s.length === 6 && s[0].length === 10 &&
+      (all.match(/1/g) || []).length === 1 && (all.match(/c/g) || []).length === 2; })()`));
+for (let i = 0; i < 3; i++) {
+  const r = JSON.parse(run(`
+    (() => { loadMap('escape');
+      return JSON.stringify({ sp: !!(MapData.spawns[0] && MapData.spawns[1]), exit: MapData.exitTiles.length > 0,
+        wide: MapData.w > 200, chests: MapData.chestSpots.length >= 10, nodes: MapData.monsterNodes.length >= 12,
+        merchant: !!MapData.merchantSpot,
+        path: bfsPath(MapData.spawns[0].x, MapData.spawns[0].y,
+                      MapData.exitRect.x + MapData.exitRect.w/2, MapData.exitRect.y + MapData.exitRect.h/2).length > 0 }); })()`));
+  check(`大逃亡随机图 #${i + 1}：出生/撤离/宝箱/怪点/商人/全程连通`, r.sp && r.exit && r.wide && r.chests && r.nodes && r.merchant && r.path);
+}
+check('MapData 携带放大后 ascii（prerender 防崩）', run(`
+  (() => { loadMap('manor'); return MapData.ascii.length === MapData.h && MapData.ascii[0].length === MapData.w; })()`));
+check('大逃亡配置与怪物池', run(`
+  ESCAPE_CFG.vision === 480 && ESCAPE.tideSpeed > 0 && escapePool(0.1).length > 0 && escapePool(0.9).includes('stoneling')`));
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('game.js：大逃亡引擎（潮汐/追兵/结算/开箱掉枪）齐全',
+    ['escapeUpdate', 'settleEscape', 'escapeLoot', 'this.tideX', 'escape_dawn'].every(k => gameSrc.includes(k)));
+  check('伤害数字有渲染代码且统一冒自 Monster.hurt',
+    gameSrc.includes('for (const n of this.dmgNums) {\n      const [sx, sy] = W2S(n.x, n.y);') === false ? gameSrc.includes('of this.dmgNums') && gameSrc.match(/of this\.dmgNums/g).length >= 2 : true);
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('Monster.hurt 集中冒伤害数字', entSrc.includes('game.dmgNum(this.x'));
+  check('Boss 头顶名字血条', gameSrc.includes("'👑 ' + m.type.name"));
+  check('贴图原生朝向镜像修正', gameSrc.includes("m.type.face === 'left'") && fs.readFileSync(base + 'data.js', 'utf8').split("face:'left'").length - 1 >= 5);
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  check('陨石结算移出技能守卫（红圈残留修复）', hordeSrc.includes('红圈永久残留'));
+  check('旋风斩圣剑扫圈 + 无人机三度增强', hordeSrc.includes('fx_sword') && hordeSrc.includes('24 + S.drone * 10'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('商人买活队友 + 大逃亡玩法卡', uiSrc.includes('merchantRevive') && uiSrc.includes("setGameplay('escape')"));
+  const dexSrc = fs.readFileSync(base + 'dex.js', 'utf8');
+  check('武器/技能图鉴（演示+等级调节）', ['showWeaponDex', 'showSkillDex', 'setSkillLv', 'SKILL_ANIM'].every(k => dexSrc.includes(k)));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

@@ -492,3 +492,13 @@ body {
 .mdex-lore { font-size: 12px; color: #aeb6cc; line-height: 1.45; }
 .mdex-hint { font-size: 11px; color: #7dd8a0; margin-top: 3px; line-height: 1.4; }
 @media (max-width: 640px) { .mdex-grid { grid-template-columns: 1fr; } }
+
+/* ======== 武器/技能图鉴 ======== */
+.wdex-card canvas { background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.05), rgba(0,0,0,.3));
+  border-radius: 10px; width: 100%; max-width: 216px; }
+.sdex-lv { float: right; font-size: 12px; color: #ffd93d; display: inline-flex; align-items: center; gap: 5px; }
+.btn.tiny { padding: 0 8px; font-size: 13px; line-height: 20px; min-width: 24px; border-radius: 7px; }
+.sdex-modgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.sdex-mod { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px; padding: 8px 10px; font-size: 12px; color: #c7cddc; }
+.sdex-mod span { color: #8a90a8; font-size: 11px; }

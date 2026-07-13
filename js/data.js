@@ -217,15 +217,15 @@ const MONSTER_TYPES = {
   charger:  { id:'charger',  name:'冲撞蛮牛', hpMul:1.3,  spdMul:0.9,  dmgMul:1.4, visMul:1.0,  r:18, kbMul:0.4, charger:true, windup:0.55, recover:0.6 },
   shroom:   { id:'shroom',   name:'毒爆菇',   hpMul:0.8,  spdMul:0.5,  dmgMul:0,   visMul:0.9,  r:14, kbMul:1.3, shroom:true },
   // —— 第七轮新怪（Dungeon Crawl CC0 贴图，机制各异） ——
-  warlock:   { id:'warlock',   name:'缚魂术士', hpMul:0.9,  spdMul:0.75, dmgMul:0.6, visMul:1.2,  r:15, kbMul:1,   sprite:'warlock',   caster:true,  windup:0.7, recover:0.6 },
-  venomsnake:{ id:'venomsnake',name:'毒鳞海蛇', hpMul:0.7,  spdMul:1.3,  dmgMul:0.6, visMul:0.9,  r:13, kbMul:1.4, sprite:'venomsnake',poison:4,     windup:0.28, recover:0.4 },
+  warlock:   { id:'warlock',   name:'缚魂术士', hpMul:0.9,  spdMul:0.75, dmgMul:0.6, visMul:1.2,  r:15, kbMul:1,   sprite:'warlock', face:'left',   caster:true,  windup:0.7, recover:0.6 },
+  venomsnake:{ id:'venomsnake',name:'毒鳞海蛇', hpMul:0.7,  spdMul:1.3,  dmgMul:0.6, visMul:0.9,  r:13, kbMul:1.4, sprite:'venomsnake', face:'left',poison:4,     windup:0.28, recover:0.4 },
   stoneling: { id:'stoneling', name:'石肤巨像', hpMul:2.8,  spdMul:0.5,  dmgMul:1.6, visMul:0.8,  r:21, kbMul:0,   sprite:'stonegiantling', windup:0.6, recover:0.8, memMul:2 },
-  direwolf:  { id:'direwolf',  name:'暗影恶狼', hpMul:0.6,  spdMul:1.7,  dmgMul:0.8, visMul:1.1,  r:14, kbMul:1.5, sprite:'direwolf',  windup:0.25, recover:0.35 },
+  direwolf:  { id:'direwolf',  name:'暗影恶狼', hpMul:0.6,  spdMul:1.7,  dmgMul:0.8, visMul:1.1,  r:14, kbMul:1.5, sprite:'direwolf', face:'left',  windup:0.25, recover:0.35 },
   leapspider:{ id:'leapspider',name:'跃击蛛',   hpMul:0.8,  spdMul:1.1,  dmgMul:1.0, visMul:1.0,  r:14, kbMul:1.2, sprite:'leapspider',charger:true, windup:0.4, recover:0.5, leap:true },
-  scorpion:  { id:'scorpion',  name:'麻痹巨蝎', hpMul:1.2,  spdMul:0.8,  dmgMul:1.1, visMul:0.85, r:16, kbMul:0.7, sprite:'scorpion',  paralyze:2,   windup:0.45, recover:0.55 },
+  scorpion:  { id:'scorpion',  name:'麻痹巨蝎', hpMul:1.2,  spdMul:0.8,  dmgMul:1.1, visMul:0.85, r:16, kbMul:0.7, sprite:'scorpion', face:'left',  paralyze:2,   windup:0.45, recover:0.55 },
   // —— Boss（割草模式三波） ——
   boss_cyclops:     { id:'boss_cyclops',     name:'独眼巨人',   hpMul:1, spdMul:0.55, dmgMul:2.2, visMul:2, r:30, kbMul:0, sprite:'boss_cyclops',     boss:true, windup:0.6, recover:0.6 },
-  boss_stormdragon: { id:'boss_stormdragon', name:'风暴巨龙',   hpMul:1, spdMul:0.7,  dmgMul:1.8, visMul:2, r:30, kbMul:0, sprite:'boss_stormdragon', boss:true, windup:0.5, recover:0.5 },
+  boss_stormdragon: { id:'boss_stormdragon', name:'风暴巨龙',   hpMul:1, spdMul:0.7,  dmgMul:1.8, visMul:2, r:30, kbMul:0, sprite:'boss_stormdragon', face:'left', boss:true, windup:0.5, recover:0.5 },
   boss_lich:        { id:'boss_lich',        name:'巫妖王',     hpMul:1, spdMul:0.6,  dmgMul:1.6, visMul:2, r:26, kbMul:0, sprite:'boss_lich',        boss:true, windup:0.5, recover:0.5 },
 };
 const HORDE_BOSS_IDS = ['boss_cyclops', 'boss_stormdragon', 'boss_lich'];
@@ -352,6 +352,22 @@ const SkinImages = {};
 function preloadSkins() {
   for (const s of SKINS) if (s.kind === 'img') {
     const im = new Image();
+    // 加载后烘焙黑色描边版（八方向剪影扩张），替换原图供绘制
+    im.onload = () => {
+      const pad = 12, r = 7;
+      const c = document.createElement('canvas');
+      c.width = im.naturalWidth + pad * 2; c.height = im.naturalHeight + pad * 2;
+      const x = c.getContext('2d');
+      for (let a = 0; a < 8; a++) x.drawImage(im, pad + Math.cos(a * Math.PI / 4) * r, pad + Math.sin(a * Math.PI / 4) * r);
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = '#100e1d';
+      x.fillRect(0, 0, c.width, c.height);
+      x.globalCompositeOperation = 'source-over';
+      x.drawImage(im, pad, pad);
+      c.complete = true; c.naturalWidth = c.width;             // 伪装成 Image 供现有判定
+      c.drawScale = c.width / im.naturalWidth;                 // 绘制尺寸补偿（含描边内边距）
+      SkinImages[s.id] = c;
+    };
     // 优先用内联 data-URI（纯文本、无外部依赖）；缺失时回退到 assets/ 下的 png
     im.src = (typeof SKIN_DATA_URI !== 'undefined' && SKIN_DATA_URI[s.id]) ? SKIN_DATA_URI[s.id] : s.src;
     SkinImages[s.id] = im;
@@ -475,6 +491,7 @@ const TROPHIES = [
   { id:'tycoon',        name:'富甲一方', icon:'🏦', desc:'持有金币达到 10000' },
   { id:'horde_win',     name:'无双割草王', icon:'🌾', desc:'无双割草模式存活满 10 分钟' },
   { id:'horde_slayer',  name:'千军辟易', icon:'💥', desc:'无双割草单局击杀 150 只怪物' },
+  { id:'escape_dawn',   name:'夜尽天明', icon:'🌅', desc:'大逃亡模式成功撤离' },
 ];
 const TROPHY_BY_ID = Object.fromEntries(TROPHIES.map(t => [t.id, t]));
 
@@ -486,6 +503,23 @@ const HORDE_CFG = {
   smart:1, huntInterval:0, lurkerGuard:false, merchant:false,
   spawn:{}, chests:{ wood:0, silver:0, gold:0, mystery:0 },
 };
+// ============ 大逃亡模式 ============
+// 长条生成图，一路向东：打怪升级、开箱捡枪，死亡之潮从西边碾来
+const ESCAPE_CFG = {
+  id:'escape', name:'大逃亡', icon:'🏃',
+  mHp:52, mDmg:15, chaseSpeed:104, patrolSpeed:60, vision:480, hear:560, memory:7,
+  smart:1, huntInterval:0, lurkerGuard:false, merchant:false,
+  spawn:{}, chests:{ wood:10, silver:6, gold:4, mystery:3 },
+};
+const ESCAPE = { tideDelay: 22, tideSpeed: 34, tideAccel: 0.012, pursuitEvery: 5.5 };
+// 沿途怪物池：越往东越凶
+function escapePool(prog) {
+  if (prog < 0.25) return ['shade', 'skitter', 'slime', 'direwolf'];
+  if (prog < 0.5)  return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'venomsnake', 'direwolf'];
+  if (prog < 0.75) return ['skeleton', 'brute', 'wisp', 'charger', 'shroom', 'scorpion', 'warlock', 'leapspider', 'venomsnake'];
+  return ['skeleton', 'brute', 'banshee', 'stoneling', 'warlock', 'leapspider', 'scorpion', 'lurker', 'direwolf'];
+}
+
 const HORDE_DURATION = 600;        // 存活 10 分钟即大胜利
 const HORDE_CAP = 80;              // 同屏怪物上限（性能与可读性）
 const HORDE_BOSS_AT = [150, 330, 510];  // Boss 波时间点

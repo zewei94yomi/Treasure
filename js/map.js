@@ -323,11 +323,82 @@ const MAPS = {
 };
 const MAP_ORDER = ['manor', 'mine', 'wreck', 'cathedral', 'swamp', 'icecave'];
 
+// ============ 大逃亡长图：程序生成（每局随机的房间链，左出生右撤离） ============
+MAPS.escape = { name: '长夜奔逃', theme: 'manor', gen: true, noScale: true, mods: {} };
+function genEscapeAscii() {
+  // 先排房间再定宽度：13~15 间房从西到东，走廊相连（构造即连通）
+  const H = 40;
+  const rooms = [];
+  let cx = 3;
+  const n = 13 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const rw = 18 + Math.floor(Math.random() * 12);
+    const rh = 16 + Math.floor(Math.random() * 16);
+    const ry = 2 + Math.floor(Math.random() * (H - rh - 4));
+    rooms.push({ x: cx, y: ry, w: rw, h: rh, cx: cx + (rw >> 1), cy: ry + (rh >> 1) });
+    cx += rw + 5 + Math.floor(Math.random() * 6);
+  }
+  const W = cx + 3;
+  const g = Array.from({ length: H }, () => Array(W).fill('#'));
+  const carve = (x0, y0, w, h) => {
+    for (let y = Math.max(1, y0); y < Math.min(H - 1, y0 + h); y++)
+      for (let x = Math.max(1, x0); x < Math.min(W - 1, x0 + w); x++) g[y][x] = '.';
+  };
+  for (const r of rooms) carve(r.x, r.y, r.w, r.h);
+  for (let i = 1; i < rooms.length; i++) {         // L 形走廊（宽 4）
+    const a = rooms[i - 1], b = rooms[i];
+    carve(a.cx, a.cy - 2, b.cx - a.cx + 2, 4);
+    carve(b.cx - 2, Math.min(a.cy, b.cy) - 2, 4, Math.abs(b.cy - a.cy) + 4);
+  }
+  const put = (r, ch, k) => {
+    for (let i = 0; i < k; i++) {
+      const x = r.x + 2 + Math.floor(Math.random() * (r.w - 4));
+      const y = r.y + 2 + Math.floor(Math.random() * (r.h - 4));
+      if (g[y] && g[y][x] === '.') g[y][x] = ch;
+    }
+  };
+  rooms.forEach((r, i) => {
+    if (i === 0) return;                            // 出生房留干净
+    put(r, '*', 2 + Math.floor(Math.random() * 3));
+    put(r, 'm', i < 3 ? 2 : 3);
+    put(r, 'c', 2);
+    put(r, 'g', 2);
+    put(r, 't', 2);
+  });
+  const r0 = rooms[0], rl = rooms[rooms.length - 1];
+  g[r0.cy][r0.x + 2] = '1';
+  g[Math.min(H - 3, r0.cy + 2)][r0.x + 2] = '7';
+  const rm = rooms[Math.floor(rooms.length / 2)];
+  g[rm.cy][rm.cx] = 'S';
+  for (let y = rl.cy - 1; y <= rl.cy + 1; y++)      // 撤离区 3×4
+    for (let x = rl.x + rl.w - 6; x < rl.x + rl.w - 2; x++)
+      if (g[y] && g[y][x]) g[y][x] = 'X';
+  return g.map(r => r.join(''));
+}
+
 let MapData = null;   // 当前对局的地图数据，loadMap() 填充
+
+// 第九轮：所有地图加载时放大（每格 → 2×2，面积 ×4）
+// 唯一点位（出生1/7、商人S）只留左上角；密度点位（宝箱c/金g/怪m/火把t）留左上+右下两份；
+// 结构字符（墙/障碍/地板/装饰/撤离区X）原样铺满 2×2。
+function scaleAscii(rows) {
+  const out = [];
+  for (const row of rows) {
+    let a = '', b = '';
+    for (const ch of row) {
+      if (ch === '1' || ch === '7' || ch === 'S') { a += ch + '.'; b += '..'; }
+      else if (ch === 'c' || ch === 'g' || ch === 'm' || ch === 't') { a += ch + '.'; b += '.' + ch; }
+      else { a += ch + ch; b += ch + ch; }
+    }
+    out.push(a, b);
+  }
+  return out;
+}
 
 function loadMap(mapId) {
   const def = MAPS[mapId] || MAPS.manor;
-  const ascii = def.ascii;
+  if (def.gen) def.ascii = genEscapeAscii();        // 大逃亡：每局重新生成
+  const ascii = def.noScale ? def.ascii : scaleAscii(def.ascii);
   const h = ascii.length, w = ascii[0].length;
   const solid = [], obstacles = [], decorTiles = [], torches = [];
   const chestSpots = [], goldSpots = [], monsterNodes = [], spawns = [null, null];
@@ -375,7 +446,7 @@ function loadMap(mapId) {
     merchantSpot = { x: far.x + TILE, y: far.y };
   }
 
-  MapData = { def, theme: def.theme, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
+  MapData = { def, ascii, theme: def.theme, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
               chestSpots, goldSpots, monsterNodes, spawns, exitTiles, exitRect, merchantSpot,
               pxW: w * TILE, pxH: h * TILE };
 

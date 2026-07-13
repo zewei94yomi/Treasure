@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
 
@@ -22,6 +22,8 @@
       <button class="btn big primary" onclick="UI.showSetup()">🗺️ 开始寻宝</button>
       <button class="btn big" onclick="UI.showCodex()">📖 宝物图鉴 <span id="menu-codex-badge" class="new-badge float"></span></button>
       <button class="btn big" onclick="UI.showMonsterDex()">👹 怪物图鉴</button>
+      <button class="btn big" onclick="Dex.showWeaponDex()">🔫 武器图鉴</button>
+      <button class="btn big" onclick="Dex.showSkillDex()">✨ 技能图鉴</button>
       <button class="btn big" onclick="UI.showShop()">🛒 鸭可夫商店</button>
       <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
       <button class="btn big" onclick="UI.showHelp()">❓ 操作说明</button>
@@ -232,6 +234,30 @@
   </div>
 </div>
 
+<!-- ======== 武器图鉴 ======== -->
+<div id="weapondex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)Dex.closeWeaponDex()">
+  <div class="modal-box help monsterdex-box">
+    <h3>🔫 武器图鉴</h3>
+    <p class="pause-tip">每张卡都在实弹演示：射速、散布、弹道与命中皆为真实参数的等比缩放。</p>
+    <div id="wdex-body"></div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="btn small primary" onclick="Dex.closeWeaponDex()">返回</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 技能图鉴 ======== -->
+<div id="skilldex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)Dex.closeSkillDex()">
+  <div class="modal-box help monsterdex-box">
+    <h3>✨ 技能图鉴（无双割草）</h3>
+    <p class="pause-tip">用 −/＋ 调节等级，数值与演示实时更新；带 requires 的变体强化列在母技能卡内。</p>
+    <div id="sdex-body"></div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="btn small primary" onclick="Dex.closeSkillDex()">返回</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 策划调参面板 ======== -->
 <div id="tuning-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeTuning()">
   <div class="modal-box help">
@@ -267,22 +293,23 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=11"></script>
-<script src="js/music.js?v=11"></script>
-<script src="js/skins-data.js?v=11"></script>
-<script src="js/monsters-data.js?v=11"></script>
-<script src="js/data.js?v=11"></script>
-<script src="js/save.js?v=11"></script>
-<script src="js/map.js?v=11"></script>
-<script src="js/vision.js?v=11"></script>
-<script src="js/entities.js?v=11"></script>
-<script src="js/game.js?v=11"></script>
-<script src="js/fx.js?v=11"></script>
-<script src="js/horde.js?v=11"></script>
-<script src="js/weather.js?v=11"></script>
-<script src="js/powerups.js?v=11"></script>
-<script src="js/ui.js?v=11"></script>
-<script src="js/trainer.js?v=11"></script>
-<script src="js/main.js?v=11"></script>
+<script src="js/sfx.js?v=14"></script>
+<script src="js/music.js?v=14"></script>
+<script src="js/skins-data.js?v=14"></script>
+<script src="js/monsters-data.js?v=14"></script>
+<script src="js/data.js?v=14"></script>
+<script src="js/save.js?v=14"></script>
+<script src="js/map.js?v=14"></script>
+<script src="js/vision.js?v=14"></script>
+<script src="js/entities.js?v=14"></script>
+<script src="js/game.js?v=14"></script>
+<script src="js/fx.js?v=14"></script>
+<script src="js/dex.js?v=14"></script>
+<script src="js/horde.js?v=14"></script>
+<script src="js/weather.js?v=14"></script>
+<script src="js/powerups.js?v=14"></script>
+<script src="js/ui.js?v=14"></script>
+<script src="js/trainer.js?v=14"></script>
+<script src="js/main.js?v=14"></script>
 </body>
 </html>

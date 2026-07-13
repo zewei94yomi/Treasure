@@ -127,10 +127,18 @@ const UI = (() => {
         <div class="card-icon">🌾</div>
         <div class="card-title">无双割草</div>
         <div class="card-desc">怪山怪海，撑过 10 分钟！击杀掉经验，升级三选一，弹药无限、阵亡不丢装备。${SAVE.hordeBest ? `<br>最佳：${Math.floor(SAVE.hordeBest.time/60)}:${String(SAVE.hordeBest.time%60).padStart(2,'0')} · ${SAVE.hordeBest.kills}杀 · Lv.${SAVE.hordeBest.level}` : ''}</div>
+      </div>
+      <div class="card ${setupState.gameplay === 'escape' ? 'sel' : ''}" onclick="UI.setGameplay('escape')">
+        <div class="card-icon">🏃</div>
+        <div class="card-title">大逃亡</div>
+        <div class="card-desc">超长随机地图一路向东：打怪升级、开箱捡枪，死亡之潮在身后碾来——边撤离边抵抗，冲进撤离点才算活！${SAVE.escapeBest ? `<br>最佳：里程 ${SAVE.escapeBest.prog}% · ${SAVE.escapeBest.kills}杀 · Lv.${SAVE.escapeBest.level}` : ''}</div>
       </div>`;
-    const hordeSel = setupState.gameplay === 'horde';
+    const hordeSel = setupState.gameplay === 'horde' || setupState.gameplay === 'escape';
     $('setup-diffs-label').style.display = hordeSel ? 'none' : '';
     $('setup-diffs').style.display = hordeSel ? 'none' : '';
+    // 大逃亡：地图为程序生成，隐藏地图选择
+    const mapsRow = $('setup-maps');
+    if (mapsRow) mapsRow.style.display = setupState.gameplay === 'escape' ? 'none' : '';
 
     // 双武器 + 护甲 + 腰包 + 皮肤
     let html = '';
@@ -219,7 +227,8 @@ const UI = (() => {
   function setMerc(i, v) { setupState.loadouts[i].merc = v || null; renderSetup(); }
 
   function startRun() {
-    const mapId = setupState.map === 'random' ? MAP_ORDER[Math.floor(Math.random() * MAP_ORDER.length)] : setupState.map;
+    const mapId = setupState.gameplay === 'escape' ? 'escape'
+                : setupState.map === 'random' ? MAP_ORDER[Math.floor(Math.random() * MAP_ORDER.length)] : setupState.map;
     // 结算雇佣兵费用（优先消耗免费试用）
     for (let i = 0; i < setupState.mode; i++) {
       const mid = setupState.loadouts[i].merc;
@@ -235,7 +244,7 @@ const UI = (() => {
     persistSave();
     showScreen('screen-game');
     new Game(setupState.mode, setupState.diff, setupState.loadouts.slice(0, setupState.mode), mapId, setupState.skins,
-             { horde: setupState.gameplay === 'horde' });
+             { horde: setupState.gameplay === 'horde', escape: setupState.gameplay === 'escape' });
   }
 
   // ---------- 无双割草：升级三选一 ----------
@@ -410,6 +419,17 @@ const UI = (() => {
           <button class="btn small ${SAVE.gold < item.price ? 'disabled' : ''}" onclick="UI.merchantBuy(${i})">买 💰${item.price}</button>
         </div>`;
     });
+    // 买活队友：双人局有人彻底阵亡时的高价救赎
+    const fallen = game.players.find(pl => pl.dead);
+    if (fallen) {
+      const cost = game.horde ? 400 : 1500;
+      buyHtml += `
+        <div class="shop-item" style="border-color:#ff8f8f">
+          <div class="shop-item-head"><span class="shop-icon">⚰️</span><b>买活 ${game.pname(fallen)}</b></div>
+          <div class="shop-item-meta" style="color:#ff8f8f">"死人也能谈价钱……就是贵。"（半血复活在摊位旁）</div>
+          <button class="btn small ${SAVE.gold < cost ? 'disabled' : ''}" onclick="UI.merchantRevive()">买 💰${cost}</button>
+        </div>`;
+    }
     $('merchant-buy').innerHTML = buyHtml;
     const sellHtml = p.bag.map((t, i) => {
       const price = Math.floor(t.value * MERCHANT_SELL_RATE);
@@ -421,6 +441,25 @@ const UI = (() => {
         </div>`;
     }).join('');
     $('merchant-sell').innerHTML = sellHtml || '<div class="empty-tip">背包里没有可以出手的宝物</div>';
+  }
+  function merchantRevive() {
+    const g = Game.current;
+    if (!g || !g.merchant) return;
+    const fallen = g.players.find(pl => pl.dead);
+    const cost = g.horde ? 400 : 1500;
+    if (!fallen || SAVE.gold < cost) { Sfx.error(); return; }
+    SAVE.gold -= cost;
+    fallen.dead = false; fallen.downed = false;   // active 为派生 getter，清状态即可
+    fallen.hp = Math.ceil(fallen.maxHp * 0.5);
+    fallen.x = g.merchant.x + 30; fallen.y = g.merchant.y + 20;
+    unstick(fallen);
+    fallen.hurtCd = 2;                        // 起身保护
+    if (!g.horde && !fallen.weapons.some(w => w)) fallen.weapons[0] = { id: 'pan', dur: 80, uid: -1 };  // 至少给口锅
+    g.fxDeath(fallen.x, fallen.y, true);
+    Sfx.revive();
+    g.toast(`⚰️→🦆 ${g.pname(fallen)} 被商人从鬼门关拽了回来！`, '#7dff9a');
+    persistSave();
+    renderMerchant(g, g.trader);
   }
   function merchantBuy(i) {
     const g = Game.current;
@@ -758,13 +797,17 @@ const UI = (() => {
   function showResult(res) {
     showScreen('screen-result');
     if (res.horde) {
-      $('result-title').textContent = res.victory ? '🌾 割草大捷！撑过了十分钟！' : '💀 被怪潮吞没……';
+      $('result-title').textContent = res.escape
+        ? (res.victory ? '🌅 夜尽天明！你逃出来了！' : '☠️ 倒在了黎明之前……')
+        : (res.victory ? '🌾 割草大捷！撑过了十分钟！' : '💀 被怪潮吞没……');
       $('result-title').className = res.victory ? 'ok' : 'fail';
       const mm = Math.floor(res.time / 60), ss = Math.floor(res.time % 60);
       $('result-stats').innerHTML =
-        `【${res.mapName}】无双割草 · 存活 ${mm}:${String(ss).padStart(2, '0')} · 等级 Lv.${res.level} · 击杀 <b class="gold-text">${res.kills}</b>` +
+        `【${res.mapName}】${res.escape ? `大逃亡 · 里程 <b class="gold-text">${res.progress}%</b>` : '无双割草'} · ${res.escape ? '用时' : '存活'} ${mm}:${String(ss).padStart(2, '0')} · 等级 Lv.${res.level} · 击杀 <b class="gold-text">${res.kills}</b>` +
         ` · 战利现金 <b class="gold-text">💰${res.cash}</b>${res.bonus ? ` · 通关奖金 <b class="gold-text">💰${res.bonus}</b>` : ''}`;
-      let hordeHtml = `<div class="result-player"><div class="result-player-head" style="color:#ffd93d">📈 历史最佳：存活 ${Math.floor(res.best.time/60)}:${String(res.best.time%60).padStart(2,'0')} · ${res.best.kills} 杀 · Lv.${res.best.level}</div>`;
+      let hordeHtml = res.escape
+        ? `<div class="result-player"><div class="result-player-head" style="color:#ffd93d">📈 历史最佳：里程 ${res.best.prog}% · ${res.best.kills} 杀 · Lv.${res.best.level}</div>`
+        : `<div class="result-player"><div class="result-player-head" style="color:#ffd93d">📈 历史最佳：存活 ${Math.floor(res.best.time/60)}:${String(res.best.time%60).padStart(2,'0')} · ${res.best.kills} 杀 · Lv.${res.best.level}</div>`;
       if (res.mode === 2) {
         hordeHtml += res.players.map(pr => `<div style="color:${pr.idx === 0 ? '#ffd93d' : '#9fd8ff'}">${pr.idx + 1}P 击杀 ${pr.kills}</div>`).join('');
       }
@@ -829,5 +872,5 @@ const UI = (() => {
            showMonsterDex, closeMonsterDex,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
-           renderMerchant, merchantBuy, merchantSell };
+           renderMerchant, merchantBuy, merchantSell, merchantRevive };
 })();

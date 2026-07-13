@@ -63,11 +63,11 @@ Object.assign(Game.prototype, {
         for (const p of this.players) {
           if (!p.active) continue;
           const R = 90 + S.whirlwind * 8;
-          ex.whirlFx.push({ x: p.x, y: p.y, r: R, t: 0.35, pl: p });
+          ex.whirlFx.push({ x: p.x, y: p.y, r: R, t: 0.35, pl: p, a0: p.facing });
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
             m.knock(Math.atan2(m.y - p.y, m.x - p.x), 700);
-            if (m.hurt(Math.round((14 + S.whirlwind * 6) * H.mods.dmg), this)) this.killMonster(m, p);
+            if (m.hurt(Math.round((18 + S.whirlwind * 8) * H.mods.dmg), this)) this.killMonster(m, p);
           }
           Sfx.melee();
         }
@@ -118,7 +118,8 @@ Object.assign(Game.prototype, {
       }
       ex.mines = ex.mines.filter(mn => !mn.boom && mn.t > 0);
     }
-    // ☄️ 天降正义
+    // ☄️ 天降正义：排程仅在持有技能时；下坠/引爆/清理永远执行
+    //（修复：无人机·空袭在未点陨石时砸下的陨石曾因守卫跳过结算，红圈永久残留）
     if (S.meteor > 0) {
       ex.meteorT -= dt;
       if (ex.meteorT <= 0) {
@@ -129,6 +130,8 @@ Object.assign(Game.prototype, {
           ex.meteors.push({ x: m.x, y: m.y, t: 0.8 });
         }
       }
+    }
+    {
       for (const mt of ex.meteors) {
         mt.t -= dt;
         // 下坠中的火焰彗尾
@@ -220,7 +223,7 @@ Object.assign(Game.prototype, {
     if (S.drone > 0) {
       ex.droneT = (ex.droneT || 0) - dt;
       if (ex.droneT <= 0) {
-        ex.droneT = Math.max(0.38, 1.25 - S.drone * 0.14);
+        ex.droneT = Math.max(0.3, 1.05 - S.drone * 0.13);
         for (const p of this.players) {
           if (!p.active) continue;
           const dx = p.x - Math.cos(this.time * 1.4) * 56;
@@ -235,7 +238,7 @@ Object.assign(Game.prototype, {
             ex.droneAim = a;                      // 记录朝向供绘制
             this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
             this.bullets.push(new Bullet(dx, dy, a,
-              { id: 'dronegun', dmg: 15 + S.drone * 7, speed: 700, range: 520, knock: 60 }, p, H.mods.dmg));
+              { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, H.mods.dmg));
             // 无人机·空袭：概率呼叫天降正义
             if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
               ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
@@ -397,12 +400,35 @@ Object.assign(Game.prototype, {
       ctx.restore();
     }
     for (const fx of ex.whirlFx) {
+      // 旋风斩：一把圣剑绕身横扫一整圈 + 加色拖影弧 + 剑尖火星
       const [sx, sy] = W2S(fx.pl.x, fx.pl.y);
-      ctx.strokeStyle = `rgba(255,230,150,${fx.t * 2.4})`;
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, fx.r * (1 - fx.t / 0.35 * 0.4), this.time * 10, this.time * 10 + Math.PI * 1.4);
-      ctx.stroke();
+      const prog = 1 - fx.t / 0.35;
+      const ang = (fx.a0 || 0) + prog * Math.PI * 2;
+      const rr = fx.r * 0.68;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i <= 6; i++) {
+        ctx.strokeStyle = `rgba(255,235,160,${Math.max(0, 0.55 - i * 0.085)})`;
+        ctx.lineWidth = 12 - i * 1.4;
+        ctx.beginPath(); ctx.arc(sx, sy, rr, ang - i * 0.34, ang - (i - 1) * 0.34); ctx.stroke();
+      }
+      ctx.restore();
+      const simg = typeof MonsterImages !== 'undefined' && MonsterImages.fx_sword;
+      if (simg && simg.naturalWidth) {
+        ctx.save();
+        ctx.translate(sx + Math.cos(ang) * rr, sy + Math.sin(ang) * rr);
+        ctx.rotate(ang + Math.PI / 4);   // 贴图剑尖朝东北(-45°)，补偿后指向扫击方向外侧
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(simg, -21, -21, 42, 42);
+        ctx.imageSmoothingEnabled = true;
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = `rgba(255,230,150,${fx.t * 2.4})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(sx, sy, rr, ang - 0.5, ang); ctx.stroke();
+      }
+      if (Math.random() < 0.5) this.fxP({ tex: FxTex.spark, x: fx.pl.x + Math.cos(ang) * fx.r * 0.9, y: fx.pl.y + Math.sin(ang) * fx.r * 0.9,
+        vx: Math.cos(ang + 1.6) * 160, vy: Math.sin(ang + 1.6) * 160, drag: 3, s0: 9, s1: 2, a0: 1, a1: 0, life: 0.25 });
     }
     if (H.skills.drone > 0) {
       for (const p of this.players) {

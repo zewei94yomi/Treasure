@@ -691,6 +691,8 @@ class Monster {
     this.hp -= dmg;
     this.hpShowT = 2;
     this.flashT = 0.13;
+    // 所有伤害来源统一在此冒数字（子弹/近战/技能/地雷/陨石/反伤/佣兵…）
+    if (game && game.dmgNum) game.dmgNum(this.x, this.y - this.r * 0.7, dmg, dmg >= 45);
     Sfx.hit();
     if (this.hp <= 0) return true;
     const near = game.nearestActivePlayer(this.x, this.y);

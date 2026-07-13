@@ -48,8 +48,9 @@ class Game {
   constructor(mode, diffId, loadouts, mapId, skinIds, opts = {}) {
     Game.current = this;
     this.mode = mode;
-    this.horde = !!opts.horde;               // 无双割草模式
-    this.cfg = this.horde ? HORDE_CFG : DIFFICULTIES[diffId];
+    this.escape = !!opts.escape;             // 大逃亡模式（复用割草的升级/无限弹药体系）
+    this.horde = !!opts.horde || this.escape;
+    this.cfg = this.escape ? ESCAPE_CFG : this.horde ? HORDE_CFG : DIFFICULTIES[diffId];
     this.diffId = this.horde ? 'normal' : diffId;
     loadMap(mapId);
     this.mapId = mapId;
@@ -83,13 +84,28 @@ class Game {
       }
     }
 
-    this.chests = this.horde ? [] : placeChests(this.cfg).map(c => new Chest(c.x, c.y, c.tier));
+    this.chests = (this.horde && !this.escape) ? [] : placeChests(this.cfg).map(c => new Chest(c.x, c.y, c.tier));
     this.monsters = [];
     const sp0 = MapData.spawns[0];
     const nodes = MapData.monsterNodes
       .filter(n => Math.hypot(n.x - sp0.x, n.y - sp0.y) > 10 * TILE)
       .sort(() => Math.random() - 0.5);
     let ni = 0;
+    // 大逃亡：沿途房间预置怪物（越东越强）+ 死亡之潮初始化
+    if (this.escape) {
+      this.tideX = -120;
+      this.escapePursuitT = ESCAPE.pursuitEvery;
+      for (const nd of MapData.monsterNodes) {
+        const prog = nd.x / MapData.pxW;
+        const pool = escapePool(prog);
+        const em = new Monster(nd.x, nd.y, this.cfg, pool[Math.floor(Math.random() * pool.length)]);
+        const sc = (1 + prog * 1.7) * (this.mode === 2 ? 1.25 : 1);
+        em.hp *= sc; em.maxHp = em.hp;
+        em.hordeDmgMul = 1 + prog * 0.8;
+        unstick(em);
+        this.monsters.push(em);
+      }
+    }
     for (const [typeId, count] of Object.entries(this.cfg.spawn)) {
       for (let k = 0; k < count; k++) {
         const n = nodes[ni++ % nodes.length];
@@ -142,7 +158,7 @@ class Game {
     // —— 无双割草初始化 ——
     if (this.horde) {
       this.merchant = null;
-      this.monsters = [];
+      if (!this.escape) this.monsters = [];   // 大逃亡保留沿途预置怪
       this.hordeState = {
         level: 1, xp: 0, xpNeed: Math.round(8 * (mode === 2 ? 1.35 : 1)),
         mods: { dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 },
@@ -153,7 +169,7 @@ class Game {
       };
       this.levelupOpen = false;
       for (const p of this.players) { p.maxHp = Math.round(500 * tune('pHp')); p.hp = p.maxHp; }
-      for (let i = 0; i < 8; i++) this.spawnHordeMonster();
+      if (!this.escape) for (let i = 0; i < 8; i++) this.spawnHordeMonster();
     }
 
     this.mapCanvas = this.prerenderMap();
@@ -336,6 +352,7 @@ class Game {
     const H = this.hordeState;
     const t = this.time;
 
+    if (this.escape) { this.escapeUpdate(dt); } else {
     // —— 胜利判定：撑满时长，全场怪物化作金币雨 ——
     if (!H.victory && t >= HORDE_DURATION) {
       H.victory = true;
@@ -415,6 +432,7 @@ class Game {
       this.toast('🏮 神秘商人出摊了（小地图紫点）', '#b48aff');
     }
 
+    }
     this.hordeGems(dt);
     this.updateHordeExtraSkills(dt);
 
@@ -854,7 +872,7 @@ class Game {
       this.goldDrops = this.goldDrops.filter(g => !g.taken);
     }
 
-    if (this.horde) return;   // 割草模式没有撤离，只有生存
+    if (this.horde && !this.escape) return;   // 割草没有撤离；大逃亡的胜利就是撤离
     const er = MapData.exitRect;
     const inExit = p.x > er.x && p.x < er.x + er.w && p.y > er.y && p.y < er.y + er.h;
     if (inExit) {
@@ -862,7 +880,8 @@ class Game {
       if (p.extractProgress >= 2) {
         p.extracted = true;
         Sfx.extract();
-        this.toast(`${this.pname(p)} 撤离成功！带出 ${p.bag.length} 件宝物（${p.carriedValue} 金币）`, '#7dff9a');
+        this.toast(this.escape ? `🌅 ${this.pname(p)} 冲出了长夜！` :
+          `${this.pname(p)} 撤离成功！带出 ${p.bag.length} 件宝物（${p.carriedValue} 金币）`, '#7dff9a');
       }
     } else p.extractProgress = Math.max(0, p.extractProgress - dt * 2);
   }
@@ -927,7 +946,6 @@ class Game {
             this.shake = Math.max(this.shake, 4);
           }
         }
-        this.dmgNum(m.x, m.y, dmg, backstab);
         if (this.horde && this.hordeState.mods.vamp) p.hp = Math.min(p.maxHp, p.hp + dmg * this.hordeState.mods.vamp);
         if (m.hurt(Math.round(dmg), this)) { this.killMonster(m, p, { backstab }); this.hitPause(0.045); }
       }
@@ -1164,6 +1182,7 @@ class Game {
     if (dmg > 0) {
       p.hp -= dmg;
       p.tookDamage = true;
+      this.dmgNum(p.x, p.y - 26, dmg, dmg >= 30, '#ff6b6b');   // 玩家受伤红色数字
       const flash = document.getElementById('hurt-flash');
       if (flash) { flash.style.opacity = '0.45'; setTimeout(() => flash.style.opacity = '0', 120); }
     }
@@ -1223,6 +1242,7 @@ class Game {
       return;
     }
 
+    if (this.escape) return this.escapeLoot(chest, opener);
     const t = rollTreasure(chest.tier, { difficulty: this.diffId, mapId: this.mapId, mythicSpawned: this.mythicSpawned, save: SAVE });
     codexMarkSeen(t.id);
     if (opener.addToBag(t)) {
@@ -1333,6 +1353,7 @@ class Game {
     cancelAnimationFrame(this.raf);
     Game.current = null;
     Music.play('menu');
+    if (this.escape) return this.settleEscape();
     if (this.horde) return this.settleHorde();
 
     SAVE.stats.runs++;
@@ -1390,6 +1411,123 @@ class Game {
     });
   }
 
+  // ================= 大逃亡核心 =================
+  escapeUpdate(dt) {
+    const t = this.time;
+    // —— 死亡之潮推进（越拖越快） ——
+    if (t > ESCAPE.tideDelay) {
+      this.tideX += ESCAPE.tideSpeed * (1 + (t - ESCAPE.tideDelay) * ESCAPE.tideAccel) * tune('mSpeed') * dt;
+    }
+    for (const p of this.players) {
+      if (!p.active) continue;
+      if (p.x < this.tideX) {
+        p.tideT = (p.tideT || 0) + dt;
+        if (p.tideT > 0.5) {
+          p.tideT = 0;
+          this.damagePlayer(p, 8, null);
+          this.floater(p.x, p.y - 40, '☠️ 死亡之潮！', '#ff5c5c');
+        }
+      } else p.tideT = 0;
+    }
+    // —— 追兵：从队伍后方持续刷狂暴怪（一边撤离一边抵抗） ——
+    this.escapePursuitT -= dt;
+    if (this.escapePursuitT <= 0 && this.monsters.length < HORDE_CAP) {
+      this.escapePursuitT = Math.max(2.4, ESCAPE.pursuitEvery - t * 0.012) / tune('spawnRate');
+      const act = this.players.filter(p => p.active);
+      if (act.length) {
+        const rear = act.reduce((a, b) => a.x < b.x ? a : b);
+        const n = 1 + Math.floor(t / 80) + (this.mode === 2 ? 1 : 0);
+        const prog = rear.x / MapData.pxW;
+        const pool = escapePool(prog);
+        for (let i = 0; i < n; i++) {
+          const m = new Monster(Math.max(this.tideX + 60, rear.x - 560), rear.y + (Math.random() - 0.5) * 320, this.cfg,
+                                pool[Math.floor(Math.random() * pool.length)]);
+          m.enraged = true;
+          m.state = 'chase'; m.target = rear;
+          m.lastKnown = { x: rear.x, y: rear.y }; m.memoryT = 99;
+          m.hp *= (1 + prog * 1.7) * (this.mode === 2 ? 1.25 : 1); m.maxHp = m.hp;
+          m.hordeDmgMul = 1 + prog * 0.8;
+          unstick(m);
+          this.monsters.push(m);
+        }
+      }
+    }
+    // —— 中段商人（唯一补给站，靠近才出摊） ——
+    if (!this.merchant && !this.escMerchantDone && MapData.merchantSpot) {
+      const near = this.players.some(p => p.active && Math.abs(p.x - MapData.merchantSpot.x) < 900);
+      if (near) {
+        this.escMerchantDone = true;
+        this.merchant = new Merchant(MapData.merchantSpot.x, MapData.merchantSpot.y, true);
+        unstick(this.merchant);
+        this.toast('🏮 神秘商人在前方废墟出摊了——最后的补给机会！', '#b48aff');
+      }
+    }
+  }
+
+  // 大逃亡开箱：不出宝物，出枪/金币/道具/急救
+  escapeLoot(chest, p) {
+    const roll = Math.random();
+    if (roll < 0.38) {
+      const pool = Object.values(WEAPONS).filter(w => w.price && !w.requires);
+      const range = { wood: [0, 900], silver: [300, 2200], gold: [1300, 99999], mystery: [700, 99999] }[chest.tier] || [0, 99999];
+      const cands = pool.filter(w => w.price >= range[0] && w.price <= range[1]);
+      const def = cands[Math.floor(Math.random() * cands.length)] || WEAPONS.pistol;
+      const inst = { uid: -Math.floor(Math.random() * 1e9), id: def.id, dur: def.dur, temp: true };
+      let slot = p.weapons[0] ? (p.weapons[1] ? -1 : 1) : 0;
+      if (slot === -1) slot = (WEAPONS[p.weapons[0].id].price || 0) <= (WEAPONS[p.weapons[1].id].price || 0) ? 0 : 1;
+      p.weapons[slot] = inst;
+      p.activeSlot = slot;
+      p.mags[slot] = def.mag || 0;
+      this.toast(`${this.pname(p)} 拾获 ${def.icon}【${def.name}】！`, '#ffd93d');
+      Sfx.pickup('epic');
+    } else if (roll < 0.6) {
+      const v = 50 + Math.round(Math.random() * 90);
+      SAVE.gold += v; this.runCash += v;
+      Sfx.coin();
+      this.floater(chest.x, chest.y - 26, `+${v}💰`, '#ffd93d');
+    } else if (roll < 0.82) {
+      const pu = POWERUPS[POWERUP_KEYS[Math.floor(Math.random() * POWERUP_KEYS.length)]];
+      this.applyPowerup({ type: pu, x: chest.x, y: chest.y }, p);
+    } else {
+      p.hp = Math.min(p.maxHp, p.hp + 50);
+      Sfx.heal();
+      this.floater(chest.x, chest.y - 26, '💖 +50', '#7dff9a');
+    }
+  }
+
+  settleEscape() {
+    const H = this.hordeState;
+    SAVE.stats.runs++;
+    const victory = this.players.some(p => p.extracted);
+    const lead = Math.max(...this.players.map(p => p.x), 0);
+    const progress = Math.min(1, lead / (MapData.exitRect.x + MapData.exitRect.w));
+    let bonus = 0;
+    if (victory) { bonus = 500 + this.runKills * 2 + H.level * 15; SAVE.gold += bonus; }
+    SAVE.stats.goldEarned += this.runCash + bonus;
+    const best = SAVE.escapeBest || { prog: 0, kills: 0, level: 0 };
+    SAVE.escapeBest = {
+      prog: Math.max(best.prog, Math.round(progress * 100)),
+      kills: Math.max(best.kills, this.runKills),
+      level: Math.max(best.level, H.level),
+    };
+    const newTrophies = [];
+    const grant = id => { const tp = awardTrophy(id); if (tp) newTrophies.push(tp); };
+    if (victory) grant('escape_dawn');
+    if (this.runKills >= 15) grant('slayer');
+    if (SAVE.gold >= 10000) grant('tycoon');
+    persistSave();
+    document.getElementById('levelup-overlay').style.display = 'none';
+    UI.showResult({
+      horde: true, escape: true, victory,
+      progress: Math.round(progress * 100),
+      mapName: this.mapName, mode: this.mode,
+      time: this.time, kills: this.runKills, level: H.level,
+      cash: this.runCash, bonus, best: SAVE.escapeBest,
+      players: this.players.map(p => ({ idx: p.idx, kills: p.kills, status: p.extracted ? 'extracted' : 'dead' })),
+      newTrophies,
+    });
+  }
+
   settleHorde() {
     const H = this.hordeState;
     SAVE.stats.runs++;
@@ -1440,10 +1578,10 @@ class Game {
   // ---------- 特效 ----------
   floater(x, y, text, color) { this.floaters.push({ x, y, text, color, t: 1.6 }); }
   // 伤害数字（打击感），暴击更大更黄
-  dmgNum(x, y, v, crit) {
+  dmgNum(x, y, v, crit, color) {
     if (tune('juice') < 1) return;
-    if (this.dmgNums.length > 40) this.dmgNums.shift();
-    this.dmgNums.push({ x: x + (Math.random() - 0.5) * 14, y: y - 8, v: Math.round(v), crit, t: 0.7 });
+    if (this.dmgNums.length > 60) this.dmgNums.shift();
+    this.dmgNums.push({ x: x + (Math.random() - 0.5) * 14, y: y - 8, v: Math.round(v), crit, color, t: 0.7 });
   }
   hitPause(sec) { if (tune('juice') >= 1) this.hitPauseT = Math.max(this.hitPauseT, sec); }
   spark(x, y, color) {
@@ -1497,7 +1635,7 @@ class Game {
     g.beginPath(); g.ellipse(sp.x + TILE, sp.y, TILE*2.2, TILE*1.4, 0, 0, Math.PI*2); g.fill();
     for (let y = 0; y < MapData.h; y++) for (let x = 0; x < MapData.w; x++) {
       if (!MapData.solid[y][x]) continue;
-      if (MapData.def.ascii[y][x] === '*') continue;
+      if (MapData.ascii[y][x] === '*') continue;
       g.fillStyle = T.wallBody;
       g.fillRect(x*TILE, y*TILE, TILE, TILE);
       if (!isSolidTile(x, y+1)) { g.fillStyle = T.wallFace; g.fillRect(x*TILE, y*TILE, TILE, TILE - 6); g.fillStyle = T.wallEdge; g.fillRect(x*TILE, y*TILE + TILE - 10, TILE, 4); }
@@ -1576,8 +1714,22 @@ class Game {
       const mm = Math.floor(left / 60), ss = Math.floor(left % 60);
       const y0 = MapData.minimap.height + 22;
       ctx.font = 'bold 20px "PingFang SC",sans-serif';
-      ctx.fillStyle = left < 60 ? '#ffd93d' : 'rgba(255,255,255,.9)';
-      ctx.fillText(`⏳ ${mm}:${String(ss).padStart(2,'0')}`, VIEW_W/2, y0 + 4);
+      if (this.escape) {
+        const lead = Math.max(0, ...this.players.filter(p => p.active || p.extracted).map(p => p.x));
+        const pct = Math.min(100, Math.round(lead / (MapData.exitRect.x + MapData.exitRect.w * 0.5) * 100));
+        ctx.fillStyle = '#ffd93d';
+        ctx.fillText(`🏁 ${pct}%`, VIEW_W/2, y0 + 4);
+        const act = this.players.filter(p => p.active);
+        if (act.length) {
+          const gap = Math.round((Math.min(...act.map(p => p.x)) - this.tideX) / TILE);
+          ctx.font = 'bold 12px "PingFang SC",sans-serif';
+          ctx.fillStyle = gap < 8 ? '#ff5c5c' : 'rgba(255,255,255,.55)';
+          ctx.fillText(gap <= 0 ? '☠️ 已陷入死亡之潮！' : `☠️ 死亡之潮 ${gap} 格`, VIEW_W/2, y0 + 40);
+        }
+      } else {
+        ctx.fillStyle = left < 60 ? '#ffd93d' : 'rgba(255,255,255,.9)';
+        ctx.fillText(`⏳ ${mm}:${String(ss).padStart(2,'0')}`, VIEW_W/2, y0 + 4);
+      }
       ctx.font = 'bold 13px "PingFang SC",sans-serif';
       ctx.fillStyle = '#b48aff';
       ctx.fillText(`Lv.${H.level}`, VIEW_W/2 - 130, y0 + 2);
@@ -1840,6 +1992,26 @@ class Game {
     ctx.drawImage(overlay, 0, 0);
     this.drawWeather(ctx, w);
     if (this.horde) this.drawHordeExtras(ctx, cam, w);
+    // —— 大逃亡：死亡之潮红雾墙 ——
+    if (this.escape) {
+      const tx = this.tideX - cam.x;
+      if (tx > -420 && tx < w + 80) {
+        const tg = ctx.createLinearGradient(tx - 340, 0, tx, 0);
+        tg.addColorStop(0, 'rgba(120,10,30,0)');
+        tg.addColorStop(0.7, 'rgba(120,10,30,.35)');
+        tg.addColorStop(1, 'rgba(150,15,40,.6)');
+        ctx.fillStyle = tg;
+        ctx.fillRect(tx - 340, 0, 340, VIEW_H);
+        ctx.fillStyle = `rgba(200,30,50,${0.6 + Math.sin(this.time * 6) * 0.2})`;
+        ctx.fillRect(tx, 0, 3, VIEW_H);
+        if (Math.random() < 0.35) this.fxP({ tex: FxTex.smoke, x: this.tideX - Math.random() * 120, y: cam.y + Math.random() * VIEW_H,
+          vx: 46, vy: -24, s0: 44, s1: 100, a0: 0.4, a1: 0, life: 1.1, add: false });
+        if (tx > 20) {
+          ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('💀', tx - 16, 60 + Math.sin(this.time * 2.6) * 14);
+        }
+      }
+    }
 
     // —— 割草特效层（穿透黑暗，保证爽感可见） ——
     if (this.horde) {
@@ -1892,6 +2064,19 @@ class Game {
     this.drawInteractionUI(ctx, cam);
 
     ctx.textAlign = 'center';
+    // 伤害数字（普通白、重击金色大号、玩家受伤红色）
+    for (const n of this.dmgNums) {
+      const [sx, sy] = W2S(n.x, n.y);
+      ctx.globalAlpha = Math.min(1, n.t * 2.2);
+      ctx.font = n.crit ? 'bold 20px sans-serif' : 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.lineWidth = 3;
+      const txt = (n.color === '#ff6b6b' ? '-' : '') + n.v;
+      ctx.strokeText(txt, sx, sy);
+      ctx.fillStyle = n.color || (n.crit ? '#ffd93d' : '#fff');
+      ctx.fillText(txt, sx, sy);
+    }
+    ctx.globalAlpha = 1;
     for (const f of this.floaters) {
       const [sx, sy] = W2S(f.x, f.y);
       ctx.globalAlpha = Math.min(1, f.t);
@@ -2018,7 +2203,9 @@ class Game {
       ctx.rotate(lean);
       ctx.scale(squash * swell, (2 - squash) * swell);
       ctx.imageSmoothingEnabled = false;
-      if (Math.cos(m.faceDir) < -0.2) { ctx.scale(-1, 1); }
+      // 镜像翻转按贴图原生朝向判定：face:'left' 的素材向右走时翻转，默认(朝右)素材向左走时翻转
+      const flip = m.type.face === 'left' ? Math.cos(m.faceDir) > 0.2 : Math.cos(m.faceDir) < -0.2;
+      if (flip) { ctx.scale(-1, 1); }
       ctx.drawImage(img, -size / 2, -size / 2 - 4, size, size);
       if (m.flashT > 0 && typeof MonsterImagesWhite !== 'undefined' && MonsterImagesWhite[m.type.sprite]) {
         ctx.globalAlpha = Math.min(1, m.flashT / 0.13) * 0.85;   // 受击闪白剪影
@@ -2032,7 +2219,22 @@ class Game {
       if (m.stunT > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillText('♪', sx, sy - m.r - 14); }
       else if (m.slowT > 0) { ctx.fillStyle = '#bfe9ff'; ctx.fillText('❄', sx, sy - m.r - 14); }
       else if (m.state === 'chase') { ctx.fillStyle = '#ff5c5c'; ctx.fillText('!', sx, sy - m.r - 14); }
-      if (m.hpShowT > 0 || m.type.boss) {
+      if (m.type.boss) {
+        // Boss 头顶：名字 + 大血条
+        const w = 96, by = sy - m.r - 30;
+        ctx.font = 'bold 13px "PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.lineWidth = 3;
+        ctx.strokeText('👑 ' + m.type.name, sx, by - 6);
+        ctx.fillStyle = '#ffd93d';
+        ctx.fillText('👑 ' + m.type.name, sx, by - 6);
+        ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(sx - w/2 - 1, by - 1, w + 2, 9);
+        const bgrad = ctx.createLinearGradient(sx - w/2, 0, sx + w/2, 0);
+        bgrad.addColorStop(0, '#ff5c5c'); bgrad.addColorStop(1, '#ff9a3d');
+        ctx.fillStyle = bgrad;
+        ctx.fillRect(sx - w/2, by, w * Math.max(0, m.hp / m.maxHp), 7);
+        ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1;
+        ctx.strokeRect(sx - w/2 - 1, by - 1, w + 2, 9);
+      } else if (m.hpShowT > 0) {
         const w = m.r * 2;
         ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(sx - w/2, sy - m.r - 24, w, 5);
         ctx.fillStyle = '#ff5c5c'; ctx.fillRect(sx - w/2, sy - m.r - 24, w * Math.max(0, m.hp / m.maxHp), 5);
@@ -2346,7 +2548,7 @@ class Game {
     ctx.beginPath(); ctx.ellipse(-5, 13 + walk * 2, 4, 2.5, 0, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(5, 13 - walk * 2, 4, 2.5, 0, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#e8ddc8';
-    ctx.strokeStyle = '#241f38'; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 3.5;
     ctx.beginPath(); ctx.ellipse(0, 0, 13, 14, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#ff9f1c'; ctx.strokeStyle = '#c76f00'; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.ellipse(fx * 10, fy * 10 - 3, 6, 4, mc.facing, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -2404,7 +2606,7 @@ class Game {
     const img = skin.kind === 'img' && SkinImages[skin.id];
     if (img && img.complete && img.naturalWidth) {
       const squash = 1 + Math.abs(walk) * 0.06;
-      const size = 40;
+      const size = 40 * (img.drawScale || 1);
       ctx.fillStyle = '#ff9f1c';
       ctx.beginPath(); ctx.ellipse(-6, PLAYER_R + walk * 2, 5, 3, 0, 0, Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(6, PLAYER_R - walk * 2, 5, 3, 0, 0, Math.PI*2); ctx.fill();
