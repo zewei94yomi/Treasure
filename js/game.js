@@ -16,14 +16,30 @@ function buildKeymaps() {
 }
 buildKeymaps();
 
-const Input = { keys: {}, sneakToggle: [false, false] };
+const Input = { keys: {}, sneakToggle: [false, false], lastCode: '', imeWarned: false };
+
+// 中文输入法防御：IME 接管标点键时 e.code 可能缺失/异常，用 e.key 的全角字符回退映射
+function normalizeCode(e) {
+  if (e.code && e.code !== 'Unidentified' && e.code !== '') return e.code;
+  const map = { '、': 'Slash', '/': 'Slash', '？': 'Slash',
+                '。': 'Period', '.': 'Period', '·': 'Backquote',
+                '，': 'Comma', ',': 'Comma', '；': 'Semicolon', '：': 'Semicolon' };
+  return map[e.key] || e.code;
+}
 window.addEventListener('keydown', e => {
-  Input.keys[e.code] = true;
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)) e.preventDefault();
+  const code = normalizeCode(e);
+  Input.keys[code] = true;
+  Input.lastCode = code;
+  // 输入法拦截检测：给玩家一个明确提示（只提示一次）
+  if ((e.isComposing || e.keyCode === 229) && !Input.imeWarned) {
+    Input.imeWarned = true;
+    if (Game.current) Game.current.toast('⚠️ 检测到中文输入法——标点键位可能失灵，请切换为英文输入', '#ff8f8f');
+  }
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(code)) e.preventDefault();
   if (e.repeat) return;   // 系统按键自动重复不触发动作（否则按住会反复切换潜行/武器等）
-  if (Game.current) Game.current.onKeyDown(e.code);
-});
-window.addEventListener('keyup', e => { Input.keys[e.code] = false; });
+  if (Game.current) Game.current.onKeyDown(code);
+}, true);   // capture 阶段：最先收到，避免被页面内其它监听干扰
+window.addEventListener('keyup', e => { Input.keys[normalizeCode(e)] = false; }, true);
 
 class Game {
   static current = null;

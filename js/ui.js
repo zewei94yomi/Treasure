@@ -495,16 +495,17 @@ const UI = (() => {
   function captureBind(e) {
     if (!bindWait) return;
     e.preventDefault(); e.stopPropagation();
-    if (e.code === 'Escape') { bindWait = null; renderKeybinds(); return; }
+    const bcode = normalizeCode(e);
+    if (bcode === 'Escape') { bindWait = null; renderKeybinds(); return; }
     const { p, action } = bindWait;
     if (!SAVE.settings.keys) SAVE.settings.keys = {};
     if (!SAVE.settings.keys[p]) SAVE.settings.keys[p] = {};
     // 同玩家冲突：与占用该键的动作互换
     const cur = Object.assign({}, DEFAULT_KEYS[p], SAVE.settings.keys[p]);
     for (const [a] of KEY_ACTIONS) {
-      if (a !== action && cur[a] === e.code) SAVE.settings.keys[p][a] = cur[action];
+      if (a !== action && cur[a] === bcode) SAVE.settings.keys[p][a] = cur[action];
     }
-    SAVE.settings.keys[p][action] = e.code;
+    SAVE.settings.keys[p][action] = bcode;
     persistSave();
     buildKeymaps();
     bindWait = null;

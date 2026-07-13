@@ -25,12 +25,15 @@ const Trainer = (() => {
 
   function say(s, text) { s.msg = text; s.msgT = 1.6; }
 
+  let lastKey = '';   // 屏上自检：显示最近收到的按键
   function onKeyDown(e) {
-    if (!states || e.repeat) return;   // 忽略按住产生的系统重复
-
+    if (!states) return;
+    const code = normalizeCode(e);
+    lastKey = code;
+    if (e.repeat) return;   // 忽略按住产生的系统重复
     for (const s of states) {
       const km = KEYMAP[s.pi];
-      if (e.code === km.roll) {
+      if (code === km.roll) {
         if (s.rollT <= 0 && s.rollCd <= 0 && s.stamina >= STAMINA.rollCost) {
           s.stamina -= STAMINA.rollCost;
           s.rollT = STAMINA.rollDur; s.rollCd = STAMINA.rollCd;
@@ -40,18 +43,18 @@ const Trainer = (() => {
           say(s, '🤸 翻滚！（无敌帧）');
           Sfx.crossbow();
         } else if (s.stamina < STAMINA.rollCost) say(s, '体力不足，等蓝条回复');
-      } else if (e.code === km.sneak) {
+      } else if (code === km.sneak) {
         s.sneak = !s.sneak;
         say(s, s.sneak ? '🤫 潜行开（再按关；翻滚/开枪会破隐）' : '潜行解除');
-      } else if (e.code === km.reload) {
+      } else if (code === km.reload) {
         if (s.weapon === 1 && s.mag < 6 && s.reloadT <= 0) { s.reloadT = 0.9; say(s, '🔄 换弹中…'); Sfx.tick(); }
-      } else if (e.code === km.swap) {
+      } else if (code === km.swap) {
         s.weapon = 1 - s.weapon;
         say(s, `切换武器 → ${s.weapon === 1 ? '🔫 手枪' : '🍳 平底锅'}`);
         Sfx.tick();
-      } else if (e.code === km.use) {
+      } else if (code === km.use) {
         say(s, '🩹 使用药品 ✓'); Sfx.heal();
-      } else if (e.code === km.cycle) {
+      } else if (code === km.cycle) {
         say(s, '🔁 切换药品 ✓'); Sfx.tick();
       }
     }
@@ -292,6 +295,11 @@ const Trainer = (() => {
     ctx.fillText(`${keyLabel(km.roll)} 翻滚 · ${keyLabel(km.sneak)} 潜行`, W - 8, 16);
     ctx.fillText(`${keyLabel(km.reload)} 换弹 · ${keyLabel(km.swap)} 切枪`, W - 8, 30);
 
+    // 自检：最近收到的按键（按了没反应=事件被输入法/系统吞掉）
+    ctx.font = '10px "PingFang SC",sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.fillText(`最近按键: ${lastKey ? keyLabel(lastKey) : '—'}`, 8, H - 8);
+
     // 动作反馈
     if (s.msgT > 0) {
       ctx.globalAlpha = Math.min(1, s.msgT * 2);
@@ -344,6 +352,7 @@ const Trainer = (() => {
       raf = requestAnimationFrame(loop);
     },
     tick,   // 供测试驱动
+    debug() { return states; },   // 供测试读取内部状态
     stop() {
       states = null;
       if (raf) cancelAnimationFrame(raf);
