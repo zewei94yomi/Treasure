@@ -391,7 +391,7 @@ function loadMap(mapId) {
 
   // 小地图底图（3px/格）
   const mm = document.createElement('canvas');
-  const S = 3;
+  const S = 4;   // 小地图放大（UI 可读性）
   mm.width = w * S; mm.height = h * S;
   const mctx = mm.getContext('2d');
   mctx.fillStyle = 'rgba(12,10,26,.88)';

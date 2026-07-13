@@ -50,6 +50,38 @@ const Music = (() => {
     }
   }
 
+  // 无双割草：高速驱动战斗曲（低音走位 + 底鼓 + 镲片 + 危险琶音）
+  const BASSLINE = [55, 55, 82.4, 55, 73.4, 55, 61.7, 65.4];
+  const ARP = [220, 261.6, 329.6, 392, 329.6, 261.6];
+  function scheduleBattle(t, b) {
+    // 底鼓每拍
+    if (b % 2 === 0) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(90, t);
+      o.frequency.exponentialRampToValueAtTime(38, t + 0.1);
+      g.gain.setValueAtTime(0.5, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      o.connect(g).connect(master); o.start(t); o.stop(t + 0.25);
+    }
+    // 低音线
+    note(BASSLINE[b % 8], t, 0.22, 'sawtooth', 0.14);
+    // 镲片offbeat
+    if (b % 2 === 1) {
+      const len = Math.floor(ac.sampleRate * 0.04);
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const s = ac.createBufferSource(); s.buffer = buf;
+      const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+      const g = ac.createGain(); g.gain.value = 0.08;
+      s.connect(f).connect(g).connect(master); s.start(t);
+    }
+    // 危险时：高速琶音
+    if (danger) note(ARP[b % 6] * 2, t, 0.14, 'square', 0.06);
+    else if (b % 4 === 2) note(ARP[(b / 2) % 6], t, 0.3, 'triangle', 0.05);
+  }
+
   function scheduleGame(t, b) {
     // 心跳：追击时加倍
     const interval = danger ? 1 : 2;
@@ -89,9 +121,9 @@ const Music = (() => {
 
   function tick() {
     if (!ac || !theme) return;
-    const BPS = theme === 'menu' ? 1.9 : 1.6; // 每拍秒数
+    const BPS = theme === 'menu' ? 1.9 : theme === 'battle' ? 0.46 : 1.4; // 每拍秒数（battle≈130BPM）
     while (nextT < ac.currentTime + 0.4) {
-      (theme === 'menu' ? scheduleMenu : scheduleGame)(nextT, beat);
+      (theme === 'menu' ? scheduleMenu : theme === 'battle' ? scheduleBattle : scheduleGame)(nextT, beat);
       nextT += BPS / 2;
       beat++;
     }
@@ -106,7 +138,7 @@ const Music = (() => {
       theme = name;
       nextT = ac.currentTime + 0.1;
       beat = 0;
-      if (name === 'game') startDrone();
+      if (name === 'game' || name === 'battle') startDrone();
       timer = setInterval(tick, 120);
     },
     stop() {

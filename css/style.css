@@ -407,3 +407,22 @@ body {
 .levelup-card .lv-level { font-size: 12px; color: var(--gold); }
 .levelup-card .lv-desc { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
 .levelup-card .lv-key { font-size: 11px; color: #8b7fb3; }
+
+/* ---------- 第五轮：UI 放大与质感强化 ---------- */
+.bottom-bar {
+  padding: 10px 18px; border-radius: 18px; border-width: 3px;
+  background:
+    linear-gradient(180deg, rgba(58,48,82,.55), rgba(22,17,42,.94)),
+    radial-gradient(circle at 8px 8px, rgba(255,217,61,.18) 2px, transparent 3px),
+    radial-gradient(circle at calc(100% - 8px) 8px, rgba(255,217,61,.18) 2px, transparent 3px);
+  box-shadow: 0 6px 24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.bb-left { width: 196px; gap: 5px; }
+.bb-name { font-size: 15px; }
+.bottom-bar .hp-bar { height: 11px; }
+.wslot { font-size: 14px; padding: 3px 10px; }
+.bb-meta { font-size: 13px; }
+.bottom-bar .hud-fx { font-size: 12.5px; }
+.bag-cell { width: 25px; height: 25px; font-size: 16px; }
+.toast { font-size: 15px; padding: 9px 24px; }
+#hud-supplies { font-size: 16px; padding: 8px 16px; }

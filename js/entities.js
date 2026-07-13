@@ -34,6 +34,15 @@ class Player {
     this.kills = 0;
     this.footT = 0;                        // 脚步声计时
     this.acc = ACCESSORIES[accId] || null; // 装饰（帽子/光环）
+    this.stamina = STAMINA.max;            // 体力（翻滚消耗，自动恢复）
+    this.staminaDelay = 0;                 // 消耗后恢复延迟
+    this.rollT = 0;                        // 翻滚剩余时间（>0 时无敌且不能攻击）
+    this.rollCd = 0;
+    this.rollDir = 0;
+    this.staminaFreeT = 0;                 // 金色沙漏：无限体力
+    this.tempShield = 0;                   // 临时护盾（圣盾/泡泡道具）
+    this.mags = [null, null];              // 每把武器的当前弹夹
+    this.reloadT = 0;                      // 换弹剩余时间
     this.wasSpotted = false;               // 本局是否被怪物盯上过（奖杯用）
     this.tookDamage = false;
     this.backstabKills = 0;
@@ -49,7 +58,19 @@ class Player {
   }
   switchWeapon() {
     const other = 1 - this.activeSlot;
-    if (this.weapons[other] || this.weapons[this.activeSlot]) this.activeSlot = other;
+    if (this.weapons[other] || this.weapons[this.activeSlot]) { this.activeSlot = other; this.reloadT = 0; }
+  }
+  // 当前弹夹余弹（近战返回 -1）
+  magLeft() {
+    const def = this.weaponDef();
+    if (def.melee || !def.mag) return -1;
+    if (this.mags[this.activeSlot] === null) this.mags[this.activeSlot] = def.mag;
+    return this.mags[this.activeSlot];
+  }
+  startReload() {
+    const def = this.weaponDef();
+    if (def.melee || this.reloadT > 0) return;
+    this.reloadT = def.reload || 1.2;
   }
   get carriedValue() { return this.bag.reduce((s, t) => s + t.value, 0); }
 
@@ -170,6 +191,29 @@ class Monster {
     }
     if (this.stunT > 0) { this.stunT -= dt; return; }
 
+    // —— 混乱蘑菇：怪物互相攻击 ——
+    if (game.confusionT > 0 && !this.isBoss && this.windupT <= 0 && this.recoverT <= 0) {
+      let foe = null, fd = 340;
+      for (const m of game.monsters) {
+        if (m === this) continue;
+        const d = Math.hypot(m.x - this.x, m.y - this.y);
+        if (d < fd) { foe = m; fd = d; }
+      }
+      if (foe) {
+        if (fd > this.r + foe.r + 6) {
+          this.moveToward({ x: foe.x, y: foe.y }, this.cfg.chaseSpeed * this.type.spdMul, dt, 0);
+          unstick(this);
+        } else if (this.attackCd <= 0) {
+          this.attackCd = 0.8;
+          this.confusedTarget = foe;
+          this.windupT = 0.25;
+          this.pendingRanged = false;
+        }
+        if (Math.random() < dt * 2) game.floater(this.x, this.y - this.r - 6, '❓', '#ff8fd0');
+        return;
+      }
+    }
+
     // —— 攻击硬直：前摇/后摇期间站桩，不移动 ——
     if (this.windupT > 0) {
       this.windupT -= dt;
@@ -180,6 +224,7 @@ class Monster {
 
     let slowMul = game.monsterSlowT > 0 ? 0.5 : 1;
     if (this.slowT > 0) slowMul *= 0.5;
+    slowMul *= game.weatherMSpd ? game.weatherMSpd() : 1;   // 天气：血月加速/雨雪减速
     const cfg = this.cfg;
     const visRange = cfg.vision * this.type.visMul * (MapData.mods.monsterVision || 1);
 
@@ -345,6 +390,17 @@ class Monster {
   // 前摇结束：判定攻击（玩家若已拉开距离则挥空）
   resolveAttack(game) {
     this.recoverT = this.type.recover || 0.45;
+    // 混乱状态：打的是别的怪
+    if (this.confusedTarget) {
+      const foe = this.confusedTarget;
+      this.confusedTarget = null;
+      if (game.monsters.includes(foe) && Math.hypot(foe.x - this.x, foe.y - this.y) < this.r + foe.r + 20) {
+        const dmg = Math.round(this.cfg.mDmg * this.type.dmgMul * 1.2);
+        if (foe.hurt(dmg, game)) game.killMonster(foe, null);
+        game.spark(foe.x, foe.y, '#ff8fd0');
+      }
+      return;
+    }
     if (this.pendingRanged) {
       // 幽火吐弹
       if (this.target && this.target.active) {
@@ -364,7 +420,7 @@ class Monster {
     }
     if (!victim) return;
     if (vd < PLAYER_R + this.r + 16) {
-      const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1));
+      const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1));
       if (victim.isMerc) victim.hurt(hitDmg, game);
       else game.damagePlayer(victim, hitDmg, this);
     } else {
@@ -456,21 +512,21 @@ class Bullet {
     this.laser = def.id === 'laser';
     this.frost = def.id === 'frost';
     this.homing = !def.pellets;   // 散射类武器不追踪
-    this.turn = def.turn || 3.2;  // 追踪转向速率（弧度/秒）
+    this.turn = def.turn || HOMING.turn;  // 追踪转向速率（弧度/秒）
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.hitSet = new Set();
   }
   update(dt, game) {
     // 轻微弹道追踪：锁定前方小锥形内最近的怪
     if (this.homing) {
-      let best = null, bd = 300;
+      let best = null, bd = HOMING.dist;
       for (const m of game.monsters) {
         if (m.state === 'ambush' || this.hitSet.has(m)) continue;
         const d = Math.hypot(m.x - this.x, m.y - this.y);
         if (d > bd) continue;
         let da = Math.atan2(m.y - this.y, m.x - this.x) - this.angle;
         da = Math.atan2(Math.sin(da), Math.cos(da));
-        if (Math.abs(da) < 0.5) { best = m; bd = d; }
+        if (Math.abs(da) < HOMING.cone) { best = m; bd = d; }
       }
       if (best) {
         let da = Math.atan2(best.y - this.y, best.x - this.x) - this.angle;

@@ -207,13 +207,18 @@
       <tr><td>使用药品</td><td>Q</td><td>M</td></tr>
       <tr><td>切换药品</td><td>Tab</td><td>K</td></tr>
       <tr><td>潜行（按住）</td><td>左 Shift</td><td>右 Shift</td></tr>
+      <tr><td>翻滚（耗体力，无敌帧）</td><td>空格</td><td>/（斜杠）</td></tr>
       <tr><td>暂停</td><td colspan="2">Esc</td></tr>
     </table>
     <div class="help-rules">
       <p>🎯 <b>目标</b>：开宝箱搜刮宝物，走到撤离点站稳 2 秒，活着带出去的宝物才会收录进图鉴、换成金币。</p>
       <p>💀 <b>阵亡惩罚</b>：宝物散落原地（图鉴记为"目击"），携带的武器、护甲、腰包永久丢失。</p>
       <p>🔫 <b>武器</b>：可带主副两把。枪有弹药、耐久和有效射程；命中会击退怪物（石巨魁免疫）。</p>
-      <p>🤫 <b>潜行</b>：按住 Shift 缓步移动——无脚步声、更难被看见。影袭匕首背刺未察觉的怪物造成 3 倍伤害；静音鹅弩射击不引怪。</p>
+      <p>🤫 <b>潜行</b>：按住 Shift 缓步——无声、难被发现，还能看到怪物的警戒方向锥；<b>从背后近战未察觉的普通怪 = 一击处决</b>。</p>
+      <p>🤸 <b>翻滚</b>：消耗 35 体力向移动方向闪身，全程无敌帧；体力自动恢复。头顶蓝条即体力。</p>
+      <p>🔫 <b>弹夹</b>：打空自动换弹（头顶金环为装填进度），武器槽显示 弹夹/容量·备弹。</p>
+      <p>🎲 <b>地图道具</b>：桃心/护盾泡泡/谜之药水/佣兵羽毛/混乱蘑菇/传送门/金色沙漏随机刷新，踩上即得。</p>
+      <p>🌦️ <b>天气</b>：每局随机——雨雪拖慢脚步、沙尘暴压缩视野、血月令怪物狂暴。</p>
       <p>⚖️ <b>负重</b>：宝物、武器、护甲都有重量。轻装跑得快还安静，超载又慢又吵还显眼。</p>
       <p>👂 <b>动静</b>：枪声和脚步声会引来怪物。怪物起手有前摇硬直，看到红圈就跑！</p>
       <p>🏮 <b>神秘商人</b>：困难/地狱模式出没，卖稀罕货，也按 55% 价值收宝物（换现钱但不计图鉴）。</p>
@@ -231,6 +236,9 @@
 <script src="js/vision.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/game.js"></script>
+<script src="js/horde.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/powerups.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>

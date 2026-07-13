@@ -146,18 +146,18 @@ const WEAPONS = {
   fists:    { id:'fists',    name:'鸭拳',           icon:'🐤', melee:true, dmg:5,  rate:1.6, range:44, knock:80,  dur:Infinity, weight:0,   price:null, desc:'走投无路时的最后尊严。' },
   pan:      { id:'pan',      name:'平底锅',         icon:'🍳', melee:true, dmg:18, rate:1.7, range:60, knock:260, dur:80,  weight:1,   price:60,   repairCost:0.4, desc:'铛！近战经典，无需弹药。' },
   dagger:   { id:'dagger',   name:'影袭匕首',       icon:'🗡️', melee:true, dmg:22, rate:2.2, range:48, knock:60,  dur:70,  weight:0.5, price:450,  repairCost:0.8, silent:true, backstab:3, desc:'潜行者的獠牙：无声，且背刺未察觉的怪物造成 3 倍伤害。' },
-  pistol:   { id:'pistol',   name:'嘎嘎-9 手枪',    icon:'🔫', dmg:14, rate:3.0, speed:560, range:480, knock:90,  ammo:'light', spread:0.05,  dur:70,  weight:1,   price:300,  repairCost:0.8, desc:'可靠的入门火力，指哪嘎哪。' },
-  revolver: { id:'revolver', name:'老公爵 左轮',    icon:'🤠', dmg:30, rate:1.6, speed:620, range:520, knock:170, ammo:'light', spread:0.02,  dur:55,  weight:1.5, price:700,  repairCost:1.2, desc:'六发威严。慢，但每一发都算数。' },
-  smg:      { id:'smg',      name:'泡泡冲锋枪',     icon:'🫧', dmg:8,  rate:8.5, speed:520, range:360, knock:50,  ammo:'light', spread:0.13,  dur:150, weight:2,   price:900,  repairCost:0.9, desc:'泼水一样的弹幕，费子弹。' },
-  shotgun:  { id:'shotgun',  name:'老铁桶 双管',    icon:'💥', dmg:8,  rate:1.1, speed:480, range:240, knock:110, ammo:'shell', spread:0.30,  pellets:6, durPerShot:2, dur:60, weight:2.5, price:1300, repairCost:1.8, desc:'一次六颗铁砂，贴脸没有怪。' },
-  frost:    { id:'frost',    name:'寒霜喷罐',       icon:'🧯', dmg:4,  rate:2.5, speed:300, range:170, knock:40,  ammo:'cell',  spread:0.45,  pellets:5, dur:80, weight:2, price:1600, repairCost:1.5, slow:2, desc:'一片冰雾，命中的怪物减速 2 秒。' },
-  crossbow: { id:'crossbow', name:'静音鹅 弩',      icon:'🏹', dmg:38, rate:1.0, speed:700, range:640, knock:120, ammo:'heavy', spread:0.005, dur:50,  weight:2,   price:1500, repairCost:2.0, silent:true, desc:'无声无息。怪物听不见你的问候。' },
-  rifle:    { id:'rifle',    name:'长颈鹅 栓动步枪', icon:'🎯', dmg:50, rate:0.9, speed:780, range:900, knock:200, ammo:'heavy', spread:0.01,  pierce:3, dur:45, weight:3, price:2200, repairCost:2.5, desc:'一枪穿三个，绅士的选择。' },
-  cannon:   { id:'cannon',   name:'轰天雷',         icon:'🧨', dmg:60, rate:0.6, speed:420, range:520, knock:300, ammo:'shell', spread:0.02,  durPerShot:2, dur:40, weight:3, price:2600, repairCost:3.0, explosive:90, desc:'炮弹落点 90 范围内的怪一起上天。动静极大。' },
-  laser:    { id:'laser',    name:'嘎嘎射线',       icon:'⚡', dmg:13, rate:7.0, speed:1500, range:700, knock:40, ammo:'cell',  spread:0.01,  pierce:2, dur:90, weight:2, price:3000, repairCost:3.0, desc:'来自未来的鸭科技，贯穿一切。' },
-  flamer:   { id:'flamer',   name:'火舌喷灯',       icon:'🔥', dmg:5,  rate:10,  speed:260, range:190, knock:20,  ammo:'cell',  spread:0.30,  pellets:2, dur:150, weight:2.5, price:2400, repairCost:2.0, burn:2.5, desc:'一条火舌舔过去，怪物边跑边烧。' },
-  freezer:  { id:'freezer',  name:'急冻线圈枪',     icon:'❄️', dmg:8,  rate:1.4, speed:520, range:420, knock:60,  ammo:'cell',  spread:0.02,  dur:70,  weight:2, price:2000, repairCost:2.2, freeze:1.3, desc:'命中直接冻成冰坨，动弹不得 1.3 秒。' },
-  sniper:   { id:'sniper',   name:'鹅王·穿云',      icon:'🛰️', dmg:90, rate:0.5, speed:1100, range:1400, knock:340, ammo:'heavy', spread:0.002, pierce:4, durPerShot:2, dur:35, weight:4, price:4500, repairCost:4.0, desc:'超越视野的一枪。听到枪声时子弹已经到了。' },
+  pistol:   { id:'pistol',   name:'嘎嘎-9 手枪',    icon:'🔫', dmg:14, rate:3.0, speed:560, range:480, knock:90,  ammo:'light', spread:0.05,  mag:12, reload:1.0, dur:70,  weight:1,   price:300,  repairCost:0.8, desc:'可靠的入门火力，指哪嘎哪。' },
+  revolver: { id:'revolver', name:'老公爵 左轮',    icon:'🤠', dmg:30, rate:1.6, speed:620, range:520, knock:170, ammo:'light', spread:0.02,  mag:6, reload:1.6, dur:55,  weight:1.5, price:700,  repairCost:1.2, desc:'六发威严。慢，但每一发都算数。' },
+  smg:      { id:'smg',      name:'泡泡冲锋枪',     icon:'🫧', dmg:8,  rate:8.5, speed:520, range:360, knock:50,  ammo:'light', spread:0.13,  mag:32, reload:1.4, dur:150, weight:2,   price:900,  repairCost:0.9, desc:'泼水一样的弹幕，费子弹。' },
+  shotgun:  { id:'shotgun',  name:'老铁桶 双管',    icon:'💥', dmg:8,  rate:1.1, speed:480, range:240, knock:110, ammo:'shell', spread:0.30,  pellets:6, durPerShot:2, mag:2, reload:1.5, dur:60, weight:2.5, price:1300, repairCost:1.8, desc:'一次六颗铁砂，贴脸没有怪。' },
+  frost:    { id:'frost',    name:'寒霜喷罐',       icon:'🧯', dmg:4,  rate:2.5, speed:300, range:170, knock:40,  ammo:'cell',  spread:0.45,  pellets:5, mag:24, reload:1.3, dur:80, weight:2, price:1600, repairCost:1.5, slow:2, desc:'一片冰雾，命中的怪物减速 2 秒。' },
+  crossbow: { id:'crossbow', name:'静音鹅 弩',      icon:'🏹', dmg:38, rate:1.0, speed:700, range:640, knock:120, ammo:'heavy', spread:0.005, mag:1, reload:1.1, dur:50,  weight:2,   price:1500, repairCost:2.0, silent:true, desc:'无声无息。怪物听不见你的问候。' },
+  rifle:    { id:'rifle',    name:'长颈鹅 栓动步枪', icon:'🎯', dmg:50, rate:0.9, speed:780, range:900, knock:200, ammo:'heavy', spread:0.01,  pierce:3, mag:5, reload:1.9, dur:45, weight:3, price:2200, repairCost:2.5, desc:'一枪穿三个，绅士的选择。' },
+  cannon:   { id:'cannon',   name:'轰天雷',         icon:'🧨', dmg:60, rate:0.6, speed:420, range:520, knock:300, ammo:'shell', spread:0.02,  durPerShot:2, mag:1, reload:2.2, dur:40, weight:3, price:2600, repairCost:3.0, explosive:90, desc:'炮弹落点 90 范围内的怪一起上天。动静极大。' },
+  laser:    { id:'laser',    name:'嘎嘎射线',       icon:'⚡', dmg:13, rate:7.0, speed:1500, range:700, knock:40, ammo:'cell',  spread:0.01,  pierce:2, mag:24, reload:1.2, dur:90, weight:2, price:3000, repairCost:3.0, desc:'来自未来的鸭科技，贯穿一切。' },
+  flamer:   { id:'flamer',   name:'火舌喷灯',       icon:'🔥', dmg:5,  rate:10,  speed:260, range:190, knock:20,  ammo:'cell',  spread:0.30,  pellets:2, mag:45, reload:1.8, dur:150, weight:2.5, price:2400, repairCost:2.0, burn:2.5, desc:'一条火舌舔过去，怪物边跑边烧。' },
+  freezer:  { id:'freezer',  name:'急冻线圈枪',     icon:'❄️', dmg:8,  rate:1.4, speed:520, range:420, knock:60,  ammo:'cell',  spread:0.02,  mag:8, reload:1.4, dur:70,  weight:2, price:2000, repairCost:2.2, freeze:1.3, desc:'命中直接冻成冰坨，动弹不得 1.3 秒。' },
+  sniper:   { id:'sniper',   name:'鹅王·穿云',      icon:'🛰️', dmg:90, rate:0.5, speed:1100, range:1400, knock:340, ammo:'heavy', spread:0.002, pierce:4, durPerShot:2, mag:3, reload:2.1, dur:35, weight:4, price:4500, repairCost:4.0, desc:'超越视野的一枪。听到枪声时子弹已经到了。' },
   pickaxe:  { id:'pickaxe',  name:'矿脉鹤嘴镐',     icon:'⛏️', melee:true, dmg:26, rate:1.4, range:62, knock:240, dur:120, weight:1.5, price:800, repairCost:0.6, requires:'mine_relics', desc:'集齐「地心结晶」解锁。刨矿刨怪，一镐两用。' },
 };
 const AMMO_TYPES = {
@@ -440,9 +440,48 @@ const HORDE_UPGRADES = [
   { id:'steal',  name:'嗜血之喙',   icon:'🩸', max:3, desc:'每次击杀回复 2 点生命', mod:m => m.lifesteal += 2 },
   { id:'regen',  name:'再生羽毛',   icon:'🪶', max:3, desc:'每秒回复 2 点生命',     mod:m => m.regen += 2 },
   { id:'orbit',     name:'环绕飞锅', icon:'🍳', max:5, skill:'orbit',     desc:'+1 只环绕身边的平底锅，撞飞怪物' },
-  { id:'missile',   name:'追踪鸭雷', icon:'🦆', max:5, skill:'missile',   desc:'周期发射自动追踪的爆走鸭' },
+  { id:'missile',   name:'追踪鸭雷', icon:'🦆', max:5, skill:'missile',   desc:'高频发射自动追踪的爆走鸭' },
   { id:'nova',      name:'寒冰新星', icon:'❄️', max:5, skill:'nova',      desc:'周期冻结并炸伤身边的怪物' },
   { id:'trail',     name:'火焰足迹', icon:'🔥', max:5, skill:'trail',     desc:'跑动时身后留下灼烧路径' },
-  { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'周期劈出在怪群中弹跳的连锁闪电' },
+  { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'高频劈出在怪群中弹跳的连锁闪电' },
+  { id:'whirlwind', name:'旋风斩',   icon:'🌪️', max:5, skill:'whirlwind', desc:'周期性旋身横扫，击飞身边所有怪物' },
+  { id:'barrier',   name:'圣盾守护', icon:'🛡️', max:5, skill:'barrier',   desc:'周期性获得吸收伤害的临时护盾' },
+  { id:'mines',     name:'鸭式地雷', icon:'🧨', max:5, skill:'mines',     desc:'边跑边埋雷，怪物踩上轰然起飞' },
+  { id:'meteor',    name:'天降正义', icon:'☄️', max:5, skill:'meteor',    desc:'陨石从天而降砸进怪群（附带灼烧）' },
+  { id:'boomerang', name:'回旋飞盘', icon:'🥏', max:5, skill:'boomerang', desc:'掷出贯穿一切的飞盘，去而复返' },
+  { id:'chrono',    name:'时缓力场', icon:'⏱️', max:5, skill:'chrono',    desc:'身边环绕减速力场，怪物近身如陷泥沼' },
 ];
+// 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
+const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
+
+// ============ 随机环境天气（每局随机，经典+割草通用） ============
+const WEATHERS = {
+  clear:     { id:'clear', name:'晴朗', icon:'🌙', desc:'' },
+  rain:      { id:'rain', name:'落雨', icon:'🌧️', desc:'大雨滂沱：全员移速 -7%', pSpd:0.93, mSpd:0.96, tint:'rgba(60,90,140,0.10)' },
+  snow:      { id:'snow', name:'风雪', icon:'❄️', desc:'积雪没踝：全员移速 -10%', pSpd:0.90, mSpd:0.93, tint:'rgba(200,220,255,0.08)' },
+  sandstorm: { id:'sandstorm', name:'沙尘暴', icon:'🌪️', desc:'黄沙蔽目：视野 -28%', vision:0.72, tint:'rgba(180,140,70,0.14)' },
+  bloodmoon: { id:'bloodmoon', name:'血月', icon:'🔴', desc:'血月高悬：怪物狂暴（移速/伤害 +15%）', mSpd:1.15, mDmg:1.15, tint:'rgba(160,20,30,0.10)' },
+};
+function rollWeather() {
+  const r = Math.random();
+  if (r < 0.34) return WEATHERS.clear;
+  const pool = ['rain', 'snow', 'sandstorm', 'bloodmoon'];
+  return WEATHERS[pool[Math.floor(Math.random() * pool.length)]];
+}
+
+// ============ 地图随机道具（拾取即生效） ============
+const POWERUPS = {
+  heart:   { id:'heart',   name:'回生桃心', icon:'💖', desc:'回复 60 生命' },
+  shield:  { id:'shield',  name:'守护泡泡', icon:'🫧', desc:'获得 50 点临时护盾' },
+  potion:  { id:'potion',  name:'谜之药水', icon:'🧪', desc:'随机一种药剂效果' },
+  feather: { id:'feather', name:'佣兵羽毛', icon:'🪶', desc:'召唤一名保镖鸭助战 40 秒' },
+  chaos:   { id:'chaos',   name:'混乱蘑菇', icon:'🍄', desc:'8 秒内怪物自相残杀！' },
+  portal:  { id:'portal',  name:'紊乱传送门', icon:'🌀', desc:'随机传送到地图某处（福祸难料）' },
+  hourgold:{ id:'hourgold',name:'金色沙漏', icon:'⌛', desc:'10 秒内翻滚不耗体力' },
+};
+const POWERUP_KEYS = Object.keys(POWERUPS);
+
+// ============ 翻滚/体力 ============
+const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, rollCd:0.9, regenDelay:0.35 };
+
 const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));

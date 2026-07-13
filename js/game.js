@@ -4,12 +4,12 @@
 const VIEW_W = 1280, VIEW_H = 720;
 
 const KEYMAP = [
-  { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD', interact:'KeyE', shoot:'KeyF', shoot2:'Space',
+  { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD', interact:'KeyE', shoot:'KeyF', shoot2:null, roll:'Space',
     use:'KeyQ', cycle:'Tab', swap:'KeyR', sneak:'ShiftLeft',
-    labels:{ interact:'E', shoot:'F/空格', use:'Q', cycle:'Tab', swap:'R', sneak:'左Shift' } },
-  { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', interact:'Comma', shoot:'Period', shoot2:null,
+    labels:{ interact:'E', shoot:'F', use:'Q', cycle:'Tab', swap:'R', sneak:'左Shift', roll:'空格' } },
+  { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', interact:'Comma', shoot:'Period', shoot2:null, roll:'Slash',
     use:'KeyM', cycle:'KeyK', swap:'KeyL', sneak:'ShiftRight',
-    labels:{ interact:',', shoot:'.', use:'M', cycle:'K', swap:'L', sneak:'右Shift' } },
+    labels:{ interact:',', shoot:'.', use:'M', cycle:'K', swap:'L', sneak:'右Shift', roll:'/' } },
 ];
 
 const Input = { keys: {} };
@@ -133,10 +133,12 @@ class Game {
     document.getElementById('hud-bot-p2').style.display = mode === 2 ? '' : 'none';
     this.toastEl = document.getElementById('hud-toasts');
     this.toastEl.innerHTML = '';
+    this.initWeather();
+    this.initPowerups();
     if (this.horde) this.toast('🌾 无双割草！撑过 10 分钟——杀出一条路来！弹药无限！', '#ffd93d');
     else this.toast(`【${this.mapName}】难度【${this.cfg.name}】— 搜刮宝箱，活着撤离！`, '#ffd93d');
     if (this.merchant) this.toast('听说这片区域有个神秘商人出没……', '#b48aff');
-    Music.play('game');
+    Music.play(this.horde ? 'battle' : 'game');
 
     this.last = performance.now();
     this.raf = requestAnimationFrame(t => this.frame(t));
@@ -157,7 +159,8 @@ class Game {
     for (const p of this.players) {
       const km = KEYMAP[p.idx];
       if (!p.active) continue;
-      if (code === km.use) this.useConsumable(p);
+      if (code === km.roll) this.tryRoll(p);
+      else if (code === km.use) this.useConsumable(p);
       else if (code === km.cycle) this.cycleConsumable(p);
       else if (code === km.swap) { p.switchWeapon(); Sfx.tick(); }
       else if (code === km.interact && this.merchant && !this.merchantOpen &&
@@ -244,6 +247,8 @@ class Game {
     for (const s of this.sparks) { s.t -= dt; s.x += s.vx * dt; s.y += s.vy * dt; }
     this.sparks = this.sparks.filter(s => s.t > 0);
 
+    this.updateWeather(dt);
+    this.updatePowerups(dt);
     if (this.horde) this.hordeUpdate(dt);
 
     this.updateCameras(dt);
@@ -292,6 +297,7 @@ class Game {
     }
 
     this.hordeGems(dt);
+    this.updateHordeExtraSkills(dt);
 
     // —— 玩家再生 ——
     for (const p of this.players) {
@@ -322,7 +328,7 @@ class Game {
     if (H.skills.missile > 0) {
       H.missileT -= dt;
       if (H.missileT <= 0) {
-        H.missileT = Math.max(0.8, 3.4 - H.skills.missile * 0.5);
+        H.missileT = Math.max(0.55, 1.9 - H.skills.missile * 0.22);
         const shooters = this.players.filter(p => p.active);
         for (const p of shooters) {
           const targets = this.monsters.filter(m => Math.hypot(m.x - p.x, m.y - p.y) < 700);
@@ -332,7 +338,7 @@ class Game {
             const tgt = targets[Math.floor(Math.random() * targets.length)];
             const a = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (Math.random() - 0.5) * 0.6;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'duckmissile', dmg: 26 + H.skills.missile * 8, speed: 400, range: 950,
+              { id: 'duckmissile', dmg: 15 + H.skills.missile * 5, speed: 400, range: 950,
                 knock: 140, turn: 7, duck: true }, p, H.mods.dmg));
           }
           Sfx.crossbow();
@@ -343,7 +349,7 @@ class Game {
     if (H.skills.nova > 0) {
       H.novaT -= dt;
       if (H.novaT <= 0) {
-        H.novaT = Math.max(3.5, 9 - H.skills.nova);
+        H.novaT = Math.max(2.6, 6.5 - H.skills.nova * 0.7);
         for (const p of this.players) {
           if (!p.active) continue;
           const R = 170 + H.skills.nova * 22;
@@ -352,7 +358,7 @@ class Game {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
             m.stunT = Math.max(m.stunT, 1 + H.skills.nova * 0.2);
             m.slowT = Math.max(m.slowT, 2.5);
-            if (m.hurt(Math.round((18 + H.skills.nova * 9) * H.mods.dmg), this)) this.killMonster(m, p);
+            if (m.hurt(Math.round((13 + H.skills.nova * 6) * H.mods.dmg), this)) this.killMonster(m, p);
           }
           Sfx.laser();
         }
@@ -386,7 +392,7 @@ class Game {
     if (H.skills.lightning > 0) {
       H.boltT -= dt;
       if (H.boltT <= 0) {
-        H.boltT = Math.max(1.4, 4.2 - H.skills.lightning * 0.5);
+        H.boltT = Math.max(0.9, 2.6 - H.skills.lightning * 0.3);
         for (const p of this.players) {
           if (!p.active) continue;
           let cur = null, curD = 520;
@@ -402,7 +408,7 @@ class Game {
           for (let c = 0; c < chains && node; c++) {
             pts.push({ x: node.x, y: node.y });
             hitSet.add(node);
-            if (node.hurt(Math.round((30 + H.skills.lightning * 10) * H.mods.dmg), this)) this.killMonster(node, p);
+            if (node.hurt(Math.round((17 + H.skills.lightning * 6) * H.mods.dmg), this)) this.killMonster(node, p);
             let next = null, nd = 240;
             for (const m of this.monsters) {
               if (hitSet.has(m)) continue;
@@ -534,9 +540,40 @@ class Game {
     this.toast('⚠️ 巨魁王踏碎地面而来！击杀它获得免费升级！', '#ff5c5c');
   }
 
+  tryRoll(p) {
+    if (!p.active || p.rollT > 0 || p.rollCd > 0) return;
+    const free = p.staminaFreeT > 0;
+    if (!free && p.stamina < STAMINA.rollCost) { Sfx.error(); this.floater(p.x, p.y - 34, '体力不足！', '#ff8f8f'); return; }
+    if (!free) { p.stamina -= STAMINA.rollCost; p.staminaDelay = STAMINA.regenDelay; }
+    p.rollT = STAMINA.rollDur;
+    p.rollCd = STAMINA.rollCd;
+    // 有方向键按方向翻，否则朝面向翻
+    const km = KEYMAP[p.idx];
+    let dx = 0, dy = 0;
+    if (Input.keys[km.up]) dy--;
+    if (Input.keys[km.down]) dy++;
+    if (Input.keys[km.left]) dx--;
+    if (Input.keys[km.right]) dx++;
+    p.rollDir = (dx || dy) ? Math.atan2(dy, dx) : p.facing;
+    Sfx.crossbow();
+  }
+
   updatePlayer(p, dt) {
     p.anim += dt;
     p.shootCd = Math.max(0, p.shootCd - dt);
+    // 体力恢复 / 翻滚冷却 / 换弹
+    p.rollCd = Math.max(0, p.rollCd - dt);
+    p.staminaFreeT = Math.max(0, p.staminaFreeT - dt);
+    p.staminaDelay = Math.max(0, p.staminaDelay - dt);
+    if (p.staminaDelay <= 0) p.stamina = Math.min(STAMINA.max, p.stamina + STAMINA.regen * dt);
+    if (p.reloadT > 0) {
+      p.reloadT -= dt;
+      if (p.reloadT <= 0) {
+        p.reloadT = 0;
+        const def = p.weaponDef();
+        if (!def.melee && def.mag) { p.mags[p.activeSlot] = def.mag; Sfx.tick(); }
+      }
+    }
     p.hurtCd = Math.max(0, p.hurtCd - dt);
     p.swing = Math.max(0, p.swing - dt);
     p.sodaTime = Math.max(0, p.sodaTime - dt);
@@ -552,6 +589,17 @@ class Game {
     }
     if (!p.active) return;
 
+    // —— 翻滚中：高速冲刺 + 无敌帧 + 不可攻击 ——
+    if (p.rollT > 0) {
+      p.rollT -= dt;
+      const r = resolveCircle(p.x + Math.cos(p.rollDir) * STAMINA.rollSpeed * dt,
+                              p.y + Math.sin(p.rollDir) * STAMINA.rollSpeed * dt, PLAYER_R);
+      p.x = r.x; p.y = r.y;
+      unstick(p);
+      p.moving = true;
+      return;   // 翻滚期间跳过攻击/互动/拾取判定（下一帧恢复）
+    }
+
     const km = KEYMAP[p.idx];
     p.sneak = this.horde ? false : !!Input.keys[km.sneak];
 
@@ -560,9 +608,9 @@ class Game {
     if (Input.keys[km.down]) dy++;
     if (Input.keys[km.left]) dx--;
     if (Input.keys[km.right]) dx++;
-    const spd = this.horde
+    const spd = (this.horde
       ? PLAYER_SPEED * 1.06 * this.hordeState.mods.speed * (p.sodaTime > 0 ? p.sodaMul : 1)
-      : PLAYER_SPEED * p.speedMul();
+      : PLAYER_SPEED * p.speedMul()) * this.weatherPSpd();
     let wishX = 0, wishY = 0;
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
@@ -664,7 +712,7 @@ class Game {
 
   // ---------- 战斗 ----------
   tryAttack(p) {
-    if (p.shootCd > 0) return;
+    if (p.shootCd > 0 || p.rollT > 0 || p.reloadT > 0) return;
     const def = p.weaponDef();
     const inst = p.weaponInst();
     if (def.melee) {
@@ -689,6 +737,18 @@ class Game {
           backstab = true;
           this.floater(m.x, m.y - 26, '背刺！', '#ff5c5c');
         }
+        // 潜行处决：潜行状态从背后近战未察觉的普通怪 → 一击毙命
+        if (!this.horde && p.sneak && m.state !== 'chase' && !m.isBoss &&
+            m.type.id !== 'brute' && m.type.id !== 'mimic') {
+          let bda = Math.atan2(p.y - m.y, p.x - m.x) - m.faceDir;
+          bda = Math.atan2(Math.sin(bda), Math.cos(bda));
+          if (Math.abs(bda) > 1.9) {
+            dmg = m.hp + 999;
+            backstab = true;
+            this.floater(m.x, m.y - 30, '💀 处决！', '#ff5c5c');
+            this.shake = Math.max(this.shake, 4);
+          }
+        }
         if (m.hurt(Math.round(dmg), this)) this.killMonster(m, p, { backstab });
       }
       if (hitAny && inst && def.id !== 'fists' && isFinite(def.dur) && !this.horde) {
@@ -710,7 +770,15 @@ class Game {
       SAVE.ammo[ammoType]--;
       inst.dur -= def.durPerShot || 1;
     }
+    // —— 弹夹：打空自动换弹 ——
+    if (def.mag) {
+      if (p.magLeft() <= 0) { p.startReload(); Sfx.tick(); return; }
+    }
     p.shootCd = 1 / (def.rate * (H ? H.rate : 1));
+    if (def.mag) {
+      p.mags[p.activeSlot]--;
+      if (p.mags[p.activeSlot] <= 0) p.startReload();
+    }
 
     // 辅助瞄准：朝向 ±31° 内 520px 最近可见怪
     let angle = p.facing;
@@ -835,12 +903,26 @@ class Game {
         this.shake = 12;
         this.toast('👑 巨魁王倒下了！金币雨 + 免费强化！', '#ffd93d');
         Sfx.boom();
+        this.spawnHordeMerchant();
       }
     }
   }
 
   damagePlayer(p, dmg, src) {
     if (!p.active) return;
+    // 翻滚无敌帧
+    if (p.rollT > 0) {
+      this.floater(p.x, p.y - 30, '✨ 完美闪避！', '#9fd8ff');
+      return;
+    }
+    // 临时护盾（圣盾/泡泡）先扛
+    if (p.tempShield > 0) {
+      const absorbed = Math.min(p.tempShield, dmg);
+      p.tempShield -= absorbed;
+      dmg -= absorbed;
+      if (p.tempShield <= 0) this.floater(p.x, p.y - 30, '护盾碎裂！', '#9fd8ff');
+      if (dmg <= 0) { p.hurtCd = 0.35; Sfx.hit(); return; }
+    }
     // 护甲吸收
     if (p.armor && p.armor.dur > 0) {
       const adef = ARMORS[p.armor.id];
@@ -1300,6 +1382,7 @@ class Game {
       ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('🪙', sx, sy + Math.sin(gd.anim * 6) * 2 + 4);
     }
+    this.drawPowerups(ctx, cam, w);
     for (const gl of this.groundLoot) {
       gl.anim += 0.015;
       const [sx, sy] = W2S(gl.x, gl.y);
@@ -1314,6 +1397,20 @@ class Game {
       const [sx, sy] = W2S(this.merchant.x, this.merchant.y);
       if (onScreen(sx, sy)) this.drawMerchant(ctx, sx, sy);
     }
+    // —— 潜行辅助：显示怪物面朝方向的警戒锥 ——
+    if (!this.horde && this.players.some(pl => pl.active && pl.sneak)) {
+      for (const m of this.monsters) {
+        if (m.state === 'ambush') continue;
+        const [sx, sy] = W2S(m.x, m.y);
+        if (!onScreen(sx, sy, 100)) continue;
+        ctx.fillStyle = m.state === 'chase' ? 'rgba(255,92,92,.10)' : 'rgba(255,217,61,.09)';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, 74, m.faceDir - 0.55, m.faceDir + 0.55);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
     // —— 割草模式地面层：火焰足迹 / 经验宝石 ——
     if (this.horde) {
       const H = this.hordeState;
@@ -1407,7 +1504,7 @@ class Game {
     }
     ctx.globalAlpha = 1;
 
-    const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) }));
+    const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) * this.weatherVision() }));
     for (const p of this.players) if (p.downed) lights.push({ x: p.x, y: p.y, radius: 90 });
     const glows = this.chests.filter(c => !c.opened && (c.tier === 'gold' || c.tier === 'mystery')).map(c => ({ x: c.x, y: c.y, r: 26 }));
     for (const t of MapData.torches) glows.push({ x: t.x, y: t.y - 8, r: 56 + Math.sin(this.time * 6 + t.y) * 7 });
@@ -1415,6 +1512,8 @@ class Game {
     const overlay = this.overlays[v.idx];
     drawDarkness(overlay.getContext('2d'), cam, lights, glows);
     ctx.drawImage(overlay, 0, 0);
+    this.drawWeather(ctx, w);
+    if (this.horde) this.drawHordeExtras(ctx, cam, w);
 
     // —— 割草特效层（穿透黑暗，保证爽感可见） ——
     if (this.horde) {
@@ -1910,6 +2009,7 @@ class Game {
     }
     ctx.save();
     ctx.translate(sx, sy);
+    if (p.rollT > 0) ctx.rotate((1 - p.rollT / STAMINA.rollDur) * Math.PI * 2 * (Math.cos(p.rollDir) < 0 ? -1 : 1));
     if (p.downed) { ctx.rotate(Math.PI / 2); ctx.globalAlpha = 0.8; }
     if (p.hurtCd > 0 && Math.floor(p.anim * 20) % 2) ctx.globalAlpha = 0.4;
     if (p.invisT > 0) ctx.globalAlpha = 0.35;           // 隐身半透明
@@ -2001,10 +2101,45 @@ class Game {
     }
     ctx.restore();
 
+    // —— 临时护盾泡泡 ——
+    if (p.tempShield > 0 && !p.downed) {
+      ctx.strokeStyle = `rgba(140,210,255,${0.35 + Math.sin(p.anim * 5) * 0.12})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(sx, sy - 2, PLAYER_R + 8, 0, Math.PI * 2); ctx.stroke();
+    }
+    // —— 头顶状态条：生命 / 体力 / 护甲 ——
+    if (p.active) {
+      const bw = 40, bx = sx - bw / 2;
+      let by = sy - 34;
+      ctx.fillStyle = 'rgba(8,6,20,.72)';
+      ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, (p.armor ? 13 : 9.5));
+      const hpPct = Math.max(0, p.hp / p.maxHp);
+      ctx.fillStyle = hpPct > 0.5 ? '#7dff9a' : hpPct > 0.25 ? '#ffd93d' : '#ff5c5c';
+      ctx.fillRect(bx, by, bw * hpPct, 4);
+      by += 5.5;
+      ctx.fillStyle = p.staminaFreeT > 0 ? '#ffd93d' : '#5ad0e8';
+      ctx.fillRect(bx, by, bw * Math.max(0, p.stamina / STAMINA.max), 2.6);
+      if (p.armor) {
+        by += 4;
+        const adef = ARMORS[p.armor.id];
+        ctx.fillStyle = '#c9d6e4';
+        ctx.fillRect(bx, by, bw * Math.max(0, p.armor.dur / adef.pool), 2.6);
+      }
+      // 换弹进度环
+      if (p.reloadT > 0) {
+        const def = p.weaponDef();
+        const t = 1 - p.reloadT / (def.reload || 1.2);
+        ctx.strokeStyle = '#ffd93d'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(sx, sy, 22, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2); ctx.stroke();
+        ctx.font = 'bold 10px "PingFang SC",sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffd93d';
+        ctx.fillText('装填…', sx, sy + 34);
+      }
+    }
     if (p.bag.length && !p.downed) {
       const top = p.bag.reduce((a, b) => RARITY_ORDER.indexOf(b.rarity) > RARITY_ORDER.indexOf(a.rarity) ? b : a);
       ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(top.icon, sx, sy - 28 + Math.sin(p.anim * 3) * 2);
+      ctx.fillText(top.icon, sx, sy - 44 + Math.sin(p.anim * 3) * 2);
     }
     if (this.mode === 2) {
       ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
@@ -2112,8 +2247,13 @@ class Game {
         if (!inst) text = '—';
         else {
           const wd = WEAPONS[inst.id];
-          const ammoTxt = wd.melee ? '' : (this.horde ? ' ∞' : ` ${AMMO_TYPES[wd.ammo].icon}${SAVE.ammo[wd.ammo]}`);
-          text = this.horde ? `${wd.icon} ∞` : `${wd.icon}${inst.dur <= 0 ? '✖' : Math.ceil(inst.dur)}${ammoTxt}`;
+          if (wd.melee) {
+            text = this.horde ? `${wd.icon} ∞` : `${wd.icon}${inst.dur <= 0 ? '✖' : Math.ceil(inst.dur)}`;
+          } else {
+            const magNow = s === p.activeSlot && p.reloadT > 0 ? '…' : (p.mags[s] === null ? wd.mag : p.mags[s]);
+            const reserve = this.horde ? '∞' : `${AMMO_TYPES[wd.ammo].icon}${SAVE.ammo[wd.ammo]}`;
+            text = `${wd.icon}${magNow}/${wd.mag}·${reserve}`;
+          }
         }
         slots[s].textContent = text;
         slots[s].classList.toggle('on', s === p.activeSlot);
