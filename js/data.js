@@ -230,6 +230,31 @@ const MONSTER_TYPES = {
 };
 const HORDE_BOSS_IDS = ['boss_cyclops', 'boss_stormdragon', 'boss_lich'];
 
+// ============ 怪物图鉴档案（击败或被其击中过才解锁） ============
+const CODEX_INFO = {
+  shade:      { lore:'游荡在废墟里的暗影残魂，永远追着有体温的东西。', hint:'最基础的追猎者，什么流派都能拿它练手。' },
+  skitter:    { lore:'翼膜薄得透光的洞穴蝠，飞行轨迹像喝醉了一样。', hint:'走位飘忽但一碰就碎，散射武器的最爱。' },
+  brute:      { lore:'石头缝里长出来的巨魁，出拳前会把整条手臂抡圆。', hint:'看到它抬手就翻滚——前摇大，但挨一下半管血。' },
+  lurker:     { lore:'趴在地上装成影子的伏击者，眼睛偶尔会闪红光。', hint:'路过可疑阴影先打一枪；被扑到再反应就晚了。' },
+  wisp:       { lore:'烧不尽的怨火，隔着老远就往你脸上吐火星。', hint:'唯一的远程杂兵，优先点名，它的吐息弹能躲。' },
+  slime:      { lore:'一大坨会分裂的活泥巴，砍一刀变两坨。', hint:'击杀会分裂成两只小泥怪，AOE 收尾最省事。' },
+  banshee:    { lore:'嗓子是它唯一的武器——一嗓子能喊来半张地图的怪。', hint:'见到必须秒杀，让它叫出声麻烦就大了。' },
+  skeleton:   { lore:'生前是仪仗卫兵，死后还端着长戟保持队形。', hint:'正面子弹被盾牌格挡只吃 35% 伤害，绕背打。' },
+  watcher:    { lore:'一颗被诅咒的眼球，凝视着的东西无处可藏。', hint:'被它盯 1.8 秒会全场揭示你的位置，速杀或断视线。' },
+  mimic:      { lore:'伪装成宝箱的贪吃鬼，牙缝里还卡着上个冒险者的头盔。', hint:'开神秘箱前留半管体力，随时准备翻滚拉开。' },
+  charger:    { lore:'鼻息喷火的蛮牛，刨地三下就直线冲锋。', hint:'冲锋是直线，横向翻滚就能躲，撞墙后它会硬直。' },
+  shroom:     { lore:'剧毒孢子撑起来的伞菇，靠近就会自爆。', hint:'远程点爆它，毒云还能顺便熏别的怪。' },
+  warlock:    { lore:'贩卖灵魂的术士，吟唱时指尖缠着紫黑色的锁链。', hint:'吟唱结束会定身你 1.2 秒——看到抬手就翻滚打断锁定。' },
+  venomsnake: { lore:'鳞片渗着毒液的海蛇，咬痕会发绿。', hint:'被咬中毒持续掉血（不致死），带瓶回复药更安心。' },
+  stoneling:  { lore:'石肤巨像，皮糙肉厚，击退对它完全无效。', hint:'血牛+免击退，风筝它，别站撸。' },
+  direwolf:   { lore:'暗影里的猎手，成群时会从两翼包抄。', hint:'全场最快的杂兵，留一发子弹给身后。' },
+  leapspider: { lore:'腿节上有弹簧般的肌腱，八米开外一跃扑脸。', hint:'它蓄力压低身体时就是起跳前兆，侧移即可让它扑空。' },
+  scorpion:   { lore:'尾针注射的不是毒，是让肌肉罢工的麻痹素。', hint:'被蜇中会麻痹减速 2 秒，千万别在怪堆里挨这一下。' },
+  boss_cyclops:     { lore:'独眼巨人扛着半座山来了。它扔出的巨石会把地面砸出坑。', hint:'掷石有红圈预警，翻滚出圈；近身缠斗反而安全。' },
+  boss_stormdragon: { lore:'风暴巨龙的每次俯冲都带着雷云，吐息能犁出一道焦土。', hint:'正面扇形吐息+脚下召雷双威胁，贴着它的侧后方绕圈。' },
+  boss_lich:        { lore:'巫妖王生前是知识的殉道者，死后是灾厄本身。', hint:'暗影三连弹可以横向走位躲，优先清掉它召的幽影仆从。' },
+};
+
 // ============ 难度 ============
 const DIFFICULTIES = {
   easy: {
@@ -502,12 +527,12 @@ const HORDE_UPGRADES = [
   { id:'garlic',    name:'蒜香领域', icon:'🧄', max:5, skill:'garlic',    desc:'贴身的气味结界持续灼烧近身怪物' },
   { id:'spears',    name:'骨刺环发', icon:'🦴', max:5, skill:'spears',    desc:'周期向四面八方射出一圈骨刺' },
   { id:'drone',     name:'无人机鸭', icon:'🛸', max:5, skill:'drone',     desc:'一架小飞鸭跟随你自动点射敌人' },
-  { id:'thorns',    name:'荆棘羽甲', icon:'🌵', max:5, skill:'thorns',    desc:'被近身击中时反弹伤害' },
+  { id:'thorns',    name:'荆棘羽甲', icon:'🌵', max:5, skill:'thorns',    desc:'反弹近身伤害，且每级减免 1.5 点受击伤害' },
   { id:'luck',      name:'幸运骰',   icon:'🎲', max:4, desc:'经验宝石价值 +25%', mod:m => m.gemMul = (m.gemMul || 1) * 1.25 },
   { id:'crit',      name:'会心之喙', icon:'💢', max:4, desc:'暴击率 +12%（双倍伤害）', mod:m => m.crit = (m.crit || 0) + 0.12 },
   // —— 第七轮新技能 ——
   { id:'fireball',  name:'火球术',   icon:'🔥', max:5, skill:'fireball',  desc:'周期掷出爆裂火球，命中炸裂灼烧' },
-  { id:'summon',    name:'召唤鸭灵', icon:'🐥', max:3, skill:'summon',    desc:'召唤一只常驻的鸭灵战士并肩作战' },
+  { id:'summon',    name:'召唤鸭灵', icon:'🐥', max:3, skill:'summon',    desc:'召唤一只常驻的鸭灵战士（阵亡 5 秒必定复活）' },
   { id:'vamp',      name:'汲血之羽', icon:'🧛', max:3, desc:'造成伤害的 3% 转化为生命',  mod:m => m.vamp = (m.vamp || 0) + 0.03 },
   { id:'magsize',   name:'扩容弹夹', icon:'📦', max:3, desc:'弹夹容量 +30%',            mod:m => m.magMul = (m.magMul || 1) + 0.3 },
   { id:'reloadspd', name:'快手换弹', icon:'⚡', max:3, desc:'换弹速度 +25%',            mod:m => m.reloadMul = (m.reloadMul || 1) * 0.75 },
@@ -519,6 +544,8 @@ const HORDE_UPGRADES = [
   { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
   { id:'meteor_freq', name:'陨石·天怒', icon:'🌋', max:2, requires:'meteor', desc:'陨石冷却 -22%', mod:m => m.meteorCd = (m.meteorCd || 1) * 0.78 },
   { id:'drone_strike',name:'无人机·空袭', icon:'🛰️', max:2, requires:'drone', desc:'无人机不时呼叫天降正义轰炸', mod:m => m.droneStrike = (m.droneStrike || 0) + 1 },
+  { id:'summon_flock',name:'鸭灵·成群',   icon:'🐣', max:2, requires:'summon', desc:'同时在场的鸭灵 +1 只', mod:m => m.petN = (m.petN || 0) + 1 },
+  { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵的生命与伤害 +40%', mod:m => m.petPow = (m.petPow || 0) + 1 },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -556,7 +583,7 @@ const POWERUPS = {
 const POWERUP_KEYS = Object.keys(POWERUPS);
 
 // ============ 翻滚/体力 ============
-const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, rollCd:0.9, regenDelay:0.35 };
+const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, rollCd:0.35, regenDelay:0.35 };
 
 const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));
 
@@ -574,6 +601,8 @@ const TUNE_DEFS = [
   { id:'goldRate', name:'金币掉落',        min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'magnet',   name:'磁吸范围',        min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'staminaRegen', name:'体力恢复',    min:0.5,  max:2.5,  step:0.1,  def:1 },
+  { id:'rollCd',   name:'翻滚冷却倍率',    min:0.1,  max:3,    step:0.05, def:1 },
+  { id:'thorns',   name:'荆棘强度(反伤/护甲)', min:0, max:3,   step:0.1,  def:1 },
   { id:'mimic',    name:'宝箱怪概率',      min:0,    max:1,    step:0.05, def:0.35, abs:true },
   { id:'merchantF',name:'商人出现倍率',    min:0,    max:2,    step:0.1,  def:1.2 },
   { id:'bossHp',   name:'Boss 血量',       min:0.5,  max:2.5,  step:0.1,  def:1 },

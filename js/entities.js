@@ -144,6 +144,7 @@ class Monster {
     this.path = []; this.pathT = 0;
     this.anim = Math.random() * 10;
     this.hpShowT = 0;
+    this.flashT = 0;             // 受击闪白
     this.huntT = cfg.huntInterval ? cfg.huntInterval * (0.5 + Math.random()) : 0;
     this.kvx = 0; this.kvy = 0;
     this.zigPhase = Math.random() * 10;
@@ -175,6 +176,7 @@ class Monster {
     this.anim += dt;
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.hpShowT = Math.max(0, this.hpShowT - dt);
+    this.flashT = Math.max(0, this.flashT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
     this.screamCd = Math.max(0, this.screamCd - dt);
     // 灼烧：持续掉血
@@ -688,6 +690,7 @@ class Monster {
   hurt(dmg, game) {
     this.hp -= dmg;
     this.hpShowT = 2;
+    this.flashT = 0.13;
     Sfx.hit();
     if (this.hp <= 0) return true;
     const near = game.nearestActivePlayer(this.x, this.y);
@@ -748,6 +751,7 @@ class Bullet {
     this.homing = !def.pellets;   // 散射类武器不追踪
     this.turn = def.turn || HOMING.turn;  // 追踪转向速率（弧度/秒）
     this.duck = !!def.duck;       // 追踪鸭雷外观
+    this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
     this.hitSet = new Set();
   }
   update(dt, game) {
@@ -771,6 +775,7 @@ class Bullet {
     }
     this.vx = Math.cos(this.angle) * this.speed;
     this.vy = Math.sin(this.angle) * this.speed;
+    if (this.fire && Math.random() < dt * 42) game.fxTrailFire(this.x, this.y, 20);
 
     const stepLen = this.speed * dt;
     this.traveled += stepLen;
@@ -790,6 +795,7 @@ class Bullet {
           if (this.explosive) { game.explode(this.x, this.y, this); return false; }
           this.hitSet.add(m);
           game.spark(this.x, this.y, this.frost || this.freeze ? '#bfe9ff' : '#ff8f5c');
+          game.fxHit(this.x, this.y, this.angle);
           m.knock(this.angle, this.knock * 4);
           if (this.slow) m.slowT = Math.max(m.slowT, this.slow);
           if (this.burn) m.burnT = Math.max(m.burnT, this.burn);

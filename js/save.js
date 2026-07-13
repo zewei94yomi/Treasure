@@ -25,7 +25,8 @@ function defaultSave() {
     trophies: {},              // 奖杯 id -> 解锁时间戳
     settings: { music: true, skins: ['duck_yellow', 'duck_blue'], lastMap: 'manor', lastDiff: 'normal', lastMode: 1 },
     hordeBest: null,           // 无双割草最佳战绩 { time, kills, level }
-    stats: { runs: 0, extractions: 0, goldEarned: 0, kills: 0, chestsOpened: 0, deaths: 0 },
+    stats: { runs: 0, extractions: 0, goldEarned: 0, kills: 0, chestsOpened: 0, deaths: 0, mKills: {} },
+    monsterSeen: {},           // 怪物图鉴解锁（击败过或被它击中过）
   };
 }
 
@@ -47,6 +48,8 @@ function loadSave() {
         if (typeof SAVE.pouches !== 'number') SAVE.pouches = 0;
         SAVE.mercTrials = Object.assign({ guard: 2, vet: 2, ace: 2 }, s.mercTrials || {});
         if (!SAVE.trophies || typeof SAVE.trophies !== 'object') SAVE.trophies = {};
+        if (!SAVE.monsterSeen || typeof SAVE.monsterSeen !== 'object') SAVE.monsterSeen = {};
+        if (!SAVE.stats.mKills || typeof SAVE.stats.mKills !== 'object') SAVE.stats.mKills = {};
         return SAVE;
       }
     }

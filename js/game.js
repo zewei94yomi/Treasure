@@ -300,6 +300,7 @@ class Game {
       if (z.t <= 0) {
         Sfx.boom();
         this.shake = Math.max(this.shake, 7);
+        this.fxExplosion(z.x, z.y, z.r, { quiet: true });
         for (let i = 0; i < 10; i++) this.spark(z.x, z.y, z.kind === 'bolt' ? '#ffe95c' : '#c9a06a');
         for (const p of this.players) {
           if (p.active && p.rollT <= 0 && Math.hypot(p.x - z.x, p.y - z.y) < z.r) this.damagePlayer(p, z.dmg, null);
@@ -317,6 +318,7 @@ class Game {
     this.floaters = this.floaters.filter(f => f.t > 0);
     for (const s of this.sparks) { s.t -= dt; s.x += s.vx * dt; s.y += s.vy * dt; }
     this.sparks = this.sparks.filter(s => s.t > 0);
+    this.updateFx(dt);
 
     this.updateWeather(dt);
     this.updatePowerups(dt);
@@ -680,7 +682,8 @@ class Game {
     if (!free) { p.stamina -= STAMINA.rollCost; p.staminaDelay = STAMINA.regenDelay; }
     if (p.sneak) { p.sneak = false; this.floater(p.x, p.y - 46, '翻滚破隐', '#9fd8ff'); }
     p.rollT = STAMINA.rollDur;
-    p.rollCd = STAMINA.rollCd;
+    p.rollCd = STAMINA.rollCd * tune('rollCd');
+    p.rollCut = false;
     // 有方向键按方向翻，否则朝面向翻
     const km = KEYMAP[p.idx];
     let dx = 0, dy = 0;
@@ -742,6 +745,17 @@ class Game {
                               p.y + Math.sin(p.rollDir) * STAMINA.rollSpeed * dt, PLAYER_R);
       p.x = r.x; p.y = r.y;
       unstick(p);
+      // 翻进怪物堆：滚不动了——剩余翻滚距离骤减（无敌帧照常保留到结束）
+      if (!p.rollCut) {
+        for (const m of this.monsters) {
+          if (m.state === 'ambush') continue;
+          if (Math.hypot(m.x - p.x, m.y - p.y) < m.r + PLAYER_R - 2) {
+            p.rollCut = true;
+            p.rollT = Math.min(p.rollT, 0.09);
+            break;
+          }
+        }
+      }
       p.moving = true;
       return;   // 翻滚期间跳过攻击/互动/拾取判定（下一帧恢复）
     }
@@ -978,6 +992,7 @@ class Game {
         p.dmgMul() * (H ? H.dmg : 1) * (crit ? 2 : 1) * tune('pDmg')));
     }
     this.spark(p.x + Math.cos(angle) * 24, p.y + Math.sin(angle) * 24, '#ffe28a');
+    this.fxMuzzle(p.x + Math.cos(angle) * 24, p.y + Math.sin(angle) * 24, angle);
     if (def.id === 'laser') Sfx.laser();
     else if (def.id === 'crossbow') Sfx.crossbow();
     else if (def.id === 'cannon') Sfx.shotgun();
@@ -991,8 +1006,8 @@ class Game {
   explode(x, y, bullet) {
     Sfx.boom();
     this.shake = 10;
-    for (let i = 0; i < 16; i++) this.spark(x, y, i % 2 ? '#ffb347' : '#ff5c5c');
     const R = bullet.explosive;
+    this.fxExplosion(x, y, R);
     for (const m of this.monsters.slice()) {
       const d = Math.hypot(m.x - x, m.y - y);
       if (d > R + m.r) continue;
@@ -1038,6 +1053,11 @@ class Game {
     this.monsters = this.monsters.filter(x => x !== m);
     this.runKills++;
     SAVE.stats.kills++;
+    // 怪物图鉴：击杀计数 + 解锁
+    if (!SAVE.stats.mKills) SAVE.stats.mKills = {};
+    SAVE.stats.mKills[m.type.id] = (SAVE.stats.mKills[m.type.id] || 0) + 1;
+    if (!SAVE.monsterSeen) SAVE.monsterSeen = {};
+    SAVE.monsterSeen[m.type.id] = true;
     if (owner) {
       owner.kills++;
       if (owner.backstabKills !== undefined) {
@@ -1045,6 +1065,7 @@ class Game {
       }
     }
     for (let i = 0; i < 8; i++) this.spark(m.x, m.y, '#b48aff');
+    this.fxDeath(m.x, m.y, !!(m.isBoss || m.isElite));
     this.floater(m.x, m.y - 20, `${m.type.name}被击败！`, '#b48aff');
     if (m.type.shroom && !m._boomed) {
       m._boomed = true;
@@ -1097,6 +1118,12 @@ class Game {
   damagePlayer(p, dmg, src) {
     if (!p.active) return;
     if (src && src.type) dmg = Math.round(dmg * tune('mDmg'));   // 怪物伤害调参
+    // 怪物图鉴：被它打过也算见过
+    if (src && src.type && src.type.id) { if (!SAVE.monsterSeen) SAVE.monsterSeen = {}; SAVE.monsterSeen[src.type.id] = true; }
+    // 荆棘羽甲的被动护甲：每级减免 1.5 点受击伤害（至少剩 1）
+    if (this.horde && this.hordeState.skills.thorns > 0 && dmg > 0) {
+      dmg = Math.max(1, dmg - this.hordeState.skills.thorns * 1.5 * tune('thorns'));
+    }
     // 灵敏反射：闪避判定
     if (this.horde && this.hordeState.mods.dodge && Math.random() < this.hordeState.mods.dodge) {
       this.floater(p.x, p.y - 40, '💨 闪避！', '#9fd8ff');
@@ -1145,7 +1172,7 @@ class Game {
     this.shake = src && src.type && src.type.id === 'brute' ? 9 : 5;
     // 荆棘羽甲：反弹伤害给近身攻击者
     if (this.horde && src && src.hurt && this.hordeState.skills.thorns > 0) {
-      const th = 8 + this.hordeState.skills.thorns * 6;
+      const th = Math.round((8 + this.hordeState.skills.thorns * 6) * tune('thorns'));
       if (src.hurt(th, this)) this.killMonster(src, p);
       else this.floater(src.x, src.y - 20, `🌵${th}`, '#7ac74f');
     }
@@ -1710,7 +1737,16 @@ class Game {
     }
     for (const m of this.monsters) {
       const [sx, sy] = W2S(m.x, m.y);
-      if (onScreen(sx, sy)) this.drawMonster(ctx, m, sx, sy);
+      if (!onScreen(sx, sy)) continue;
+      this.drawMonster(ctx, m, sx, sy);
+      // 程序绘制怪的受击闪白：柔光脉冲（贴图怪在 drawMonster 里用白剪影）
+      if (m.flashT > 0 && !m.type.sprite) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, m.flashT / 0.13) * 0.7;
+        ctx.drawImage(FxTex.glow, sx - m.r * 1.6, sy - m.r * 1.6, m.r * 3.2, m.r * 3.2);
+        ctx.restore();
+      }
     }
     for (const mc of this.mercs) {
       const [sx, sy] = W2S(mc.x, mc.y);
@@ -1762,6 +1798,25 @@ class Game {
       } else if (b.frost) {
         ctx.fillStyle = 'rgba(190,233,255,.8)';
         ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI*2); ctx.fill();
+      } else if (b.fire) {
+        // 火球术：像素火球贴图 + 加色辉光（拖尾粒子在 Bullet.update 里喷）
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 22) * 0.15;
+        ctx.drawImage(FxTex.fire, sx - 22, sy - 22, 44, 44);
+        ctx.restore();
+        const fimg = typeof MonsterImages !== 'undefined' && MonsterImages.fx_fireball;
+        if (fimg && fimg.naturalWidth) {
+          ctx.save();
+          ctx.translate(sx, sy); ctx.rotate(b.angle + Math.PI / 2);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(fimg, -14, -14, 28, 28);
+          ctx.imageSmoothingEnabled = true;
+          ctx.restore();
+        } else {
+          ctx.fillStyle = '#ffb347';
+          ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI*2); ctx.fill();
+        }
       } else {
         ctx.fillStyle = '#ffe28a';
         ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI*2); ctx.fill();
@@ -1773,6 +1828,7 @@ class Game {
       ctx.fillRect(sx-2, sy-2, 4, 4);
     }
     ctx.globalAlpha = 1;
+    this.drawFx(ctx, cam, w);   // 高级粒子层（爆炸/枪口焰/烟尘）
 
     const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) * this.weatherVision() }));
     for (const p of this.players) if (p.downed) lights.push({ x: p.x, y: p.y, radius: 90 });
@@ -1934,8 +1990,16 @@ class Game {
     if (m.type.sprite && typeof MonsterImages !== 'undefined' && MonsterImages[m.type.sprite] && MonsterImages[m.type.sprite].naturalWidth) {
       const img = MonsterImages[m.type.sprite];
       const size = m.type.boss ? m.r * 2.5 : m.r * 2 + 12;
+      // —— 程序骨骼感动画：走路小跳+挤压、待机呼吸、前摇鼓胀颤抖、追击前倾 ——
+      const moving = m.state === 'chase' || m.state === 'investigate' || m.state === 'patrol';
+      const trot = moving ? Math.sin(m.anim * 11) : 0;
+      const hop = Math.abs(trot) * 3.5;                                          // 小碎步跳动
+      const squash = 1 + (moving ? trot * 0.07 : Math.sin(m.anim * 2.6) * 0.035); // 走路挤压/待机呼吸
+      const lean = m.state === 'chase' ? trot * 0.055 : 0;                        // 追击左右晃身
+      const jx = m.windupT > 0 ? (Math.random() - 0.5) * 3 : 0;                   // 前摇颤抖
+      const swell = m.windupT > 0 ? 1.1 + (0.6 - Math.min(0.6, m.windupT)) * 0.12 : 1;  // 前摇鼓胀
       ctx.save();
-      ctx.translate(sx, sy + bob);
+      ctx.translate(sx + jx, sy + bob - hop);
       if (m.enraged) {
         ctx.fillStyle = `rgba(255,80,50,${0.2 + Math.sin(this.time * 9 + m.zigPhase) * 0.08})`;
         ctx.beginPath(); ctx.arc(0, 0, m.r + 8, 0, Math.PI * 2); ctx.fill();
@@ -1950,10 +2014,17 @@ class Game {
         ctx.beginPath(); ctx.arc(0, 2, m.r + 5, 0, Math.PI * 2); ctx.stroke();
       }
       ctx.fillStyle = 'rgba(0,0,0,.3)';
-      ctx.beginPath(); ctx.ellipse(0, m.r - 2, m.r - 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, m.r - 2 + hop, Math.max(4, (m.r - 2) * (1 - hop * 0.03)), 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.rotate(lean);
+      ctx.scale(squash * swell, (2 - squash) * swell);
       ctx.imageSmoothingEnabled = false;
       if (Math.cos(m.faceDir) < -0.2) { ctx.scale(-1, 1); }
       ctx.drawImage(img, -size / 2, -size / 2 - 4, size, size);
+      if (m.flashT > 0 && typeof MonsterImagesWhite !== 'undefined' && MonsterImagesWhite[m.type.sprite]) {
+        ctx.globalAlpha = Math.min(1, m.flashT / 0.13) * 0.85;   // 受击闪白剪影
+        ctx.drawImage(MonsterImagesWhite[m.type.sprite], -size / 2, -size / 2 - 4, size, size);
+        ctx.globalAlpha = 1;
+      }
       ctx.imageSmoothingEnabled = true;
       ctx.restore();
       ctx.textAlign = 'center';

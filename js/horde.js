@@ -106,7 +106,7 @@ Object.assign(Game.prototype, {
           if (mine.boom) {
             Sfx.boom();
             this.shake = Math.max(this.shake, 5);
-            for (let i = 0; i < 10; i++) this.spark(mine.x, mine.y, '#ffb347');
+            this.fxExplosion(mine.x, mine.y, 74);
             for (const m of this.monsters.slice()) {
               const d = Math.hypot(m.x - mine.x, m.y - mine.y);
               if (d > 74 + m.r) continue;
@@ -131,11 +131,14 @@ Object.assign(Game.prototype, {
       }
       for (const mt of ex.meteors) {
         mt.t -= dt;
+        // 下坠中的火焰彗尾
+        const fall = Math.max(0, mt.t / 0.8);
+        if (Math.random() < dt * 40) this.fxTrailFire(mt.x + fall * 90, mt.y - fall * 260, 24);
         if (mt.t <= 0) {
           Sfx.boom();
           this.shake = Math.max(this.shake, 7);
-          for (let i = 0; i < 12; i++) this.spark(mt.x, mt.y, i % 2 ? '#ff7b2d' : '#ffd93d');
           const mR = 84 * (H.mods.meteorR || 1);
+          this.fxExplosion(mt.x, mt.y, mR);
           for (const m of this.monsters.slice()) {
             const d = Math.hypot(m.x - mt.x, m.y - mt.y);
             if (d > mR + m.r) continue;
@@ -213,24 +216,26 @@ Object.assign(Game.prototype, {
         Sfx.crossbow();
       }
     }
-    // 🛸 无人机鸭（自动点射）
+    // 🛸 无人机鸭（自动点射；第八轮：火力/射速/射程全面上修）
     if (S.drone > 0) {
       ex.droneT = (ex.droneT || 0) - dt;
       if (ex.droneT <= 0) {
-        ex.droneT = Math.max(0.5, 1.6 - S.drone * 0.15);
+        ex.droneT = Math.max(0.38, 1.25 - S.drone * 0.14);
         for (const p of this.players) {
           if (!p.active) continue;
           const dx = p.x - Math.cos(this.time * 1.4) * 56;
           const dy = p.y - Math.sin(this.time * 1.4) * 56 - 24;
-          let tgt = null, td = 430;
+          let tgt = null, td = 490;
           for (const m of this.monsters) {
             const d = Math.hypot(m.x - dx, m.y - dy);
             if (d < td) { tgt = m; td = d; }
           }
           if (tgt) {
             const a = Math.atan2(tgt.y - dy, tgt.x - dx);
+            ex.droneAim = a;                      // 记录朝向供绘制
+            this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
             this.bullets.push(new Bullet(dx, dy, a,
-              { id: 'dronegun', dmg: 9 + S.drone * 4, speed: 620, range: 460, knock: 50 }, p, H.mods.dmg));
+              { id: 'dronegun', dmg: 15 + S.drone * 7, speed: 700, range: 520, knock: 60 }, p, H.mods.dmg));
             // 无人机·空袭：概率呼叫天降正义
             if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
               ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
@@ -262,18 +267,20 @@ Object.assign(Game.prototype, {
         }
       }
     }
-    // 🐥 召唤鸭灵：常驻小战士（阵亡 8 秒后重生）
+    // 🐥 召唤鸭灵：常驻小战士（阵亡 5 秒固定复活；成群/战意变体可强化）
     if (S.summon > 0) {
       if (!ex.pets) ex.pets = [];
       ex.pets = ex.pets.filter(pet => pet.hp > 0);
       ex.petRespawnT = Math.max(0, (ex.petRespawnT || 0) - dt);
-      if (ex.pets.length < S.summon && ex.petRespawnT <= 0) {
-        ex.petRespawnT = 8;
+      const petCap = S.summon + (H.mods.petN || 0);
+      const pow = 1 + (H.mods.petPow || 0) * 0.4;
+      if (ex.pets.length < petCap && ex.petRespawnT <= 0) {
+        ex.petRespawnT = 5;
         const owner = this.players.find(p => p.active);
         if (owner) {
           const pet = new Mercenary(owner.x + 26, owner.y + 26,
-            { id: 'petduck', name: '鸭灵', icon: '🐥', hp: 60 + S.summon * 30, dmg: 9 + S.summon * 4,
-              rate: 1.6, melee: true, range: 46, speed: 165 }, owner);
+            { id: 'petduck', name: '鸭灵', icon: '🐥', hp: Math.round((100 + S.summon * 50) * pow), dmg: Math.round((12 + S.summon * 6) * pow),
+              rate: 1.6, melee: true, range: 46, speed: 175 }, owner);
           pet.isPet = true;
           unstick(pet);
           this.mercs.push(pet);
@@ -326,21 +333,59 @@ Object.assign(Game.prototype, {
     const W2S = (x, y) => [x - cam.x, y - cam.y];
     for (const mine of ex.mines) {
       const [sx, sy] = W2S(mine.x, mine.y);
-      const blink = Math.sin(this.time * 8) > 0;
-      ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
-      ctx.globalAlpha = blink ? 1 : 0.55;
-      ctx.fillText('🧨', sx, sy + 5);
-      ctx.globalAlpha = 1;
+      // 精绘地雷：金属盘 + 铆钉 + 呼吸红灯（临爆快闪）
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.fillStyle = 'rgba(0,0,0,.35)';
+      ctx.beginPath(); ctx.ellipse(0, 4, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+      const mg = ctx.createRadialGradient(-3, -4, 2, 0, 0, 12);
+      mg.addColorStop(0, '#8a94a6'); mg.addColorStop(0.55, '#4a5264'); mg.addColorStop(1, '#23283a');
+      ctx.fillStyle = mg;
+      ctx.beginPath(); ctx.ellipse(0, 0, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#141826'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#9aa4b8';
+      for (const a of [0.6, 2.2, 4.0, 5.6]) { ctx.beginPath(); ctx.arc(Math.cos(a) * 7, Math.sin(a) * 5, 1.2, 0, Math.PI * 2); ctx.fill(); }
+      const urgent = mine.t < 4;
+      const led = Math.sin(this.time * (urgent ? 22 : 6)) > 0;
+      ctx.fillStyle = led ? '#ff3b3b' : '#5c1420';
+      ctx.beginPath(); ctx.arc(0, -2, 2.4, 0, Math.PI * 2); ctx.fill();
+      if (led) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(FxTex.glow, -9, -11, 18, 18);
+      }
+      ctx.restore();
     }
     for (const mt of ex.meteors) {
       const [sx, sy] = W2S(mt.x, mt.y);
-      // 落点预警圈 + 下坠的陨石
-      ctx.strokeStyle = `rgba(255,120,40,${0.4 + Math.sin(this.time * 10) * 0.2})`;
+      const prog = 1 - mt.t / 0.8;
+      // 落点预警：双环 + 随进度收拢的实心警告
+      ctx.strokeStyle = `rgba(255,120,40,${0.45 + Math.sin(this.time * 10) * 0.2})`;
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(sx, sy, 60, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,190,90,.8)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx, sy, 60 * prog, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,110,40,${0.10 + prog * 0.10})`;
+      ctx.beginPath(); ctx.arc(sx, sy, 60, 0, Math.PI * 2); ctx.fill();
+      // 下坠岩体：火焰辉光包裹的碎裂陨石
       const fall = mt.t / 0.8;
-      ctx.font = '26px sans-serif';
-      ctx.fillText('☄️', sx + fall * 90, sy - fall * 260 + 8);
+      const rx = sx + fall * 90, ry = sy - fall * 260;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(FxTex.fire, rx - 20, ry - 20, 40, 40);
+      ctx.restore();
+      ctx.save();
+      ctx.translate(rx, ry); ctx.rotate(this.time * 6 + mt.x);
+      const rg = ctx.createRadialGradient(-3, -3, 1, 0, 0, 10);
+      rg.addColorStop(0, '#7a6355'); rg.addColorStop(1, '#332420');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.moveTo(-9, -3); ctx.lineTo(-3, -9); ctx.lineTo(5, -8); ctx.lineTo(9, 0); ctx.lineTo(5, 8); ctx.lineTo(-4, 8); ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ff9a4d'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(-4, -2); ctx.lineTo(1, 1); ctx.lineTo(-1, 5); ctx.stroke();
+      ctx.restore();
     }
     for (const b of ex.booms) {
       const [sx, sy] = W2S(b.x, b.y);
@@ -362,9 +407,45 @@ Object.assign(Game.prototype, {
     if (H.skills.drone > 0) {
       for (const p of this.players) {
         if (!p.active) continue;
-        const [sx, sy] = W2S(p.x - Math.cos(this.time * 1.4) * 56, p.y - Math.sin(this.time * 1.4) * 56 - 24);
-        ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('🛸', sx, sy + Math.sin(this.time * 5) * 3 + 6);
+        const [sx, sy0] = W2S(p.x - Math.cos(this.time * 1.4) * 56, p.y - Math.sin(this.time * 1.4) * 56 - 24);
+        const sy = sy0 + Math.sin(this.time * 5) * 3;
+        const aim = ex.droneAim || 0;
+        // 精绘四旋翼无人机（大尺寸、不透明）：机臂+旋翼虚影+机身+炮管+航行灯
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.scale(1.35, 1.35);
+        ctx.fillStyle = 'rgba(0,0,0,.25)';
+        ctx.beginPath(); ctx.ellipse(0, 26, 13, 4, 0, 0, Math.PI * 2); ctx.fill();   // 投在地面的影子
+        ctx.strokeStyle = '#2a3145'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        for (const [ax, ay] of [[-11, -7], [11, -7], [-11, 7], [11, 7]]) {
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ax, ay); ctx.stroke();       // 机臂
+          const spin = this.time * 40 + ax;
+          ctx.save();
+          ctx.translate(ax, ay);
+          ctx.fillStyle = 'rgba(180,200,235,.5)';
+          ctx.beginPath(); ctx.ellipse(0, 0, 8, 2.6, spin, 0, Math.PI * 2); ctx.fill();  // 旋翼虚影
+          ctx.fillStyle = '#39415c';
+          ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        const bg = ctx.createRadialGradient(-3, -4, 2, 0, 0, 12);
+        bg.addColorStop(0, '#6d7896'); bg.addColorStop(0.6, '#464e68'); bg.addColorStop(1, '#262c40');
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2); ctx.fill();     // 机身
+        ctx.strokeStyle = '#141826'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#ffd93d';
+        ctx.beginPath(); ctx.ellipse(0, -2.5, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill(); // 小鸭涂装
+        ctx.fillStyle = '#1c2233';
+        ctx.beginPath(); ctx.arc(1.6, -3, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        ctx.rotate(aim);
+        ctx.fillStyle = '#7ef7ff';
+        ctx.fillRect(8, -1.4, 8, 2.8);                                                // 指向目标的炮管
+        ctx.restore();
+        const nav = Math.sin(this.time * 7) > 0;
+        ctx.fillStyle = nav ? '#ff5c5c' : '#48ffa0';
+        ctx.beginPath(); ctx.arc(nav ? -8 : 8, -6, 1.6, 0, Math.PI * 2); ctx.fill();  // 航行灯
+        ctx.restore();
       }
     }
     if (H.skills.garlic > 0) {

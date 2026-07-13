@@ -496,6 +496,97 @@ const UI = (() => {
     Sfx.buy();
   }
 
+  // ---------- 怪物图鉴（活体动画卡片） ----------
+  let mdexRaf = null, mdexT = 0, mdexLast = 0, mdexCards = [];
+  const MDEX_TAGS = t => {
+    const tags = [];
+    if (t.boss) tags.push(['BOSS', '#ff5c5c']);
+    if (t.ranged) tags.push(['远程', '#7ef7ff']);
+    if (t.caster) tags.push(['定身', '#b48aff']);
+    if (t.poison) tags.push(['剧毒', '#7ac74f']);
+    if (t.paralyze) tags.push(['麻痹', '#ffd93d']);
+    if (t.charger && !t.leap) tags.push(['冲锋', '#ff8f5c']);
+    if (t.leap) tags.push(['猛扑', '#ff8f5c']);
+    if (t.ambush) tags.push(['伏击', '#9a86c8']);
+    if (t.splits) tags.push(['分裂', '#7ac74f']);
+    if (t.screamer) tags.push(['召集', '#ff8fd0']);
+    if (t.shieldFront) tags.push(['格挡', '#c9ced8']);
+    if (t.watcher) tags.push(['凝视', '#ffd93d']);
+    if (t.shroom) tags.push(['自爆', '#7ac74f']);
+    if (t.zigzag) tags.push(['蛇行', '#9fd8ff']);
+    if (t.kbMul === 0 && !t.boss) tags.push(['免击退', '#c9a06a']);
+    return tags;
+  };
+  function showMonsterDex() {
+    $('monsterdex-overlay').style.display = 'flex';
+    renderMonsterDex();
+    if (!mdexRaf) mdexTick(mdexLast);
+  }
+  function closeMonsterDex() {
+    $('monsterdex-overlay').style.display = 'none';
+    if (mdexRaf) { cancelAnimationFrame(mdexRaf); mdexRaf = null; }
+    mdexCards = [];
+  }
+  const mdexPips = (v, max) => { const n = Math.max(1, Math.min(5, Math.round(v / max * 5)));
+    return '<span class="mdex-pips">' + '●'.repeat(n) + '<span class="dim">' + '●'.repeat(5 - n) + '</span></span>'; };
+  function renderMonsterDex() {
+    const ids = Object.keys(MONSTER_TYPES);
+    const seen = id => !!((SAVE.monsterSeen && SAVE.monsterSeen[id]) || (SAVE.stats.mKills && SAVE.stats.mKills[id] > 0));
+    $('mdex-progress').textContent = `已解锁 ${ids.filter(seen).length}/${ids.length}`;
+    let html = '<div class="mdex-grid">';
+    for (const id of ids) {
+      const t = MONSTER_TYPES[id];
+      const ok = seen(id);
+      const info = CODEX_INFO[id] || {};
+      const kills = (SAVE.stats.mKills && SAVE.stats.mKills[id]) || 0;
+      const tags = ok ? MDEX_TAGS(t).map(([txt, c]) => `<span class="mdex-tag" style="color:${c};border-color:${c}55">${txt}</span>`).join('') : '';
+      html += `
+      <div class="mdex-card ${t.boss ? 'boss' : ''} ${ok ? '' : 'locked'}">
+        <canvas id="mdex-cv-${id}" width="94" height="94"></canvas>
+        <div class="mdex-info">
+          <div class="mdex-name">${ok ? t.name : '？？？'}${ok && kills ? ` <span class="mdex-kills">已讨伐 ×${kills}</span>` : ''}</div>
+          ${ok ? `<div class="mdex-tags">${tags}</div>
+          <div class="mdex-stats">血 ${mdexPips(t.hpMul, t.boss ? 1 : 2.8)}　攻 ${mdexPips(t.dmgMul, 2.2)}　速 ${mdexPips(t.spdMul, 1.7)}</div>
+          <div class="mdex-lore">${info.lore || ''}</div>
+          <div class="mdex-hint">💡 ${info.hint || ''}</div>`
+          : '<div class="mdex-lore dim">尚未遭遇。击败它（或吃它一记攻击）即可解锁档案。</div>'}
+        </div>
+      </div>`;
+    }
+    $('mdex-body').innerHTML = html + '</div>';
+    // 活体卡片：mock 一个最小 Game 环境，直接复用游戏内 drawMonster 逐帧绘制
+    mdexCards = ids.map((id, i) => {
+      const cv = $('mdex-cv-' + id);
+      if (!cv) return null;
+      const t = MONSTER_TYPES[id];
+      const mg = Object.create(Game.prototype);
+      mg.time = 0; mg.sparks = []; mg.spark = () => {}; mg.fx = []; mg.fxP = () => {};
+      return { id, t, ok: seen(id), ctx: cv.getContext('2d'), phase: i * 1.7, mg,
+        m: { type: t, r: t.r, x: 0, y: 0, anim: 0, zigPhase: i, faceDir: 0.5, state: 'patrol',
+             windupT: 0, stunT: 0, slowT: 0, burnT: 0, hpShowT: 0, flashT: 0, hp: 1, maxHp: 1, enraged: false, kvx: 0, kvy: 0 } };
+    }).filter(Boolean);
+  }
+  function mdexTick(ts) {
+    mdexRaf = requestAnimationFrame(mdexTick);
+    if (ts - mdexLast < 33) return;   // ~30fps 足够
+    const dt = Math.min(0.1, (ts - mdexLast) / 1000) || 0.033;
+    mdexLast = ts;
+    mdexT += dt;
+    for (const c of mdexCards) {
+      const { ctx } = c;
+      ctx.clearRect(0, 0, 94, 94);
+      c.mg.time = mdexT + c.phase;
+      c.m.anim = mdexT + c.phase;
+      try { c.mg.drawMonster(ctx, c.m, 47, c.t.boss ? 50 : 54); } catch (e) { /* 单卡失败不拖垮整页 */ }
+      if (!c.ok) {   // 未解锁：涂黑成剪影
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.fillStyle = 'rgba(8,6,18,.94)';
+        ctx.fillRect(0, 0, 94, 94);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+
   // ---------- 键位设置 ----------
   let bindWait = null;   // { p, action }
   function showKeybinds() {
@@ -735,6 +826,7 @@ const UI = (() => {
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
+           showMonsterDex, closeMonsterDex,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell };

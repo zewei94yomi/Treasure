@@ -204,20 +204,51 @@ check('新怪 6 种带贴图与机制字段', run(`
   MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
 check('3 个 Boss 定义与轮换表', run(`
   HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
-check('贴图数据 9 张且为 dataURI', run(`
-  Object.keys(MONSTER_SPRITES).length === 9 && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('贴图数据 10 张（9怪+火球）且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 10 && MONSTER_SPRITES.fx_fireball && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
 check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
 check('攻击%升级已削弱为加算', run(`
   (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
 check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
-check('调参面板 18 项定义完整且 tune() 返回默认', run(`
-  TUNE_DEFS.length === 17 && TUNE_DEFS.every(t => t.name && t.min < t.max) &&
-  tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05`));
+check('调参面板 19 项定义完整且 tune() 返回默认', run(`
+  TUNE_DEFS.length === 19 && TUNE_DEFS.every(t => t.name && t.min < t.max) &&
+  tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05 && tune('rollCd') === 1 && tune('thorns') === 1`));
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
 check('普通难度商人概率 0.5', run(`DIFFICULTIES.normal.merchant === 0.5`));
+
+// ==================== 第八轮：特效引擎/图鉴/翻滚/鸭灵 ====================
+check('翻滚 CD 大幅下调至 0.35', run(`STAMINA.rollCd === 0.35`));
+check('怪物图鉴档案覆盖全部 21 种怪', run(`
+  Object.keys(MONSTER_TYPES).every(id => CODEX_INFO[id] && CODEX_INFO[id].lore && CODEX_INFO[id].hint)`));
+check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
+  typeof SAVE.monsterSeen === 'object' && typeof SAVE.stats.mKills === 'object'`));
+check('鸭灵变体（成群/战意）带 requires', run(`
+  HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
+  (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petN === 1 && m.petPow === 1; })()`));
+check('升级池扩至 42 项', run(`HORDE_UPGRADES.length === 42`));
+{
+  const fx = fs.readFileSync(base + 'fx.js', 'utf8');
+  check('特效引擎：烘焙纹理 + 五类预设齐全',
+    ['FxTex', 'fxExplosion', 'fxHit', 'fxDeath', 'fxMuzzle', 'fxTrailFire'].every(k => fx.includes(k)));
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('game.js 接入：击杀图鉴统计/荆棘护甲/翻滚调参/白闪剪影',
+    gameSrc.includes('SAVE.stats.mKills[m.type.id]') && gameSrc.includes('thorns * 1.5') &&
+    gameSrc.includes("STAMINA.rollCd * tune('rollCd')") && gameSrc.includes('MonsterImagesWhite[m.type.sprite]') &&
+    gameSrc.includes('rollCut'));
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  check('horde.js 接入：无人机增强/鸭灵5秒复活/精绘地雷陨石',
+    hordeSrc.includes('15 + S.drone * 7') && hordeSrc.includes('ex.petRespawnT = 5') &&
+    hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
+    html.includes('js/fx.js?v=11') && html.includes('monsterdex-overlay') && !html.includes('?v=10'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('ui.js：怪物图鉴界面（活体卡片渲染）',
+    uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
+}
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);
 process.exit(fails ? 1 : 0);

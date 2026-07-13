@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
 
@@ -21,6 +21,7 @@
     <div class="menu-buttons">
       <button class="btn big primary" onclick="UI.showSetup()">🗺️ 开始寻宝</button>
       <button class="btn big" onclick="UI.showCodex()">📖 宝物图鉴 <span id="menu-codex-badge" class="new-badge float"></span></button>
+      <button class="btn big" onclick="UI.showMonsterDex()">👹 怪物图鉴</button>
       <button class="btn big" onclick="UI.showShop()">🛒 鸭可夫商店</button>
       <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
       <button class="btn big" onclick="UI.showHelp()">❓ 操作说明</button>
@@ -219,6 +220,18 @@
   </div>
 </div>
 
+<!-- ======== 怪物图鉴 ======== -->
+<div id="monsterdex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeMonsterDex()">
+  <div class="modal-box help monsterdex-box">
+    <h3>👹 怪物图鉴 <span id="mdex-progress" class="codex-chip"></span></h3>
+    <p class="pause-tip">击败一只怪物（或吃过它一记攻击）即可解锁档案。剪影 = 尚未遭遇。</p>
+    <div id="mdex-body"></div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="btn small primary" onclick="UI.closeMonsterDex()">返回</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 策划调参面板 ======== -->
 <div id="tuning-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeTuning()">
   <div class="modal-box help">
@@ -254,21 +267,22 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=10"></script>
-<script src="js/music.js?v=10"></script>
-<script src="js/skins-data.js?v=10"></script>
-<script src="js/monsters-data.js?v=10"></script>
-<script src="js/data.js?v=10"></script>
-<script src="js/save.js?v=10"></script>
-<script src="js/map.js?v=10"></script>
-<script src="js/vision.js?v=10"></script>
-<script src="js/entities.js?v=10"></script>
-<script src="js/game.js?v=10"></script>
-<script src="js/horde.js?v=10"></script>
-<script src="js/weather.js?v=10"></script>
-<script src="js/powerups.js?v=10"></script>
-<script src="js/ui.js?v=10"></script>
-<script src="js/trainer.js?v=10"></script>
-<script src="js/main.js?v=10"></script>
+<script src="js/sfx.js?v=11"></script>
+<script src="js/music.js?v=11"></script>
+<script src="js/skins-data.js?v=11"></script>
+<script src="js/monsters-data.js?v=11"></script>
+<script src="js/data.js?v=11"></script>
+<script src="js/save.js?v=11"></script>
+<script src="js/map.js?v=11"></script>
+<script src="js/vision.js?v=11"></script>
+<script src="js/entities.js?v=11"></script>
+<script src="js/game.js?v=11"></script>
+<script src="js/fx.js?v=11"></script>
+<script src="js/horde.js?v=11"></script>
+<script src="js/weather.js?v=11"></script>
+<script src="js/powerups.js?v=11"></script>
+<script src="js/ui.js?v=11"></script>
+<script src="js/trainer.js?v=11"></script>
+<script src="js/main.js?v=11"></script>
 </body>
 </html>
