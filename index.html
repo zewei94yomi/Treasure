@@ -201,6 +201,16 @@
     <h3>⌨️ 键位设置</h3>
     <p class="pause-tip">点击任意按键格后，按下想要绑定的新键（Esc 取消）。同玩家键位冲突时自动互换。</p>
     <div id="keybind-body"></div>
+    <div class="trainer-row">
+      <div class="trainer-box">
+        <div class="trainer-title" style="color:#ffd93d">🟡 1P 练习场</div>
+        <canvas id="trainer-p1" width="360" height="220"></canvas>
+      </div>
+      <div class="trainer-box">
+        <div class="trainer-title" style="color:#9fd8ff">🔵 2P 练习场</div>
+        <canvas id="trainer-p2" width="360" height="220"></canvas>
+      </div>
+    </div>
     <div style="display:flex; gap:10px; justify-content:center; margin-top:8px">
       <button class="btn small" onclick="UI.resetKeybinds()">恢复默认</button>
       <button class="btn small primary" onclick="UI.closeKeybinds()">完成</button>
@@ -243,6 +253,7 @@
 <script src="js/weather.js"></script>
 <script src="js/powerups.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/trainer.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

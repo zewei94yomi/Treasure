@@ -470,11 +470,13 @@ const UI = (() => {
     $('keybind-overlay').style.display = 'flex';
     renderKeybinds();
     document.addEventListener('keydown', captureBind, true);
+    Trainer.start();   // 双人练习场：实时试用当前键位
   }
   function closeKeybinds() {
     $('keybind-overlay').style.display = 'none';
     bindWait = null;
     document.removeEventListener('keydown', captureBind, true);
+    Trainer.stop();
   }
   function renderKeybinds() {
     let html = '<table class="keybind-table"><tr><th>动作</th><th style="color:#ffd93d">1P 🟡</th><th style="color:#9fd8ff">2P 🔵</th></tr>';
