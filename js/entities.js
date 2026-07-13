@@ -751,7 +751,10 @@ class Bullet {
     this.laser = def.id === 'laser';
     this.frost = def.id === 'frost';
     this.homing = !def.pellets;   // 散射类武器不追踪
-    this.turn = def.turn || HOMING.turn;  // 追踪转向速率（弧度/秒）
+    const hb = def.homing || {};  // 武器专属追踪强化（静音鹅弩）
+    this.turn = hb.turn || def.turn || HOMING.turn;
+    this.hCone = hb.cone || HOMING.cone;
+    this.hDist = hb.dist || HOMING.dist;
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
     this.hitSet = new Set();
@@ -759,14 +762,14 @@ class Bullet {
   update(dt, game) {
     // 轻微弹道追踪：锁定前方小锥形内最近的怪
     if (this.homing) {
-      let best = null, bd = HOMING.dist;
+      let best = null, bd = this.hDist;
       for (const m of game.monsters) {
         if (m.state === 'ambush' || this.hitSet.has(m)) continue;
         const d = Math.hypot(m.x - this.x, m.y - this.y);
         if (d > bd) continue;
         let da = Math.atan2(m.y - this.y, m.x - this.x) - this.angle;
         da = Math.atan2(Math.sin(da), Math.cos(da));
-        if (Math.abs(da) < HOMING.cone) { best = m; bd = d; }
+        if (Math.abs(da) < this.hCone) { best = m; bd = d; }
       }
       if (best) {
         let da = Math.atan2(best.y - this.y, best.x - this.x) - this.angle;

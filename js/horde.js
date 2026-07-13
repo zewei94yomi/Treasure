@@ -165,7 +165,7 @@ Object.assign(Game.prototype, {
       }
       for (const b of ex.booms) {
         b.spin += dt * 14;
-        const sp = 380 * dt;
+        const sp = 440 * dt;
         if (!b.back) {
           b.x += Math.cos(b.a) * sp; b.y += Math.sin(b.a) * sp;
           b.d += sp;
@@ -180,7 +180,7 @@ Object.assign(Game.prototype, {
           if (Math.hypot(m.x - b.x, m.y - b.y) < m.r + 14) {
             b.hit.add(m);
             m.knock(b.a, 300);
-            if (m.hurt(Math.round((18 + S.boomerang * 7) * H.mods.dmg), this)) this.killMonster(m, b.pl);
+            if (m.hurt(Math.round((24 + S.boomerang * 9) * H.mods.dmg), this)) this.killMonster(m, b.pl);
             this.spark(b.x, b.y, '#ffd93d');
           }
         }
@@ -209,40 +209,45 @@ Object.assign(Game.prototype, {
         ex.spearT = Math.max(1.6, 3.5 - S.spears * 0.3);
         for (const p of this.players) {
           if (!p.active) continue;
-          const n = 6 + S.spears;
+          const n = 8 + S.spears;
           for (let i = 0; i < n; i++) {
             const a = i * Math.PI * 2 / n + this.time;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'spear', dmg: 10 + S.spears * 4, speed: 480, range: 230 + S.spears * 15, knock: 90 }, p, H.mods.dmg));
+              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110 }, p, H.mods.dmg));
           }
         }
         Sfx.crossbow();
       }
     }
-    // 🛸 无人机鸭（自动点射；第八轮：火力/射速/射程全面上修）
+    // 🛸 无人机鸭：编队点射（僚机变体可加机，频率随级提升）
     if (S.drone > 0) {
       ex.droneT = (ex.droneT || 0) - dt;
+      const droneCount = 1 + (H.mods.droneN || 0);
       if (ex.droneT <= 0) {
-        ex.droneT = Math.max(0.3, 1.05 - S.drone * 0.13);
+        ex.droneT = Math.max(0.24, 0.92 - S.drone * 0.12);
+        if (!ex.droneAims) ex.droneAims = [];
         for (const p of this.players) {
           if (!p.active) continue;
-          const dx = p.x - Math.cos(this.time * 1.4) * 56;
-          const dy = p.y - Math.sin(this.time * 1.4) * 56 - 24;
-          let tgt = null, td = 490;
-          for (const m of this.monsters) {
-            const d = Math.hypot(m.x - dx, m.y - dy);
-            if (d < td) { tgt = m; td = d; }
-          }
-          if (tgt) {
-            const a = Math.atan2(tgt.y - dy, tgt.x - dx);
-            ex.droneAim = a;                      // 记录朝向供绘制
-            this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
-            this.bullets.push(new Bullet(dx, dy, a,
-              { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, H.mods.dmg));
-            // 无人机·空袭：概率呼叫天降正义
-            if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
-              ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
-              this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
+          for (let di = 0; di < droneCount; di++) {
+            const ph = this.time * 1.4 + di * Math.PI * 2 / droneCount;
+            const dx = p.x - Math.cos(ph) * 56;
+            const dy = p.y - Math.sin(ph) * 56 - 24;
+            let tgt = null, td = 490;
+            for (const m of this.monsters) {
+              const d = Math.hypot(m.x - dx, m.y - dy);
+              if (d < td) { tgt = m; td = d; }
+            }
+            if (tgt) {
+              const a = Math.atan2(tgt.y - dy, tgt.x - dx);
+              ex.droneAims[di] = a;
+              this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
+              this.bullets.push(new Bullet(dx, dy, a,
+                { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, H.mods.dmg));
+              // 无人机·空袭：概率呼叫天降正义
+              if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
+                ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
+                this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
+              }
             }
           }
         }
@@ -431,11 +436,14 @@ Object.assign(Game.prototype, {
         vx: Math.cos(ang + 1.6) * 160, vy: Math.sin(ang + 1.6) * 160, drag: 3, s0: 9, s1: 2, a0: 1, a1: 0, life: 0.25 });
     }
     if (H.skills.drone > 0) {
+      const droneCount = 1 + (H.mods.droneN || 0);
       for (const p of this.players) {
         if (!p.active) continue;
-        const [sx, sy0] = W2S(p.x - Math.cos(this.time * 1.4) * 56, p.y - Math.sin(this.time * 1.4) * 56 - 24);
-        const sy = sy0 + Math.sin(this.time * 5) * 3;
-        const aim = ex.droneAim || 0;
+        for (let di = 0; di < droneCount; di++) {
+        const ph = this.time * 1.4 + di * Math.PI * 2 / droneCount;
+        const [sx, sy0] = W2S(p.x - Math.cos(ph) * 56, p.y - Math.sin(ph) * 56 - 24);
+        const sy = sy0 + Math.sin(this.time * 5 + di * 2) * 3;
+        const aim = (ex.droneAims && ex.droneAims[di]) || 0;
         // 精绘四旋翼无人机（大尺寸、不透明）：机臂+旋翼虚影+机身+炮管+航行灯
         ctx.save();
         ctx.translate(sx, sy);
@@ -468,10 +476,11 @@ Object.assign(Game.prototype, {
         ctx.fillStyle = '#7ef7ff';
         ctx.fillRect(8, -1.4, 8, 2.8);                                                // 指向目标的炮管
         ctx.restore();
-        const nav = Math.sin(this.time * 7) > 0;
+        const nav = Math.sin(this.time * 7 + di * 3) > 0;
         ctx.fillStyle = nav ? '#ff5c5c' : '#48ffa0';
         ctx.beginPath(); ctx.arc(nav ? -8 : 8, -6, 1.6, 0, Math.PI * 2); ctx.fill();  // 航行灯
         ctx.restore();
+        }
       }
     }
     if (H.skills.garlic > 0) {

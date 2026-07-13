@@ -26,8 +26,19 @@ const UI = (() => {
       <span class="codex-chip">📖 图鉴 ${done}/${TREASURES.length}</span>`;
     $('menu-codex-badge').style.display = newCount ? '' : 'none';
     $('menu-codex-badge').textContent = newCount;
-    $('btn-music').textContent = Music.enabled() ? '🎵 音乐：开' : '🔇 音乐：关';
+    const bm = $('btn-music');
+    if (bm) bm.textContent = Music.enabled() ? '🎵 音乐：开' : '🔇 音乐：关';
   }
+
+  // ---------- 图鉴馆 / 设置中心 ----------
+  function showDexHub() { $('dexhub-overlay').style.display = 'flex'; }
+  function hideDexHub() { $('dexhub-overlay').style.display = 'none'; }
+  function showSettingsHub() {
+    $('settingshub-overlay').style.display = 'flex';
+    const b = $('btn-music');
+    if (b) b.textContent = Music.enabled() ? '🎵 音乐：开' : '🔇 音乐：关';
+  }
+  function hideSettingsHub() { $('settingshub-overlay').style.display = 'none'; }
 
   function toggleMusic() {
     const on = Music.toggle();
@@ -126,7 +137,7 @@ const UI = (() => {
       <div class="card ${setupState.gameplay === 'horde' ? 'sel' : ''}" onclick="UI.setGameplay('horde')">
         <div class="card-icon">🌾</div>
         <div class="card-title">无双割草</div>
-        <div class="card-desc">怪山怪海，撑过 10 分钟！击杀掉经验，升级三选一，弹药无限、阵亡不丢装备。${SAVE.hordeBest ? `<br>最佳：${Math.floor(SAVE.hordeBest.time/60)}:${String(SAVE.hordeBest.time%60).padStart(2,'0')} · ${SAVE.hordeBest.kills}杀 · Lv.${SAVE.hordeBest.level}` : ''}</div>
+        <div class="card-desc">怪山怪海，撑过 ${Math.round(tune('hordeTime'))} 分钟！击杀掉经验（越晚越肥），升级三选一，弹药无限、阵亡不丢装备。${SAVE.hordeBest ? `<br>最佳：${Math.floor(SAVE.hordeBest.time/60)}:${String(SAVE.hordeBest.time%60).padStart(2,'0')} · ${SAVE.hordeBest.kills}杀 · Lv.${SAVE.hordeBest.level}` : ''}</div>
       </div>
       <div class="card ${setupState.gameplay === 'escape' ? 'sel' : ''}" onclick="UI.setGameplay('escape')">
         <div class="card-icon">🏃</div>
@@ -869,7 +880,7 @@ const UI = (() => {
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
-           showMonsterDex, closeMonsterDex,
+           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive };

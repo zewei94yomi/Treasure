@@ -151,7 +151,7 @@ const WEAPONS = {
   smg:      { id:'smg',      name:'泡泡冲锋枪',     icon:'🫧', dmg:8,  rate:8.5, speed:520, range:360, knock:50,  ammo:'light', spread:0.13,  mag:32, reload:1.4, dur:150, weight:2,   price:900,  repairCost:0.9, desc:'泼水一样的弹幕，费子弹。' },
   shotgun:  { id:'shotgun',  name:'老铁桶 双管',    icon:'💥', dmg:8,  rate:1.1, speed:480, range:240, knock:110, ammo:'shell', spread:0.30,  pellets:6, durPerShot:2, mag:2, reload:1.5, dur:60, weight:2.5, price:1300, repairCost:1.8, desc:'一次六颗铁砂，贴脸没有怪。' },
   frost:    { id:'frost',    name:'寒霜喷罐',       icon:'🧯', dmg:4,  rate:2.5, speed:300, range:170, knock:40,  ammo:'cell',  spread:0.45,  pellets:5, mag:24, reload:1.3, dur:80, weight:2, price:1600, repairCost:1.5, slow:2, desc:'一片冰雾，命中的怪物减速 2 秒。' },
-  crossbow: { id:'crossbow', name:'静音鹅 弩',      icon:'🏹', dmg:38, rate:1.0, speed:700, range:640, knock:120, ammo:'heavy', spread:0.005, mag:1, reload:1.1, dur:50,  weight:2,   price:1500, repairCost:2.0, silent:true, desc:'无声无息。怪物听不见你的问候。' },
+  crossbow: { id:'crossbow', name:'静音鹅 弩',      icon:'🏹', dmg:38, rate:1.0, speed:700, range:640, knock:120, ammo:'heavy', spread:0.005, mag:1, reload:1.1, dur:50,  weight:2,   price:1500, repairCost:2.0, silent:true, homing:{ cone:1.7, dist:600, turn:13 }, desc:'无声无息，箭矢如活物般咬住猎物拐弯追杀。' },
   rifle:    { id:'rifle',    name:'长颈鹅 栓动步枪', icon:'🎯', dmg:50, rate:0.9, speed:780, range:900, knock:200, ammo:'heavy', spread:0.01,  pierce:3, mag:5, reload:1.9, dur:45, weight:3, price:2200, repairCost:2.5, desc:'一枪穿三个，绅士的选择。' },
   cannon:   { id:'cannon',   name:'轰天雷',         icon:'🧨', dmg:60, rate:0.6, speed:420, range:520, knock:300, ammo:'shell', spread:0.02,  durPerShot:2, mag:1, reload:2.2, dur:40, weight:3, price:2600, repairCost:3.0, explosive:90, desc:'炮弹落点 90 范围内的怪一起上天。动静极大。' },
   laser:    { id:'laser',    name:'嘎嘎射线',       icon:'⚡', dmg:13, rate:7.0, speed:1500, range:700, knock:40, ammo:'cell',  spread:0.01,  pierce:2, mag:24, reload:1.2, dur:90, weight:2, price:3000, repairCost:3.0, desc:'来自未来的鸭科技，贯穿一切。' },
@@ -511,7 +511,7 @@ const ESCAPE_CFG = {
   smart:1, huntInterval:0, lurkerGuard:false, merchant:false,
   spawn:{}, chests:{ wood:10, silver:6, gold:4, mystery:3 },
 };
-const ESCAPE = { tideDelay: 22, tideSpeed: 34, tideAccel: 0.012, pursuitEvery: 5.5 };
+const ESCAPE = { tideDelay: 30, tideSpeed: 34, tideAccel: 0.018, pursuitEvery: 7 };
 // 沿途怪物池：越往东越凶
 function escapePool(prog) {
   if (prog < 0.25) return ['shade', 'skitter', 'slime', 'direwolf'];
@@ -520,9 +520,10 @@ function escapePool(prog) {
   return ['skeleton', 'brute', 'banshee', 'stoneling', 'warlock', 'leapspider', 'scorpion', 'lurker', 'direwolf'];
 }
 
-const HORDE_DURATION = 600;        // 存活 10 分钟即大胜利
+const HORDE_DURATION = 900;        // 基准 15 分钟（实际用 tune('hordeTime')*60，策划面板可调）
+function hordeDuration() { return tune('hordeTime') * 60; }
 const HORDE_CAP = 80;              // 同屏怪物上限（性能与可读性）
-const HORDE_BOSS_AT = [150, 330, 510];  // Boss 波时间点
+const HORDE_BOSS_AT = [140, 340, 560, 800];  // Boss 波时间点（15 分钟四波，轮换出场）
 // 狂暴：中期起怪物有概率狂暴出生（+移速+攻频，红焰特效）；涌潮全员狂暴
 const HORDE_ENRAGE = { start: 130, maxChance: 0.5, speedMul: 1.3, atkMul: 0.62 };
 
@@ -578,6 +579,7 @@ const HORDE_UPGRADES = [
   { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
   { id:'meteor_freq', name:'陨石·天怒', icon:'🌋', max:2, requires:'meteor', desc:'陨石冷却 -22%', mod:m => m.meteorCd = (m.meteorCd || 1) * 0.78 },
   { id:'drone_strike',name:'无人机·空袭', icon:'🛰️', max:2, requires:'drone', desc:'无人机不时呼叫天降正义轰炸', mod:m => m.droneStrike = (m.droneStrike || 0) + 1 },
+  { id:'drone_wing',  name:'无人机·僚机', icon:'🛩️', max:2, requires:'drone', desc:'再起飞一架无人机协同点射', mod:m => m.droneN = (m.droneN || 0) + 1 },
   { id:'summon_flock',name:'鸭灵·成群',   icon:'🐣', max:2, requires:'summon', desc:'同时在场的鸭灵 +1 只', mod:m => m.petN = (m.petN || 0) + 1 },
   { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵的生命与伤害 +40%', mod:m => m.petPow = (m.petPow || 0) + 1 },
 ];
@@ -643,6 +645,7 @@ const TUNE_DEFS = [
   { id:'dda',      name:'自适应难度(0关1开)', min:0, max:1,    step:1,    def:1, abs:true },
   { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.15, abs:true },
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
+  { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:15, abs:true },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

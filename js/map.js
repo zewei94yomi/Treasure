@@ -365,6 +365,7 @@ function genEscapeAscii() {
     put(r, 'g', 2);
     put(r, 't', 2);
   });
+  MAPS.escape.rooms = rooms;                        // 导出房间矩形（怪潮触发用）
   const r0 = rooms[0], rl = rooms[rooms.length - 1];
   g[r0.cy][r0.x + 2] = '1';
   g[Math.min(H - 3, r0.cy + 2)][r0.x + 2] = '7';
@@ -446,7 +447,7 @@ function loadMap(mapId) {
     merchantSpot = { x: far.x + TILE, y: far.y };
   }
 
-  MapData = { def, ascii, theme: def.theme, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
+  MapData = { def, ascii, escapeRooms: def.rooms || null, theme: def.theme, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
               chestSpots, goldSpots, monsterNodes, spawns, exitTiles, exitRect, merchantSpot,
               pxW: w * TILE, pxH: h * TILE };
 
@@ -460,9 +461,9 @@ function loadMap(mapId) {
     }
   }
 
-  // 小地图底图（3px/格）
+  // 小地图底图：按地图尺寸自适应缩放，封顶 300×150（大图不再霸屏）
   const mm = document.createElement('canvas');
-  const S = 4;   // 小地图放大（UI 可读性）
+  const S = Math.min(4, 300 / w, 150 / h);
   mm.width = w * S; mm.height = h * S;
   const mctx = mm.getContext('2d');
   mctx.fillStyle = 'rgba(12,10,26,.88)';

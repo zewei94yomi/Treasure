@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
 
@@ -20,16 +20,11 @@
     <div id="menu-info" class="menu-info"></div>
     <div class="menu-buttons">
       <button class="btn big primary" onclick="UI.showSetup()">🗺️ 开始寻宝</button>
-      <button class="btn big" onclick="UI.showCodex()">📖 宝物图鉴 <span id="menu-codex-badge" class="new-badge float"></span></button>
-      <button class="btn big" onclick="UI.showMonsterDex()">👹 怪物图鉴</button>
-      <button class="btn big" onclick="Dex.showWeaponDex()">🔫 武器图鉴</button>
-      <button class="btn big" onclick="Dex.showSkillDex()">✨ 技能图鉴</button>
+      <button class="btn big" onclick="UI.showDexHub()">📚 图鉴馆 <span id="menu-codex-badge" class="new-badge float"></span></button>
       <button class="btn big" onclick="UI.showShop()">🛒 鸭可夫商店</button>
       <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
       <button class="btn big" onclick="UI.showHelp()">❓ 操作说明</button>
-      <button class="btn big" onclick="UI.showKeybinds()">⌨️ 键位设置</button>
-      <button class="btn" onclick="UI.showTuning()">🎛️ 策划调参面板</button>
-      <button class="btn" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
+      <button class="btn big" onclick="UI.showSettingsHub()">⚙️ 设置中心</button>
     </div>
   </div>
 </div>
@@ -222,6 +217,50 @@
   </div>
 </div>
 
+<!-- ======== 图鉴馆（四馆入口） ======== -->
+<div id="dexhub-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.hideDexHub()">
+  <div class="modal-box help" style="width:min(640px,94vw)">
+    <h3>📚 图鉴馆</h3>
+    <p class="pause-tip">冒险者的知识库——认识你的宝物、敌人与武器。</p>
+    <div class="dexhub-grid">
+      <div class="card dexhub-card" onclick="UI.hideDexHub();UI.showCodex()">
+        <div class="card-icon">📖</div><div class="card-title">宝物图鉴</div>
+        <div class="card-desc">72 件宝物的收录与传说</div>
+      </div>
+      <div class="card dexhub-card" onclick="UI.hideDexHub();UI.showMonsterDex()">
+        <div class="card-icon">👹</div><div class="card-title">怪物图鉴</div>
+        <div class="card-desc">21 种怪物的活体档案</div>
+      </div>
+      <div class="card dexhub-card" onclick="UI.hideDexHub();Dex.showWeaponDex()">
+        <div class="card-icon">🔫</div><div class="card-title">武器图鉴</div>
+        <div class="card-desc">16 把武器实弹演示</div>
+      </div>
+      <div class="card dexhub-card" onclick="UI.hideDexHub();Dex.showSkillDex()">
+        <div class="card-icon">✨</div><div class="card-title">技能图鉴</div>
+        <div class="card-desc">割草技能等级演示台</div>
+      </div>
+    </div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="btn small primary" onclick="UI.hideDexHub()">返回</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 设置中心 ======== -->
+<div id="settingshub-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.hideSettingsHub()">
+  <div class="modal-box help" style="width:min(480px,94vw)">
+    <h3>⚙️ 设置中心</h3>
+    <div class="menu-buttons" style="margin-top:6px">
+      <button class="btn big" onclick="UI.hideSettingsHub();UI.showKeybinds()">⌨️ 键位设置（含双人练习场）</button>
+      <button class="btn big" onclick="UI.hideSettingsHub();UI.showTuning()">🎛️ 策划调参面板</button>
+      <button class="btn big" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
+    </div>
+    <div style="display:flex; justify-content:center; margin-top:12px">
+      <button class="btn small primary" onclick="UI.hideSettingsHub()">返回</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 怪物图鉴 ======== -->
 <div id="monsterdex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeMonsterDex()">
   <div class="modal-box help monsterdex-box">
@@ -293,23 +332,23 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=14"></script>
-<script src="js/music.js?v=14"></script>
-<script src="js/skins-data.js?v=14"></script>
-<script src="js/monsters-data.js?v=14"></script>
-<script src="js/data.js?v=14"></script>
-<script src="js/save.js?v=14"></script>
-<script src="js/map.js?v=14"></script>
-<script src="js/vision.js?v=14"></script>
-<script src="js/entities.js?v=14"></script>
-<script src="js/game.js?v=14"></script>
-<script src="js/fx.js?v=14"></script>
-<script src="js/dex.js?v=14"></script>
-<script src="js/horde.js?v=14"></script>
-<script src="js/weather.js?v=14"></script>
-<script src="js/powerups.js?v=14"></script>
-<script src="js/ui.js?v=14"></script>
-<script src="js/trainer.js?v=14"></script>
-<script src="js/main.js?v=14"></script>
+<script src="js/sfx.js?v=15"></script>
+<script src="js/music.js?v=15"></script>
+<script src="js/skins-data.js?v=15"></script>
+<script src="js/monsters-data.js?v=15"></script>
+<script src="js/data.js?v=15"></script>
+<script src="js/save.js?v=15"></script>
+<script src="js/map.js?v=15"></script>
+<script src="js/vision.js?v=15"></script>
+<script src="js/entities.js?v=15"></script>
+<script src="js/game.js?v=15"></script>
+<script src="js/fx.js?v=15"></script>
+<script src="js/dex.js?v=15"></script>
+<script src="js/horde.js?v=15"></script>
+<script src="js/weather.js?v=15"></script>
+<script src="js/powerups.js?v=15"></script>
+<script src="js/ui.js?v=15"></script>
+<script src="js/trainer.js?v=15"></script>
+<script src="js/main.js?v=15"></script>
 </body>
 </html>

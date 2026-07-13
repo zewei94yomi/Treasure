@@ -95,7 +95,13 @@ Object.assign(Game.prototype, {
         ctx.globalAlpha = Math.max(0, f.a0 + (f.a1 - f.a0) * k);
         ctx.save();
         ctx.translate(sx, sy); ctx.rotate(f.rot);
-        ctx.drawImage(f.tex, -s / 2, -s / 2, s, s);
+        if (f.img) {           // 像素贴图粒子（火焰云等）
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(f.img, -s / 2, -s / 2, s, s);
+          ctx.imageSmoothingEnabled = true;
+        } else {
+          ctx.drawImage(f.tex, -s / 2, -s / 2, s, s);
+        }
         ctx.restore();
       }
       if (began) ctx.restore();
@@ -118,6 +124,22 @@ Object.assign(Game.prototype, {
       const a = Math.random() * Math.PI * 2, v = (220 + Math.random() * 320) * k;
       this.fxP({ tex: FxTex.spark, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, drag: 2.4, grav: 260,
                  s0: 10, s1: 3, a0: 1, a1: 0, life: 0.4 + Math.random() * 0.3 });
+    }
+    // 火焰云贴图碎片：向外飞散的真实火焰（crawl CC0）
+    const flames = typeof MonsterImages !== 'undefined' &&
+      [MonsterImages.fx_flame0, MonsterImages.fx_flame1, MonsterImages.fx_flame2].filter(im => im && im.naturalWidth);
+    if (flames && flames.length) {
+      for (let i = 0; i < Math.round(6 * k) + 3; i++) {
+        const a = Math.random() * Math.PI * 2, v = (50 + Math.random() * 160) * k;
+        this.fxP({ img: flames[i % flames.length], x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, drag: 2.6,
+                   s0: 22 * k + Math.random() * 14, s1: 8, a0: 1, a1: 0, life: 0.4 + Math.random() * 0.25, rv: (Math.random()-0.5)*7 });
+      }
+      // 滞留地面余火（原地烧一会儿）
+      for (let i = 0; i < Math.round(4 * k) + 2; i++) {
+        this.fxP({ img: flames[i % flames.length], x: x + (Math.random()-0.5) * R * 0.9, y: y + (Math.random()-0.5) * R * 0.9,
+                   vx: 0, vy: -12, s0: 16 + Math.random() * 10, s1: 4, a0: 0.95, a1: 0,
+                   life: 0.8 + Math.random() * 0.7, rv: (Math.random()-0.5)*2 });
+      }
     }
     for (let i = 0; i < Math.round(5 * k) + 2; i++) {                                                            // 余烟
       const a = Math.random() * Math.PI * 2, v = 30 + Math.random() * 60;
@@ -163,6 +185,28 @@ Object.assign(Game.prototype, {
     this.fxP({ tex: FxTex.fire, x: x + Math.cos(ang) * 6, y: y + Math.sin(ang) * 6,
                vx: Math.cos(ang) * 90, vy: Math.sin(ang) * 90, s0: 18, s1: 4, a0: 0.9, a1: 0, life: 0.09, rot: ang });
     this.fxP({ tex: FxTex.glow, x, y, s0: 22, s1: 10, a0: 0.6, a1: 0, life: 0.08 });
+  },
+
+  // 复仇之焰：火焰云环形爆发 + 双冲击环（受击反噬的怒火）
+  fxRevenge(x, y, R = 150) {
+    if (!tune('juice')) return;
+    this.fxP({ tex: FxTex.glow, x, y, s0: R * 0.8, s1: R * 2.2, a0: 0.9, a1: 0, life: 0.16 });
+    this.fxP({ tex: FxTex.ring, x, y, s0: 30, s1: R * 2.3, a0: 0.9, a1: 0, life: 0.32 });
+    this.fxP({ tex: FxTex.ring, x, y, s0: 10, s1: R * 1.7, a0: 0.7, a1: 0, life: 0.42 });
+    const flames = typeof MonsterImages !== 'undefined' &&
+      [MonsterImages.fx_flame0, MonsterImages.fx_flame1, MonsterImages.fx_flame2].filter(im => im && im.naturalWidth);
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const a = i * Math.PI * 2 / n + Math.random() * 0.3;
+      const v = 260 + Math.random() * 120;
+      if (flames && flames.length) {
+        this.fxP({ img: flames[i % flames.length], x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, drag: 2.8,
+                   s0: 30, s1: 10, a0: 1, a1: 0, life: 0.45 + Math.random() * 0.2, rot: a, rv: (Math.random()-0.5)*6 });
+      }
+      this.fxP({ tex: FxTex.spark, x, y, vx: Math.cos(a) * v * 1.3, vy: Math.sin(a) * v * 1.3, drag: 2.2,
+                 s0: 10, s1: 3, a0: 1, a1: 0, life: 0.35 });
+    }
+    this.shake = Math.max(this.shake, 7);
   },
 
   // 火焰拖尾（火球/陨石下坠）

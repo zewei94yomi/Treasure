@@ -148,8 +148,8 @@ const Dex = (() => {
   // ============ 技能图鉴 ============
   // 每个技能：按等级的效果文案（公式与 horde.js/game.js 实现一一对应）+ 招牌动画
   const SKILL_INFO = {
-    orbit:     { fx: 'orbit',     info: lv => `${lv} 只平底锅环绕，撞击 16 伤害/次并击飞` },
-    missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.7, 2.2 - lv * 0.3).toFixed(1)}s 发射追踪鸭雷，命中 ${14 + lv * 6} 伤害` },
+    orbit:     { fx: 'orbit',     info: lv => `${lv} 只平底锅环绕，撞击 24 伤害/次并强力击飞` },
+    missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.5, 1.6 - lv * 0.2).toFixed(1)}s 发射 ${1 + Math.floor(lv / 2)} 枚追踪鸭雷，命中 ${18 + lv * 7} 伤害` },
     nova:      { fx: 'nova',      info: lv => `每 ${Math.max(2.5, 6 - lv * 0.7).toFixed(1)}s 冻结新星：${13 + lv * 6} 伤害 + 冻结身边怪` },
     trail:     { fx: 'trail',     info: lv => `跑动残留火径，踩中每跳 ${5 + lv * 3} 伤害` },
     lightning: { fx: 'lightning', info: lv => `连锁闪电 ${17 + lv * 6} 伤害，在怪群中弹跳` },
@@ -157,15 +157,15 @@ const Dex = (() => {
     barrier:   { fx: 'barrier',   info: lv => `每 ${Math.max(5, 12 - lv)}s 获得 ${20 + lv * 10} 点吸收护盾` },
     mines:     { fx: 'mines',     info: lv => `边跑边埋雷（场上至多 ${6 + lv} 颗），踩中 ${26 + lv * 10} 伤害 + 击飞` },
     meteor:    { fx: 'meteor',    info: lv => `每轮 ${1 + Math.floor(lv / 2)} 颗陨石，${30 + lv * 12} 伤害 + 灼烧（半径 84）` },
-    boomerang: { fx: 'boomerang', info: lv => `飞盘贯穿一切：${18 + lv * 7} 伤害，飞出 ${260 + lv * 25} 后折返再割一轮` },
+    boomerang: { fx: 'boomerang', info: lv => `飞盘贯穿一切：${24 + lv * 9} 伤害，飞出 ${260 + lv * 25} 后折返再割一轮` },
     chrono:    { fx: 'chrono',    info: lv => `半径 ${120 + lv * 15} 时缓力场，入场怪物持续减速` },
     garlic:    { fx: 'garlic',    info: lv => `贴身结界（半径 ${88 + lv * 12}），每 0.5s 灼烧 ${5 + lv * 3}` },
-    spears:    { fx: 'spears',    info: lv => `每轮向八方射 ${6 + lv} 根骨刺，各 ${10 + lv * 4} 伤害` },
-    drone:     { fx: 'drone',     info: lv => `无人机每 ${Math.max(0.3, 1.05 - lv * 0.13).toFixed(2)}s 点射 ${24 + lv * 10} 伤害（穿透 2）` },
+    spears:    { fx: 'spears',    info: lv => `每轮向八方射 ${8 + lv} 根骨刺，各 ${14 + lv * 6} 伤害` },
+    drone:     { fx: 'drone',     info: lv => `无人机每 ${Math.max(0.24, 0.92 - lv * 0.12).toFixed(2)}s 点射 ${24 + lv * 10} 伤害（穿透 2，僚机变体可加机）` },
     thorns:    { fx: 'thorns',    info: lv => `被近身击中反弹 ${8 + lv * 6} 伤害，受击伤害 -${(lv * 1.5).toFixed(1)}` },
     fireball:  { fx: 'fireball',  info: lv => `火球 ${18 + lv * 7} 伤害，爆炸半径 ${58 + lv * 7} + 灼烧 2s` },
     summon:    { fx: 'summon',    info: lv => `${lv} 只鸭灵（${100 + lv * 50} 血 / ${12 + lv * 6} 伤害），阵亡 5s 复活` },
-    revenge:   { fx: 'revenge',   info: lv => `受击反爆火环：${12 + lv * 8} 伤害 + 灼烧（半径 120）` },
+    revenge:   { fx: 'revenge',   info: lv => `受击炸出火焰云怒环：${16 + lv * 10} 伤害 + 灼烧 + 击飞（半径 150）` },
   };
   // 变体强化归到母技能卡下备注
   const SKILL_VARIANTS = {};

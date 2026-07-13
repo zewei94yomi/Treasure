@@ -91,20 +91,14 @@ class Game {
       .filter(n => Math.hypot(n.x - sp0.x, n.y - sp0.y) > 10 * TILE)
       .sort(() => Math.random() - 0.5);
     let ni = 0;
-    // 大逃亡：沿途房间预置怪物（越东越强）+ 死亡之潮初始化
+    // 大逃亡：房间制怪潮（踏入才刷，肃清有奖）+ 死亡之潮初始化——前期不再满地怪
     if (this.escape) {
       this.tideX = -120;
       this.escapePursuitT = ESCAPE.pursuitEvery;
-      for (const nd of MapData.monsterNodes) {
-        const prog = nd.x / MapData.pxW;
-        const pool = escapePool(prog);
-        const em = new Monster(nd.x, nd.y, this.cfg, pool[Math.floor(Math.random() * pool.length)]);
-        const sc = (1 + prog * 1.7) * (this.mode === 2 ? 1.25 : 1);
-        em.hp *= sc; em.maxHp = em.hp;
-        em.hordeDmgMul = 1 + prog * 0.8;
-        unstick(em);
-        this.monsters.push(em);
-      }
+      this.escRooms = (MapData.escapeRooms || []).map((r, i) => ({
+        idx: i, x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE,
+        state: i === 0 ? 'clear' : 'idle',      // 出生房免战
+      }));
     }
     for (const [typeId, count] of Object.entries(this.cfg.spawn)) {
       for (let k = 0; k < count; k++) {
@@ -354,7 +348,7 @@ class Game {
 
     if (this.escape) { this.escapeUpdate(dt); } else {
     // —— 胜利判定：撑满时长，全场怪物化作金币雨 ——
-    if (!H.victory && t >= HORDE_DURATION) {
+    if (!H.victory && t >= hordeDuration()) {
       H.victory = true;
       Sfx.extract();
       this.shake = 12;
@@ -363,7 +357,7 @@ class Game {
         this.goldDrops.push(new GoldDrop(m.x, m.y, 10 + Math.round(Math.random() * 10)));
       }
       this.monsters = [];
-      this.toast('🎉 撑过了十分钟！怪物尽数溃散成金币！', '#7dff9a');
+      this.toast(`🎉 撑过了 ${Math.round(hordeDuration() / 60)} 分钟！怪物尽数溃散成金币！`, '#7dff9a');
       setTimeout(() => { if (Game.current === this) this.settle(); }, 2200);
       return;
     }
@@ -447,14 +441,14 @@ class Game {
         if (!p.active) continue;
         const n = H.skills.orbit;
         for (let i = 0; i < n; i++) {
-          const a = this.time * 3.2 + i * Math.PI * 2 / n + p.idx * 0.5;
-          const ox = p.x + Math.cos(a) * 78, oy = p.y + Math.sin(a) * 78;
+          const a = this.time * 3.6 + i * Math.PI * 2 / n + p.idx * 0.5;
+          const ox = p.x + Math.cos(a) * 84, oy = p.y + Math.sin(a) * 84;
           for (const m of this.monsters) {
             if ((m.orbitCd || 0) > this.time) continue;
-            if (Math.hypot(m.x - ox, m.y - oy) < m.r + 15) {
-              m.orbitCd = this.time + 0.45;
-              m.knock(a + Math.PI / 2, 460);
-              if (m.hurt(Math.round(16 * H.mods.dmg), this)) this.killMonster(m, p);
+            if (Math.hypot(m.x - ox, m.y - oy) < m.r + 16) {
+              m.orbitCd = this.time + 0.38;
+              m.knock(a + Math.PI / 2, 560);
+              if (m.hurt(Math.round(24 * H.mods.dmg), this)) this.killMonster(m, p);
               this.spark(ox, oy, '#ffd93d');
             }
           }
@@ -465,18 +459,18 @@ class Game {
     if (H.skills.missile > 0) {
       H.missileT -= dt;
       if (H.missileT <= 0) {
-        H.missileT = Math.max(0.55, 1.9 - H.skills.missile * 0.22);
+        H.missileT = Math.max(0.5, 1.6 - H.skills.missile * 0.2);
         const shooters = this.players.filter(p => p.active);
         for (const p of shooters) {
           const targets = this.monsters.filter(m => Math.hypot(m.x - p.x, m.y - p.y) < 700);
           if (!targets.length) continue;
-          const count = 1 + Math.floor(H.skills.missile / 3);
+          const count = 1 + Math.floor(H.skills.missile / 2);
           for (let i = 0; i < count; i++) {
             const tgt = targets[Math.floor(Math.random() * targets.length)];
             const a = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (Math.random() - 0.5) * 0.6;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'duckmissile', dmg: 15 + H.skills.missile * 5, speed: 400, range: 950,
-                knock: 140, turn: 7, duck: true }, p, H.mods.dmg));
+              { id: 'duckmissile', dmg: 18 + H.skills.missile * 7, speed: 430, range: 1000,
+                knock: 160, turn: 7.5, duck: true }, p, H.mods.dmg));
           }
           Sfx.crossbow();
         }
@@ -590,7 +584,8 @@ class Game {
         this.gemCombo = (this.gemComboT > 0 ? this.gemCombo : 0) + 1;
         this.gemComboT = 1.0;
         Sfx.gem(this.gemCombo);
-        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate')));
+        // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）
+        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300)));
       }
     }
     H.gems = H.gems.filter(g => !g.taken);
@@ -1147,15 +1142,18 @@ class Game {
       this.floater(p.x, p.y - 40, '💨 闪避！', '#9fd8ff');
       return;
     }
-    // 复仇之焰：受击反噬
+    // 复仇之焰：受击反噬——火焰云环形爆发（半径 150，附灼烧+击飞）
     if (this.horde && this.hordeState.skills.revenge > 0 && dmg > 0) {
       const lv = this.hordeState.skills.revenge;
+      const R = 150;
       for (const m of this.monsters.slice()) {
-        if (Math.hypot(m.x - p.x, m.y - p.y) > 120) continue;
-        m.burnT = Math.max(m.burnT, 1);
-        if (m.hurt(Math.round((12 + lv * 8) * this.hordeState.mods.dmg), this)) this.killMonster(m, p);
+        if (Math.hypot(m.x - p.x, m.y - p.y) > R) continue;
+        m.burnT = Math.max(m.burnT, 1.5);
+        m.knock(Math.atan2(m.y - p.y, m.x - p.x), 620);
+        if (m.hurt(Math.round((16 + lv * 10) * this.hordeState.mods.dmg), this)) this.killMonster(m, p);
       }
-      for (let i = 0; i < 6; i++) this.spark(p.x, p.y, '#ff8f5c');
+      this.fxRevenge(p.x, p.y, R);
+      Sfx.boom();
     }
     // 翻滚无敌帧
     if (p.rollT > 0) {
@@ -1429,14 +1427,28 @@ class Game {
         }
       } else p.tideT = 0;
     }
-    // —— 追兵：从队伍后方持续刷狂暴怪（一边撤离一边抵抗） ——
+    // —— 房间怪潮：踏入未肃清的房间即触发；清空房间怪 → 肃清奖励 ——
+    const leadP = this.players.filter(p => p.active).sort((a, b) => b.x - a.x)[0];
+    if (leadP && this.escRooms) {
+      for (const r of this.escRooms) {
+        if (r.state === 'idle' &&
+            leadP.x > r.x && leadP.x < r.x + r.w && leadP.y > r.y && leadP.y < r.y + r.h) {
+          r.state = 'wave';
+          this.escSpawnWave(r);
+        } else if (r.state === 'wave' && !this.monsters.some(m => m.escRoom === r.idx)) {
+          r.state = 'clear';
+          this.escRoomReward(r);
+        }
+      }
+    }
+    // —— 追兵：死亡之潮启动后才从队伍后方刷狂暴怪（前期安心搜刮） ——
     this.escapePursuitT -= dt;
-    if (this.escapePursuitT <= 0 && this.monsters.length < HORDE_CAP) {
-      this.escapePursuitT = Math.max(2.4, ESCAPE.pursuitEvery - t * 0.012) / tune('spawnRate');
+    if (t > ESCAPE.tideDelay && this.escapePursuitT <= 0 && this.monsters.length < HORDE_CAP) {
+      this.escapePursuitT = Math.max(3.2, ESCAPE.pursuitEvery - t * 0.01) / tune('spawnRate');
       const act = this.players.filter(p => p.active);
       if (act.length) {
         const rear = act.reduce((a, b) => a.x < b.x ? a : b);
-        const n = 1 + Math.floor(t / 80) + (this.mode === 2 ? 1 : 0);
+        const n = 1 + Math.floor(t / 120) + (this.mode === 2 ? 1 : 0);
         const prog = rear.x / MapData.pxW;
         const pool = escapePool(prog);
         for (let i = 0; i < n; i++) {
@@ -1462,6 +1474,65 @@ class Game {
         this.toast('🏮 神秘商人在前方废墟出摊了——最后的补给机会！', '#b48aff');
       }
     }
+  }
+
+  // 大逃亡：房间怪潮——从房间边缘涌出，锁定玩家
+  escSpawnWave(r) {
+    const prog = (r.x + r.w / 2) / MapData.pxW;
+    const mid = Math.floor((this.escRooms.length - 1) / 2);
+    const n = Math.min(14, Math.round((3 + r.idx * 1.1) * (this.mode === 2 ? 1.5 : 1)));
+    const pool = escapePool(prog);
+    const tgt0 = this.players.find(p => p.active);
+    let spawned = 0;
+    for (let tries = 0; tries < n * 8 && spawned < n; tries++) {
+      const x = r.x + 30 + Math.random() * Math.max(40, r.w - 60);
+      const y = r.y + 30 + Math.random() * Math.max(40, r.h - 60);
+      if (isSolidAt(x, y)) continue;
+      if (this.players.some(p => p.active && Math.hypot(p.x - x, p.y - y) < 170)) continue;
+      const m = new Monster(x, y, this.cfg, pool[Math.floor(Math.random() * pool.length)]);
+      m.escRoom = r.idx;
+      m.state = 'chase'; m.target = tgt0;
+      if (tgt0) { m.lastKnown = { x: tgt0.x, y: tgt0.y }; m.memoryT = 99; }
+      m.hp *= (1 + prog * 1.7) * (this.mode === 2 ? 1.25 : 1); m.maxHp = m.hp;
+      m.hordeDmgMul = 1 + prog * 0.8;
+      unstick(m);
+      this.monsters.push(m);
+      spawned++;
+    }
+    // 中段房间：Boss 扼守要道（击杀=免费升级+金币雨+商人出摊）
+    if (r.idx === mid) {
+      const bid = HORDE_BOSS_IDS[Math.floor(Math.random() * HORDE_BOSS_IDS.length)];
+      const b = new Monster(r.x + r.w / 2, r.y + r.h / 2, this.cfg, bid);
+      b.isBoss = true;
+      b.hp = this.cfg.mHp * 26 * (this.mode === 2 ? 1.4 : 1) * tune('bossHp');
+      b.maxHp = b.hp;
+      b.hordeDmgMul = 1.8;
+      b.escRoom = r.idx;
+      unstick(b);
+      this.monsters.push(b);
+      this.hordeState.boss = b;
+      Sfx.brute();
+      this.toast(`👑 ${b.type.name}扼守要道！击杀它拿免费升级！`, '#ff5c5c');
+    }
+    this.shake = Math.max(this.shake, 5);
+    Sfx.aggro();
+    if (spawned) this.toast(`⚔️ 怪潮来袭 ×${spawned + (r.idx === mid ? 1 : 0)}！肃清房间领奖励！`, '#ff8f5c');
+  }
+
+  // 大逃亡：肃清奖励——经验喷泉 + 金币 + 概率道具 + 3 秒疾行
+  escRoomReward(r) {
+    const H = this.hordeState;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    for (let i = 0; i < 8; i++) H.gems.push(new XPGem(cx + (Math.random() - 0.5) * 150, cy + (Math.random() - 0.5) * 110, 2));
+    for (let i = 0; i < 4; i++) this.goldDrops.push(new GoldDrop(cx + (Math.random() - 0.5) * 120, cy + (Math.random() - 0.5) * 90, 12 + Math.round(Math.random() * 14)));
+    if (this.powerups && Math.random() < 0.6) {
+      const pu = POWERUPS[POWERUP_KEYS[Math.floor(Math.random() * POWERUP_KEYS.length)]];
+      this.powerups.push(new Powerup(cx, cy, pu));
+    }
+    for (const p of this.players) if (p.active) { p.sodaTime = Math.max(p.sodaTime, 3); p.sodaMul = Math.max(p.sodaMul || 1, 1.25); }
+    this.fxP({ tex: FxTex.ring, x: cx, y: cy, s0: 60, s1: 420, a0: 0.7, a1: 0, life: 0.5 });
+    Sfx.extract();
+    this.toast('✨ 房间肃清！经验喷泉 + 3 秒疾行！', '#7dff9a');
   }
 
   // 大逃亡开箱：不出宝物，出枪/金币/道具/急救
@@ -1606,11 +1677,41 @@ class Game {
     const c = document.createElement('canvas');
     c.width = MapData.pxW; c.height = MapData.pxH;
     const g = c.getContext('2d');
+    // —— 地面纹理层：棋盘底 + 明暗斑驳 + 砾石噪点 + 偶发裂纹 + 主题纹样 ——
+    const fhash = (x, y, s) => { let v = Math.imul(x, 374761) + Math.imul(y, 668265) + s * 987; v = Math.imul(v ^ (v >>> 13), 1274126177); return ((v >>> 0) % 1000) / 1000; };
     for (let y = 0; y < MapData.h; y++) for (let x = 0; x < MapData.w; x++) {
       if (MapData.solid[y][x]) continue;
       g.fillStyle = (x + y) % 2 ? T.floorA : T.floorB;
       g.fillRect(x*TILE, y*TILE, TILE, TILE);
-      if ((x*7 + y*13) % 11 === 0) { g.fillStyle = 'rgba(255,255,255,.03)'; g.fillRect(x*TILE+8, y*TILE+8, 6, 6); }
+      const h1 = fhash(x, y, 1);
+      g.fillStyle = h1 < 0.5 ? `rgba(0,0,0,${(0.02 + h1 * 0.09).toFixed(3)})` : `rgba(255,255,255,${((h1 - 0.5) * 0.06).toFixed(3)})`;
+      g.fillRect(x*TILE, y*TILE, TILE, TILE);
+      const n = Math.floor(fhash(x, y, 2) * 4);
+      for (let i = 0; i < n; i++) {
+        g.fillStyle = fhash(x, y, 11 + i) > 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.11)';
+        g.fillRect(x*TILE + 3 + fhash(x, y, 3 + i) * (TILE - 9), y*TILE + 3 + fhash(x, y, 7 + i) * (TILE - 9),
+                   1.5 + fhash(x, y, 15 + i) * 3, 1.5 + fhash(x, y, 19 + i) * 2.5);
+      }
+      if (fhash(x, y, 23) > 0.93) {          // 偶发裂纹
+        g.strokeStyle = 'rgba(0,0,0,.16)'; g.lineWidth = 1.2;
+        g.beginPath();
+        let cxp = x*TILE + fhash(x, y, 24) * TILE, cyp = y*TILE + 2;
+        g.moveTo(cxp, cyp);
+        for (let s2 = 0; s2 < 3; s2++) { cxp += (fhash(x, y, 25 + s2) - 0.5) * 20; cyp += 9 + fhash(x, y, 28 + s2) * 9; g.lineTo(cxp, cyp); }
+        g.stroke();
+      }
+      if (T.obstacle === 'crate' && (y % 3) === 0) {   // 木板缝
+        g.strokeStyle = 'rgba(0,0,0,.08)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x*TILE, y*TILE + 0.5); g.lineTo(x*TILE + TILE, y*TILE + 0.5); g.stroke();
+      }
+      if (T.obstacle === 'rock' && fhash(x, y, 31) > 0.86) {   // 石纹弧
+        g.strokeStyle = 'rgba(0,0,0,.10)'; g.lineWidth = 1;
+        g.beginPath(); g.arc(x*TILE + TILE/2, y*TILE + TILE/2, 6 + fhash(x, y, 32) * 9, fhash(x, y, 33) * 6, fhash(x, y, 33) * 6 + 2.2); g.stroke();
+      }
+      if (T.obstacle === 'barrel' && fhash(x, y, 35) > 0.9) {  // 湿渍
+        g.fillStyle = 'rgba(40,90,110,.10)';
+        g.beginPath(); g.ellipse(x*TILE + TILE/2, y*TILE + TILE/2, 8 + fhash(x, y, 36) * 8, 5 + fhash(x, y, 37) * 5, fhash(x, y, 38) * 3, 0, Math.PI*2); g.fill();
+      }
     }
     for (const d of MapData.decorTiles) {
       g.fillStyle = T.decor;
@@ -1710,7 +1811,7 @@ class Game {
     }
     if (this.horde) {
       const H = this.hordeState;
-      const left = Math.max(0, HORDE_DURATION - this.time);
+      const left = Math.max(0, hordeDuration() - this.time);
       const mm = Math.floor(left / 60), ss = Math.floor(left % 60);
       const y0 = MapData.minimap.height + 22;
       ctx.font = 'bold 20px "PingFang SC",sans-serif';
@@ -2110,7 +2211,16 @@ class Game {
     for (const gl of this.groundLoot) dot(gl.x, gl.y, '#ffffff', 2);
     if (this.merchant) dot(this.merchant.x, this.merchant.y, '#b48aff', 2.6);
     for (const mc of this.mercs) dot(mc.x, mc.y, mc.def.color, 2.2);
-    if (this.revealT > 0) for (const m of this.monsters) dot(m.x, m.y, '#ff5c5c', 2);
+    // 全部怪物红点 + Boss 金色大点（带脉冲圈）
+    for (const m of this.monsters) {
+      if (m.state === 'ambush') continue;   // 伏击者仍然隐身
+      if (m.isBoss || m.type.boss) {
+        dot(m.x, m.y, '#ffd93d', 4);
+        ctx.strokeStyle = `rgba(255,92,92,${0.5 + Math.sin(this.time * 5) * 0.3})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x0 + m.x / TILE * S, y0 + m.y / TILE * S, 6 + Math.sin(this.time * 5) * 2, 0, Math.PI*2); ctx.stroke();
+      } else dot(m.x, m.y, m.enraged ? '#ff3b3b' : '#e05c6a', 1.8);
+    }
     for (const p of this.players) {
       if (!p.alive) continue;
       ctx.strokeStyle = '#241f38'; ctx.lineWidth = 1.5;

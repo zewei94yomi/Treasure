@@ -149,7 +149,7 @@ check('奖杯授予幂等', run(`
 
 // ==================== 无双割草 ====================
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
-check('割草 600s/上限80/3个Boss波', run(`HORDE_DURATION === 600 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 3`));
+check('割草基准 900s/上限80/4个Boss波/时长可调', run(`HORDE_DURATION === 900 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 4 && tune('hordeTime') === 15`));
 check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
 check('18 个技能项 id 合法', run(`HORDE_UPGRADES.filter(u => u.skill).length === 18 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
@@ -204,16 +204,16 @@ check('新怪 6 种带贴图与机制字段', run(`
   MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
 check('3 个 Boss 定义与轮换表', run(`
   HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
-check('贴图数据 11 张（9怪+火球+圣剑）且为 dataURI', run(`
-  Object.keys(MONSTER_SPRITES).length === 11 && MONSTER_SPRITES.fx_fireball && MONSTER_SPRITES.fx_sword && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('贴图数据 14 张（9怪+火球+圣剑+3火焰云）且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 14 && MONSTER_SPRITES.fx_fireball && MONSTER_SPRITES.fx_sword && MONSTER_SPRITES.fx_flame0 && MONSTER_SPRITES.fx_flame2 && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
 check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
 check('攻击%升级已削弱为加算', run(`
   (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
 check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
-check('调参面板 19 项定义完整且 tune() 返回默认', run(`
-  TUNE_DEFS.length === 19 && TUNE_DEFS.every(t => t.name && t.min < t.max) &&
+check('调参面板 20 项定义完整且 tune() 返回默认', run(`
+  TUNE_DEFS.length === 20 && TUNE_DEFS.every(t => t.name && t.min < t.max) &&
   tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05 && tune('rollCd') === 1 && tune('thorns') === 1`));
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
@@ -228,7 +228,7 @@ check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
 check('鸭灵变体（成群/战意）带 requires', run(`
   HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
   (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petN === 1 && m.petPow === 1; })()`));
-check('升级池扩至 42 项', run(`HORDE_UPGRADES.length === 42`));
+check('升级池扩至 43 项（含无人机·僚机）', run(`HORDE_UPGRADES.length === 43 && HORDE_UPGRADE_BY_ID.drone_wing.requires === 'drone'`));
 {
   const fx = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：烘焙纹理 + 五类预设齐全',
@@ -244,7 +244,7 @@ check('升级池扩至 42 项', run(`HORDE_UPGRADES.length === 42`));
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=14') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=14') && !html.includes('?v=13'));
+    html.includes('js/fx.js?v=15') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=15') && !html.includes('?v=14'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -287,6 +287,31 @@ check('大逃亡配置与怪物池', run(`
   check('商人买活队友 + 大逃亡玩法卡', uiSrc.includes('merchantRevive') && uiSrc.includes("setGameplay('escape')"));
   const dexSrc = fs.readFileSync(base + 'dex.js', 'utf8');
   check('武器/技能图鉴（演示+等级调节）', ['showWeaponDex', 'showSkillDex', 'setSkillLv', 'SKILL_ANIM'].every(k => dexSrc.includes(k)));
+}
+
+// ==================== 第十轮：强化/爆炸/时长/大逃亡重构/UI ====================
+check('静音鹅弩专属追踪强化', run(`WEAPONS.crossbow.homing && WEAPONS.crossbow.homing.cone > HOMING.cone && WEAPONS.crossbow.homing.turn > HOMING.turn`));
+check('大逃亡房间矩形导出（怪潮触发）', run(`
+  (() => { loadMap('escape'); return Array.isArray(MapData.escapeRooms) && MapData.escapeRooms.length >= 10 && MapData.escapeRooms.every(r => r.w > 0 && r.h > 0); })()`));
+check('小地图封顶 300×150', run(`
+  (() => { loadMap('manor'); const ok1 = MapData.minimap.width <= 302 && MapData.minimap.height <= 152;
+    loadMap('escape'); return ok1 && MapData.minimap.width <= 302 && MapData.minimap.height <= 152; })()`));
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('大逃亡房间怪潮引擎（escSpawnWave/escRoomReward/免战出生房）',
+    ['escSpawnWave', 'escRoomReward', "state: i === 0 ? 'clear' : 'idle'", '肃清'].every(k => gameSrc.includes(k)));
+  check('时长走 tune + 经验随时间上涨',
+    gameSrc.includes('hordeDuration()') && gameSrc.includes('1 + this.time / 300'));
+  check('小地图显示全部怪物与Boss', gameSrc.includes('全部怪物红点 + Boss 金色大点'));
+  check('复仇之焰新特效 + 地面纹理层', gameSrc.includes('fxRevenge') && gameSrc.includes('地面纹理层'));
+  const fxSrc = fs.readFileSync(base + 'fx.js', 'utf8');
+  check('特效引擎：贴图粒子 + 火焰云爆炸 + fxRevenge',
+    ['f.img', 'fx_flame0', 'fxRevenge'].every(k => fxSrc.includes(k)));
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  check('无人机编队（僚机）+ 骨刺/飞盘增强',
+    hordeSrc.includes('droneCount') && hordeSrc.includes('14 + S.spears * 6') && hordeSrc.includes('24 + S.boomerang * 9'));
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  check('菜单收纳：图鉴馆 + 设置中心', html.includes('dexhub-overlay') && html.includes('settingshub-overlay') && html.includes('UI.showDexHub()'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);
