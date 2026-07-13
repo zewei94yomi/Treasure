@@ -16,7 +16,8 @@ const Trainer = (() => {
       weapon: 1,                 // 0=平底锅 1=手枪
       mag: 6, reloadT: 0, shootCd: 0, swing: 0,
       bullets: [],
-      dummy: { x: 265, y: 78, hp: 30, hurtT: 0, kills: 0, bob: Math.random() * 5 },
+      dummy: { cx: 245, cy: 100, ang: Math.random() * 6.28, x: 245, y: 100, faceDir: 0,
+               hp: 30, hurtT: 0, kills: 0, bob: Math.random() * 5, spotT: 0, spotCd: 0, spots: 0 },
       chest: { x: 265, y: 172, open: false, prog: 0, opened: 0, respawnT: 0 },
       msg: '试试你的按键吧！', msgT: 3, anim: 0,
     };
@@ -25,7 +26,8 @@ const Trainer = (() => {
   function say(s, text) { s.msg = text; s.msgT = 1.6; }
 
   function onKeyDown(e) {
-    if (!states) return;
+    if (!states || e.repeat) return;   // 忽略按住产生的系统重复
+
     for (const s of states) {
       const km = KEYMAP[s.pi];
       if (e.code === km.roll) {
@@ -102,22 +104,64 @@ const Trainer = (() => {
           s.shootCd = 0.5; s.swing = 0.2;
           Sfx.melee();
           const dd = Math.hypot(s.dummy.x - s.x, s.dummy.y - s.y);
-          if (dd < 46) hitDummy(s, 10);
+          if (dd < 46) {
+            let da = Math.atan2(s.y - s.dummy.y, s.x - s.dummy.x) - s.dummy.faceDir;
+            da = Math.atan2(Math.sin(da), Math.cos(da));
+            const backstab = s.sneak && Math.abs(da) > 1.9;   // 潜行 + 在背后
+            hitDummy(s, backstab ? 30 : 10);
+            if (backstab) say(s, '🗡️ 背刺！三倍伤害！');
+          }
         }
       }
     }
     s.x = Math.max(16, Math.min(W - 16, s.x));
     s.y = Math.max(20, Math.min(H - 16, s.y));
 
-    // 子弹
+    // 子弹（带弹道追踪：前方 ±0.55 弧度、220px 内向假人转向）
     for (const b of s.bullets) {
       b.t -= dt;
+      const dxT = s.dummy.x - b.x, dyT = s.dummy.y - b.y;
+      const dT = Math.hypot(dxT, dyT);
+      if (dT < 220) {
+        let da = Math.atan2(dyT, dxT) - b.a;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        if (Math.abs(da) < 0.55) {
+          const turn = 3.5 * dt;
+          b.a += Math.max(-turn, Math.min(turn, da));
+        }
+      }
       b.x += Math.cos(b.a) * 420 * dt;
       b.y += Math.sin(b.a) * 420 * dt;
       if (Math.hypot(b.x - s.dummy.x, b.y - s.dummy.y) < 16) { b.t = 0; hitDummy(s, 8); }
     }
     s.bullets = s.bullets.filter(b => b.t > 0 && b.x > 0 && b.x < W && b.y > 0 && b.y < H);
-    s.dummy.hurtT = Math.max(0, s.dummy.hurtT - dt);
+
+    // —— 假人绕圈巡逻（练潜行绕背）——
+    const d2 = s.dummy;
+    d2.ang += dt * 0.85;
+    const px2 = d2.cx + Math.cos(d2.ang) * 78;
+    const py2 = d2.cy + Math.sin(d2.ang) * 40;
+    d2.faceDir = Math.atan2(py2 - d2.y, px2 - d2.x);
+    d2.x = px2; d2.y = py2;
+    d2.hurtT = Math.max(0, d2.hurtT - dt);
+    d2.spotCd = Math.max(0, d2.spotCd - dt);
+    // 警戒锥判定：非潜行走进锥形 → 被发现（与正式游戏同理，潜行需 0.7s 蓄力才暴露）
+    {
+      const dd = Math.hypot(s.x - d2.x, s.y - d2.y);
+      let da = Math.atan2(s.y - d2.y, s.x - d2.x) - d2.faceDir;
+      da = Math.atan2(Math.sin(da), Math.cos(da));
+      const inCone = dd < 92 && Math.abs(da) < 0.65;
+      if (inCone && d2.spotCd <= 0) {
+        if (!s.sneak) {
+          d2.spotT += dt * 3;                 // 非潜行：极快被发现
+        } else d2.spotT += dt;                // 潜行：0.7s 蓄力（有时间撤出）
+        if (d2.spotT >= 0.7) {
+          d2.spotT = 0; d2.spotCd = 2; d2.spots++;
+          say(s, `👁 被发现了！×${d2.spots}（试试潜行绕到它背后）`);
+          Sfx.aggro();
+        }
+      } else d2.spotT = Math.max(0, d2.spotT - dt * 2);
+    }
 
     // 开箱（按住互动键靠近宝箱）
     const c = s.chest;
@@ -166,8 +210,18 @@ const Trainer = (() => {
     ctx.fillStyle = 'rgba(255,255,255,.45)';
     ctx.fillText(`按住 ${keyLabel(km.interact)} 开箱`, c.x, c.y + 26);
 
-    // 假人靶（幽影）
+    // 假人警戒锥（在假人身后先画）
     const d = s.dummy;
+    {
+      const grad = ctx.createRadialGradient(d.x, d.y, 6, d.x, d.y, 92);
+      grad.addColorStop(0, d.spotT > 0 ? 'rgba(255,120,90,.30)' : 'rgba(255,210,90,.16)');
+      grad.addColorStop(1, 'rgba(255,210,90,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.arc(d.x, d.y, 92, d.faceDir - 0.65, d.faceDir + 0.65);
+      ctx.closePath(); ctx.fill();
+    }
     const bob = Math.sin(s.anim * 5 + d.bob) * 2;
     ctx.save();
     ctx.translate(d.x, d.y + bob);
@@ -181,14 +235,15 @@ const Trainer = (() => {
       ctx.quadraticCurveTo(wx + 3, 13 + Math.sin(s.anim * 6 + i) * 2, wx - 4, 10);
     }
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffe28a';
-    ctx.beginPath(); ctx.arc(-4, -4, 2.4, 0, Math.PI * 2); ctx.arc(4, -4, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = d.spotT > 0 ? '#ff5c5c' : '#ffe28a';
+    const ex = Math.cos(d.faceDir) * 3, ey = Math.sin(d.faceDir) * 2;
+    ctx.beginPath(); ctx.arc(-4 + ex, -4 + ey, 2.4, 0, Math.PI * 2); ctx.arc(4 + ex, -4 + ey, 2.4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     // 假人血条
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(d.x - 16, d.y - 24, 32, 4);
     ctx.fillStyle = '#ff5c5c'; ctx.fillRect(d.x - 16, d.y - 24, 32 * Math.max(0, d.hp / 30), 4);
     ctx.fillStyle = 'rgba(255,255,255,.45)';
-    ctx.fillText(`${keyLabel(km.shoot)} 攻击假人`, d.x, d.y - 30);
+    ctx.fillText(`${keyLabel(km.shoot)} 攻击 · 避开光锥潜行绕背`, d.x, Math.max(12, d.y - 32));
 
     // 子弹
     ctx.fillStyle = '#ffe28a';
@@ -231,7 +286,7 @@ const Trainer = (() => {
     ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.strokeRect(10, 10, 60, 5);
     ctx.font = '11px "PingFang SC",sans-serif'; ctx.textAlign = 'left';
     ctx.fillStyle = '#f2eefc';
-    ctx.fillText(s.weapon === 1 ? `🔫 ${s.reloadT > 0 ? '…' : s.mag}/6` : '🍳 近战', 10, 26);
+    ctx.fillText(s.weapon === 1 ? `🔫 ${s.reloadT > 0 ? '…' : s.mag}/6（追踪弹道）` : '🍳 近战（潜行绕背=背刺×3）', 10, 26);
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,.4)';
     ctx.fillText(`${keyLabel(km.roll)} 翻滚 · ${keyLabel(km.sneak)} 潜行`, W - 8, 16);

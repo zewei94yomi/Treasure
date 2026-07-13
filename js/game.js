@@ -20,6 +20,7 @@ const Input = { keys: {}, sneakToggle: [false, false] };
 window.addEventListener('keydown', e => {
   Input.keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;   // 系统按键自动重复不触发动作（否则按住会反复切换潜行/武器等）
   if (Game.current) Game.current.onKeyDown(e.code);
 });
 window.addEventListener('keyup', e => { Input.keys[e.code] = false; });
@@ -645,6 +646,7 @@ class Game {
     p.swing = Math.max(0, p.swing - dt);
     p.sodaTime = Math.max(0, p.sodaTime - dt);
     p.invisT = Math.max(0, p.invisT - dt);
+    p.suspectedT = Math.max(0, (p.suspectedT || 0) - dt);
     p.rageT = Math.max(0, p.rageT - dt);
     for (const a of p.arrows) a.t -= dt;
     p.arrows = p.arrows.filter(a => a.t > 0);
@@ -1114,7 +1116,9 @@ class Game {
         for (const m of this.monsters) {
           if (m.state === 'ambush') continue;
           if (Math.hypot(m.x - opener.x, m.y - opener.y) < 520) {
-            m.lastKnown = { x: opener.x, y: opener.y };
+            // 潜行中的玩家只暴露大致方位（±200px）
+            const fuzz = opener.sneak ? 200 : 0;
+            m.lastKnown = { x: opener.x + (Math.random() - 0.5) * fuzz * 2, y: opener.y + (Math.random() - 0.5) * fuzz * 2 };
             if (m.state !== 'chase') m.state = 'investigate';
           }
         }
@@ -2288,6 +2292,12 @@ class Game {
       ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
       ctx.fillStyle = p.skin.body;
       ctx.fillText(`${p.idx+1}P`, sx, sy - 40);
+    }
+    if (p.suspectedT > 0 && p.active) {
+      ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.5 + Math.sin(this.time * 10) * 0.4;
+      ctx.fillText('👁', sx, sy - 52);
+      ctx.globalAlpha = 1;
     }
     if (p.sneak && p.active) {
       ctx.font = '11px sans-serif'; ctx.textAlign = 'center';

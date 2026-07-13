@@ -93,7 +93,7 @@ class Player {
   detectMul() {
     let m = weightDetectMul(this.loadFactor());
     for (const t of this.bag) if (t.effect && t.effect.kind === 'carry' && t.effect.detect) m += t.effect.detect;
-    if (this.sneak) m *= this.moving ? 0.40 : 0.28;
+    if (this.sneak) m *= this.moving ? 0.30 : 0.18;   // 潜行大幅隐蔽，静止近乎隐形
     return m;
   }
   speedMul() {
@@ -163,7 +163,7 @@ class Monster {
     let r = range * p.detectMul();
     let da = Math.atan2(p.y - this.y, p.x - this.x) - this.faceDir;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    if (Math.abs(da) > 1.95) r *= (p.sneak ? 0.30 : 0.65);   // 玩家在怪物背后
+    if (Math.abs(da) > 1.95) r *= (p.sneak ? 0.22 : 0.65);   // 玩家在怪物背后
     return d < r && losClear(this.x, this.y, p.x, p.y);
   }
 
@@ -309,6 +309,15 @@ class Monster {
         return;
       } else this.gazeT = Math.max(0, this.gazeT - dt * 2);
     }
+    // 察觉蓄力：潜行中的目标要被连续注视 0.7 秒才暴露（头顶出现 👁 警告）
+    if (seen && seen.sneak && this.state !== 'chase') {
+      this.suspectT = (this.suspectT || 0) + dt;
+      seen.suspectedT = 0.25;
+      this.faceDir = Math.atan2(seen.y - this.y, seen.x - this.x);   // 疑心转头
+      if (this.suspectT < 0.7) seen = null;                          // 尚未暴露
+    } else if (!seen) {
+      this.suspectT = Math.max(0, (this.suspectT || 0) - dt * 1.5);
+    } else this.suspectT = 0;
     if (seen) {
       if (this.state !== 'chase') { this.type.id === 'brute' ? Sfx.brute() : Sfx.aggro(); }
       this.state = 'chase'; this.target = seen;
@@ -342,7 +351,8 @@ class Monster {
         const alive = game.players.filter(p => p.active);
         if (alive.length) {
           const t = alive[Math.floor(Math.random() * alive.length)];
-          this.lastKnown = { x: t.x, y: t.y };
+          const fuzz = t.sneak ? 220 : 0;   // 潜行者不会被算法精确点名
+          this.lastKnown = { x: t.x + (Math.random() - 0.5) * fuzz * 2, y: t.y + (Math.random() - 0.5) * fuzz * 2 };
           this.state = 'investigate';
         }
       }
