@@ -8,8 +8,12 @@ Object.assign(Game.prototype, {
   openLevelup() {
     const H = this.hordeState;
     H.picked = H.picked || {};
-    const owned = u => u.skill ? H.skills[u.skill] : (H.picked[u.id] || 0);
-    const pool = HORDE_UPGRADES.filter(u => owned(u) < u.max);
+    const owned = u => (u.skill ? H.skills[u.skill] : H.picked[u.id]) || 0;
+    const pool = HORDE_UPGRADES.filter(u => {
+      if (owned(u) >= u.max) return false;
+      if (u.requires && !(H.skills[u.requires] > 0)) return false;   // 变体：先有母技能
+      return true;
+    });
     if (!pool.length) { H.freeChoices = 0; return; }
 
     const anySkill = Object.values(H.skills).some(v => v > 0);
@@ -20,6 +24,7 @@ Object.assign(Game.prototype, {
       const cur = owned(u);
       if (cur > 0) w *= 1.8 + cur * 0.6;                    // 已投资的路线优先出现
       if (u.skill && !anySkill) w *= 1.7;                    // 还没技能时鼓励开技能
+      if (u.requires) w *= 1.6;                              // 变体强化贴合已有 build
       if (lowHp && (u.id === 'maxhp' || u.id === 'steal' || u.id === 'regen' || u.id === 'barrier')) w *= 2.2;  // 残血时供生存牌
       // 近战流没有弹道类需求
       const def = this.players[0].weaponDef();
@@ -117,8 +122,8 @@ Object.assign(Game.prototype, {
     if (S.meteor > 0) {
       ex.meteorT -= dt;
       if (ex.meteorT <= 0) {
-        ex.meteorT = Math.max(2.2, 5.5 - S.meteor * 0.5);
-        const count = 1 + Math.floor(S.meteor / 2);
+        ex.meteorT = Math.max(1.6, (5.5 - S.meteor * 0.5) * (H.mods.meteorCd || 1));
+        const count = 1 + Math.floor(S.meteor / 2) + (H.mods.meteorN || 0);
         for (let i = 0; i < count && this.monsters.length; i++) {
           const m = this.monsters[Math.floor(Math.random() * this.monsters.length)];
           ex.meteors.push({ x: m.x, y: m.y, t: 0.8 });
@@ -130,9 +135,10 @@ Object.assign(Game.prototype, {
           Sfx.boom();
           this.shake = Math.max(this.shake, 7);
           for (let i = 0; i < 12; i++) this.spark(mt.x, mt.y, i % 2 ? '#ff7b2d' : '#ffd93d');
+          const mR = 84 * (H.mods.meteorR || 1);
           for (const m of this.monsters.slice()) {
             const d = Math.hypot(m.x - mt.x, m.y - mt.y);
-            if (d > 84 + m.r) continue;
+            if (d > mR + m.r) continue;
             m.burnT = Math.max(m.burnT, 1.5);
             if (m.hurt(Math.round((30 + S.meteor * 12) * H.mods.dmg), this)) this.killMonster(m, this.players[0]);
           }
@@ -225,7 +231,54 @@ Object.assign(Game.prototype, {
             const a = Math.atan2(tgt.y - dy, tgt.x - dx);
             this.bullets.push(new Bullet(dx, dy, a,
               { id: 'dronegun', dmg: 9 + S.drone * 4, speed: 620, range: 460, knock: 50 }, p, H.mods.dmg));
+            // 无人机·空袭：概率呼叫天降正义
+            if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
+              ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
+              this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
+            }
           }
+        }
+      }
+    }
+    // 🔥 火球术：掷向最近怪群，爆裂灼烧
+    if (S.fireball > 0) {
+      ex.fireT = (ex.fireT === undefined ? 1.5 : ex.fireT) - dt;
+      if (ex.fireT <= 0) {
+        ex.fireT = Math.max(1.1, 2.9 - S.fireball * 0.3);
+        for (const p of this.players) {
+          if (!p.active) continue;
+          let tgt = null, td = 560;
+          for (const m of this.monsters) {
+            const d = Math.hypot(m.x - p.x, m.y - p.y);
+            if (d < td) { tgt = m; td = d; }
+          }
+          if (tgt) {
+            const a = Math.atan2(tgt.y - p.y, tgt.x - p.x);
+            this.bullets.push(new Bullet(p.x, p.y, a,
+              { id: 'fireball', dmg: 18 + S.fireball * 7, speed: 360, range: 560,
+                knock: 120, explosive: 58 + S.fireball * 7, burn: 2 }, p, H.mods.dmg));
+            Sfx.wisp();
+          }
+        }
+      }
+    }
+    // 🐥 召唤鸭灵：常驻小战士（阵亡 8 秒后重生）
+    if (S.summon > 0) {
+      if (!ex.pets) ex.pets = [];
+      ex.pets = ex.pets.filter(pet => pet.hp > 0);
+      ex.petRespawnT = Math.max(0, (ex.petRespawnT || 0) - dt);
+      if (ex.pets.length < S.summon && ex.petRespawnT <= 0) {
+        ex.petRespawnT = 8;
+        const owner = this.players.find(p => p.active);
+        if (owner) {
+          const pet = new Mercenary(owner.x + 26, owner.y + 26,
+            { id: 'petduck', name: '鸭灵', icon: '🐥', hp: 60 + S.summon * 30, dmg: 9 + S.summon * 4,
+              rate: 1.6, melee: true, range: 46, speed: 165 }, owner);
+          pet.isPet = true;
+          unstick(pet);
+          this.mercs.push(pet);
+          ex.pets.push(pet);
+          this.floater(pet.x, pet.y - 20, '🐥 鸭灵苏醒！', '#ffd93d');
         }
       }
     }

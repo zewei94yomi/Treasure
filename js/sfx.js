@@ -34,6 +34,8 @@ const Sfx = (() => {
     shotgun() { noise(0.18, 0.3, 1400); tone(90, 0.15, 'square', 0.14, -40); },
     melee()   { noise(0.06, 0.12, 900); tone(220, 0.06, 'triangle', 0.12, -100); },
     hit()     { tone(140, 0.08, 'sawtooth', 0.12, -60); },
+    flesh()   { noise(0.05, 0.14, 900); tone(95, 0.06, 'triangle', 0.1, -40); },
+    crit()    { noise(0.07, 0.2, 1400); tone(320, 0.1, 'square', 0.14, -180); tone(660, 0.08, 'sine', 0.1, -200); },
     hurt()    { tone(110, 0.2, 'sawtooth', 0.16, -50); },
     open()    { tone(330, 0.1, 'triangle', 0.12); setTimeout(() => tone(440, 0.12, 'triangle', 0.12), 90); },
     pickup(r) { const base = { common:440, rare:520, epic:620, legendary:740, mythic:880 }[r] || 440;

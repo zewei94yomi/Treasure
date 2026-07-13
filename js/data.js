@@ -216,7 +216,19 @@ const MONSTER_TYPES = {
   mimic:    { id:'mimic',    name:'宝箱怪',   hpMul:1.6,  spdMul:1.25, dmgMul:1.2, visMul:1.1,  r:16, kbMul:0.6 },
   charger:  { id:'charger',  name:'冲撞蛮牛', hpMul:1.3,  spdMul:0.9,  dmgMul:1.4, visMul:1.0,  r:18, kbMul:0.4, charger:true, windup:0.55, recover:0.6 },
   shroom:   { id:'shroom',   name:'毒爆菇',   hpMul:0.8,  spdMul:0.5,  dmgMul:0,   visMul:0.9,  r:14, kbMul:1.3, shroom:true },
+  // —— 第七轮新怪（Dungeon Crawl CC0 贴图，机制各异） ——
+  warlock:   { id:'warlock',   name:'缚魂术士', hpMul:0.9,  spdMul:0.75, dmgMul:0.6, visMul:1.2,  r:15, kbMul:1,   sprite:'warlock',   caster:true,  windup:0.7, recover:0.6 },
+  venomsnake:{ id:'venomsnake',name:'毒鳞海蛇', hpMul:0.7,  spdMul:1.3,  dmgMul:0.6, visMul:0.9,  r:13, kbMul:1.4, sprite:'venomsnake',poison:4,     windup:0.28, recover:0.4 },
+  stoneling: { id:'stoneling', name:'石肤巨像', hpMul:2.8,  spdMul:0.5,  dmgMul:1.6, visMul:0.8,  r:21, kbMul:0,   sprite:'stonegiantling', windup:0.6, recover:0.8, memMul:2 },
+  direwolf:  { id:'direwolf',  name:'暗影恶狼', hpMul:0.6,  spdMul:1.7,  dmgMul:0.8, visMul:1.1,  r:14, kbMul:1.5, sprite:'direwolf',  windup:0.25, recover:0.35 },
+  leapspider:{ id:'leapspider',name:'跃击蛛',   hpMul:0.8,  spdMul:1.1,  dmgMul:1.0, visMul:1.0,  r:14, kbMul:1.2, sprite:'leapspider',charger:true, windup:0.4, recover:0.5, leap:true },
+  scorpion:  { id:'scorpion',  name:'麻痹巨蝎', hpMul:1.2,  spdMul:0.8,  dmgMul:1.1, visMul:0.85, r:16, kbMul:0.7, sprite:'scorpion',  paralyze:2,   windup:0.45, recover:0.55 },
+  // —— Boss（割草模式三波） ——
+  boss_cyclops:     { id:'boss_cyclops',     name:'独眼巨人',   hpMul:1, spdMul:0.55, dmgMul:2.2, visMul:2, r:30, kbMul:0, sprite:'boss_cyclops',     boss:true, windup:0.6, recover:0.6 },
+  boss_stormdragon: { id:'boss_stormdragon', name:'风暴巨龙',   hpMul:1, spdMul:0.7,  dmgMul:1.8, visMul:2, r:30, kbMul:0, sprite:'boss_stormdragon', boss:true, windup:0.5, recover:0.5 },
+  boss_lich:        { id:'boss_lich',        name:'巫妖王',     hpMul:1, spdMul:0.6,  dmgMul:1.6, visMul:2, r:26, kbMul:0, sprite:'boss_lich',        boss:true, windup:0.5, recover:0.5 },
 };
+const HORDE_BOSS_IDS = ['boss_cyclops', 'boss_stormdragon', 'boss_lich'];
 
 // ============ 难度 ============
 const DIFFICULTIES = {
@@ -230,21 +242,21 @@ const DIFFICULTIES = {
   normal: {
     id:'normal', name:'普通', icon:'🦆',
     desc:'疾爪蝠、石巨魁、远程幽火与骨戟卫兵登场。',
-    spawn:{ shade:4, skitter:2, brute:1, wisp:1, skeleton:1 }, lurkerGuard:false, merchant:false,
+    spawn:{ shade:4, skitter:2, brute:1, wisp:1, skeleton:1 , venomsnake:1, direwolf:1}, lurkerGuard:false, merchant:0.5,
     mHp:45, mDmg:16, chaseSpeed:106, patrolSpeed:50, vision:235, hear:380, memory:4.5, smart:1, huntInterval:0,
     chests:{ wood:9, silver:5, gold:2, mystery:1 },
   },
   hard: {
     id:'hard', name:'困难', icon:'👹',
     desc:'潜伏者蹲守高级宝箱，咒眼在暗中凝视。神秘商人出没。',
-    spawn:{ shade:4, skitter:3, brute:2, lurker:1, wisp:2, slime:1, skeleton:1, watcher:1, charger:1, shroom:1 }, lurkerGuard:true, merchant:true,
+    spawn:{ shade:4, skitter:3, brute:2, lurker:1, wisp:2, slime:1, skeleton:1, watcher:1, charger:1, shroom:1, venomsnake:1, direwolf:1, warlock:1, scorpion:1 }, lurkerGuard:true, merchant:true,
     mHp:70, mDmg:22, chaseSpeed:128, patrolSpeed:58, vision:300, hear:540, memory:8, smart:2, huntInterval:20,
     chests:{ wood:8, silver:6, gold:3, mystery:2 },
   },
   hell: {
     id:'hell', name:'地狱', icon:'🔥',
     desc:'全种类倾巢而出，尖啸者会召集猎杀。宝箱最豪华，商人必定出没。',
-    spawn:{ shade:5, skitter:4, brute:3, lurker:2, wisp:3, slime:2, banshee:1, skeleton:2, watcher:1, charger:2, shroom:2 }, lurkerGuard:true, merchant:true,
+    spawn:{ shade:5, skitter:4, brute:3, lurker:2, wisp:3, slime:2, banshee:1, skeleton:2, watcher:1, charger:2, shroom:2, venomsnake:2, direwolf:2, warlock:1, scorpion:1, stoneling:1, leapspider:1 }, lurkerGuard:true, merchant:true,
     mHp:95, mDmg:26, chaseSpeed:138, patrolSpeed:62, vision:330, hear:620, memory:10, smart:2, huntInterval:14,
     chests:{ wood:7, silver:7, gold:4, mystery:2 },
   },
@@ -452,18 +464,20 @@ const HORDE_CFG = {
 const HORDE_DURATION = 600;        // 存活 10 分钟即大胜利
 const HORDE_CAP = 80;              // 同屏怪物上限（性能与可读性）
 const HORDE_BOSS_AT = [150, 330, 510];  // Boss 波时间点
+// 狂暴：中期起怪物有概率狂暴出生（+移速+攻频，红焰特效）；涌潮全员狂暴
+const HORDE_ENRAGE = { start: 130, maxChance: 0.5, speedMul: 1.3, atkMul: 0.62 };
 
 // 随时间解锁的刷怪池
 function hordeSpawnPool(t) {
-  if (t < 60)  return ['shade', 'shade', 'skitter'];
-  if (t < 180) return ['shade', 'skitter', 'slime', 'wisp', 'charger'];
-  if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom'];
-  return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'lurker', 'banshee', 'mimic'];
+  if (t < 60)  return ['shade', 'shade', 'skitter', 'direwolf'];
+  if (t < 180) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'direwolf', 'venomsnake'];
+  if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'venomsnake', 'scorpion', 'warlock', 'leapspider'];
+  return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'lurker', 'banshee', 'mimic', 'venomsnake', 'direwolf', 'warlock', 'scorpion', 'stoneling', 'leapspider'];
 }
 
 // 升级三选一的池子：mods 数值强化 + skill 奇招技能（可重复选升级）
 const HORDE_UPGRADES = [
-  { id:'dmg',    name:'狂怒弹头',   icon:'💢', max:5, desc:'全部伤害 +25%',        mod:m => m.dmg *= 1.25 },
+  { id:'dmg',    name:'狂怒弹头',   icon:'💢', max:5, desc:'全部伤害 +18%（加算）', mod:m => m.dmg += 0.18 },
   { id:'rate',   name:'嘎特林之魂', icon:'🌀', max:5, desc:'攻击速度 +22%',        mod:m => m.rate *= 1.22 },
   { id:'multi',  name:'分裂弹道',   icon:'🎯', max:3, desc:'每次射击 +1 发弹道',   mod:m => m.multi += 1 },
   { id:'pierce', name:'贯穿之力',   icon:'📌', max:3, desc:'子弹穿透 +1 个目标',   mod:m => m.pierce += 1 },
@@ -491,6 +505,20 @@ const HORDE_UPGRADES = [
   { id:'thorns',    name:'荆棘羽甲', icon:'🌵', max:5, skill:'thorns',    desc:'被近身击中时反弹伤害' },
   { id:'luck',      name:'幸运骰',   icon:'🎲', max:4, desc:'经验宝石价值 +25%', mod:m => m.gemMul = (m.gemMul || 1) * 1.25 },
   { id:'crit',      name:'会心之喙', icon:'💢', max:4, desc:'暴击率 +12%（双倍伤害）', mod:m => m.crit = (m.crit || 0) + 0.12 },
+  // —— 第七轮新技能 ——
+  { id:'fireball',  name:'火球术',   icon:'🔥', max:5, skill:'fireball',  desc:'周期掷出爆裂火球，命中炸裂灼烧' },
+  { id:'summon',    name:'召唤鸭灵', icon:'🐥', max:3, skill:'summon',    desc:'召唤一只常驻的鸭灵战士并肩作战' },
+  { id:'vamp',      name:'汲血之羽', icon:'🧛', max:3, desc:'造成伤害的 3% 转化为生命',  mod:m => m.vamp = (m.vamp || 0) + 0.03 },
+  { id:'magsize',   name:'扩容弹夹', icon:'📦', max:3, desc:'弹夹容量 +30%',            mod:m => m.magMul = (m.magMul || 1) + 0.3 },
+  { id:'reloadspd', name:'快手换弹', icon:'⚡', max:3, desc:'换弹速度 +25%',            mod:m => m.reloadMul = (m.reloadMul || 1) * 0.75 },
+  { id:'agility',   name:'灵敏反射', icon:'🩰', max:4, desc:'移速 +4%，闪避 +5%（完全躲开攻击）', mod:m => { m.speed *= 1.04; m.dodge = (m.dodge || 0) + 0.05; } },
+  { id:'greed',     name:'贪婪之喙', icon:'🤑', max:3, desc:'怪物掉落金币 +40%',        mod:m => m.goldMul = (m.goldMul || 1) + 0.4 },
+  { id:'revenge',   name:'复仇之焰', icon:'💢', max:3, skill:'revenge',   desc:'受击时爆出一圈火焰反噬周围怪物' },
+  // —— 变体强化（持有母技能后才会出现） ——
+  { id:'meteor_big',  name:'陨石·巨岩', icon:'🪨', max:2, requires:'meteor', desc:'陨石半径 +35%', mod:m => m.meteorR = (m.meteorR || 1) + 0.35 },
+  { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
+  { id:'meteor_freq', name:'陨石·天怒', icon:'🌋', max:2, requires:'meteor', desc:'陨石冷却 -22%', mod:m => m.meteorCd = (m.meteorCd || 1) * 0.78 },
+  { id:'drone_strike',name:'无人机·空袭', icon:'🛰️', max:2, requires:'drone', desc:'无人机不时呼叫天降正义轰炸', mod:m => m.droneStrike = (m.droneStrike || 0) + 1 },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -531,3 +559,31 @@ const POWERUP_KEYS = Object.keys(POWERUPS);
 const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, rollCd:0.9, regenDelay:0.35 };
 
 const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));
+
+
+// ============ 策划调参面板（SAVE.tuning 持久化，实时生效） ============
+const TUNE_DEFS = [
+  { id:'pSpeed',   name:'玩家移速',        min:0.7,  max:1.5,  step:0.05, def:1 },
+  { id:'pDmg',     name:'玩家伤害',        min:0.5,  max:2.5,  step:0.05, def:1 },
+  { id:'pHp',      name:'玩家生命上限',    min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'mHp',      name:'怪物血量',        min:0.5,  max:2.5,  step:0.05, def:1 },
+  { id:'mDmg',     name:'怪物伤害',        min:0.5,  max:2.5,  step:0.05, def:1.05 },
+  { id:'mSpeed',   name:'怪物移速',        min:0.7,  max:1.6,  step:0.05, def:1.03 },
+  { id:'spawnRate',name:'割草刷怪速率',    min:0.5,  max:2,    step:0.05, def:1.05 },
+  { id:'xpRate',   name:'经验获取',        min:0.5,  max:2.5,  step:0.1,  def:1 },
+  { id:'goldRate', name:'金币掉落',        min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'magnet',   name:'磁吸范围',        min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'staminaRegen', name:'体力恢复',    min:0.5,  max:2.5,  step:0.1,  def:1 },
+  { id:'mimic',    name:'宝箱怪概率',      min:0,    max:1,    step:0.05, def:0.35, abs:true },
+  { id:'merchantF',name:'商人出现倍率',    min:0,    max:2,    step:0.1,  def:1.2 },
+  { id:'bossHp',   name:'Boss 血量',       min:0.5,  max:2.5,  step:0.1,  def:1 },
+  { id:'dda',      name:'自适应难度(0关1开)', min:0, max:1,    step:1,    def:1, abs:true },
+  { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.15, abs:true },
+  { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
+];
+// 读取调参值（面板未改过则用默认）
+function tune(id) {
+  const def = TUNE_DEFS.find(t => t.id === id);
+  const v = (typeof SAVE !== 'undefined' && SAVE && SAVE.tuning && SAVE.tuning[id] !== undefined) ? SAVE.tuning[id] : (def ? def.def : 1);
+  return v;
+}

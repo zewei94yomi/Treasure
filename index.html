@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
       <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
       <button class="btn big" onclick="UI.showHelp()">❓ 操作说明</button>
       <button class="btn big" onclick="UI.showKeybinds()">⌨️ 键位设置</button>
+      <button class="btn" onclick="UI.showTuning()">🎛️ 策划调参面板</button>
       <button class="btn" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
     </div>
   </div>
@@ -218,6 +219,19 @@
   </div>
 </div>
 
+<!-- ======== 策划调参面板 ======== -->
+<div id="tuning-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeTuning()">
+  <div class="modal-box help">
+    <h3>🎛️ 策划调参面板</h3>
+    <p class="pause-tip">实时生效并持久保存——像策划一样打磨你的数值。倍率 1.0 = 设计基准。</p>
+    <div id="tuning-body"></div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn small" onclick="UI.resetTuning()">恢复默认</button>
+      <button class="btn small primary" onclick="UI.closeTuning()">完成</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 操作说明 ======== -->
 <div id="help-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-box help">
@@ -240,20 +254,21 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=9"></script>
-<script src="js/music.js?v=9"></script>
-<script src="js/skins-data.js?v=9"></script>
-<script src="js/data.js?v=9"></script>
-<script src="js/save.js?v=9"></script>
-<script src="js/map.js?v=9"></script>
-<script src="js/vision.js?v=9"></script>
-<script src="js/entities.js?v=9"></script>
-<script src="js/game.js?v=9"></script>
-<script src="js/horde.js?v=9"></script>
-<script src="js/weather.js?v=9"></script>
-<script src="js/powerups.js?v=9"></script>
-<script src="js/ui.js?v=9"></script>
-<script src="js/trainer.js?v=9"></script>
-<script src="js/main.js?v=9"></script>
+<script src="js/sfx.js?v=10"></script>
+<script src="js/music.js?v=10"></script>
+<script src="js/skins-data.js?v=10"></script>
+<script src="js/monsters-data.js?v=10"></script>
+<script src="js/data.js?v=10"></script>
+<script src="js/save.js?v=10"></script>
+<script src="js/map.js?v=10"></script>
+<script src="js/vision.js?v=10"></script>
+<script src="js/entities.js?v=10"></script>
+<script src="js/game.js?v=10"></script>
+<script src="js/horde.js?v=10"></script>
+<script src="js/weather.js?v=10"></script>
+<script src="js/powerups.js?v=10"></script>
+<script src="js/ui.js?v=10"></script>
+<script src="js/trainer.js?v=10"></script>
+<script src="js/main.js?v=10"></script>
 </body>
 </html>

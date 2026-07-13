@@ -5,6 +5,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSave();
   buildKeymaps();
   preloadSkins();
+  preloadMonsterSprites();
   UI.showMenu();
 
   // 浏览器要求用户手势后才能出声：首次点击时启动音乐

@@ -15,7 +15,7 @@ const sandbox = {
   console, Math, Date, JSON, Object, Array, Map, Set, Proxy, isFinite, Infinity, performance: { now: () => 0 },
 };
 vm.createContext(sandbox);
-for (const f of ['data.js', 'save.js', 'map.js']) {
+for (const f of ['monsters-data.js', 'data.js', 'save.js', 'map.js']) {
   vm.runInContext(fs.readFileSync(base + f, 'utf8'), sandbox, { filename: f });
 }
 const run = code => vm.runInContext(code, sandbox);
@@ -57,7 +57,7 @@ check('武器 16 种字段完整（重量/射程/击退）', run(`
     w.weight !== undefined && w.knock > 0 && (w.melee ? w.range > 0 : (w.range > 0 && AMMO_TYPES[w.ammo])))`));
 check('药品 6 种 & 顺序表一致', run(`CONSUM_ORDER.length === 6 && CONSUM_ORDER.every(k => CONSUMABLES[k])`));
 check('护甲 3 种 + 腰包', run(`Object.keys(ARMORS).length === 3 && GEAR.pouch.extraSlots === 3`));
-check('怪物 12 种', run('Object.keys(MONSTER_TYPES).length') === 12);
+check('怪物 21 种（含6新怪+3Boss）', run('Object.keys(MONSTER_TYPES).length') === 21);
 check('难度 4 档且 spawn 合法', run(`
   Object.keys(DIFFICULTIES).length === 4 &&
   Object.values(DIFFICULTIES).every(d => Object.keys(d.spawn).every(t => MONSTER_TYPES[t]))`));
@@ -150,8 +150,8 @@ check('奖杯授予幂等', run(`
 // ==================== 无双割草 ====================
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
 check('割草 600s/上限80/3个Boss波', run(`HORDE_DURATION === 600 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 3`));
-check('升级池 28 项字段完整', run(`HORDE_UPGRADES.length === 28 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
-check('15 个技能项 id 合法', run(`HORDE_UPGRADES.filter(u => u.skill).length === 15 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns'].includes(u.skill))`));
+check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
+check('18 个技能项 id 合法', run(`HORDE_UPGRADES.filter(u => u.skill).length === 18 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
 
 // ==================== 第五轮：翻滚/弹夹/天气/道具 ====================
@@ -196,6 +196,28 @@ check('经典商人卖传说宝物', run(`
 check('天气晴朗概率降至 20%', run(`
   (() => { let clear = 0; for (let i = 0; i < 3000; i++) if (rollWeather().id === 'clear') clear++;
     return clear > 400 && clear < 800; })()`));
+
+
+// ==================== 第七轮：新怪/Boss/调参/狂暴 ====================
+check('新怪 6 种带贴图与机制字段', run(`
+  ['warlock','venomsnake','stoneling','direwolf','leapspider','scorpion'].every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].sprite) &&
+  MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
+check('3 个 Boss 定义与轮换表', run(`
+  HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
+check('贴图数据 9 张且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 9 && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
+check('攻击%升级已削弱为加算', run(`
+  (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
+check('变体技能带 requires 且母技能存在', run(`
+  HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
+  HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
+check('调参面板 18 项定义完整且 tune() 返回默认', run(`
+  TUNE_DEFS.length === 17 && TUNE_DEFS.every(t => t.name && t.min < t.max) &&
+  tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05`));
+check('调参覆盖生效', run(`
+  (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
+check('普通难度商人概率 0.5', run(`DIFFICULTIES.normal.merchant === 0.5`));
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);
 process.exit(fails ? 1 : 0);

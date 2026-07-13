@@ -242,7 +242,7 @@ const UI = (() => {
   function renderLevelup(game, choices) {
     const H = game.hordeState;
     $('levelup-cards').innerHTML = choices.map((u, i) => {
-      const cur = u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id]) || 0;
+      const cur = (u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id])) || 0;
       return `
       <div class="levelup-card" onclick="UI.chooseLevelup(${i})">
         <span class="lv-icon">${u.icon}</span>
@@ -464,6 +464,38 @@ const UI = (() => {
     persistSave(); Sfx.trade();
     renderMerchant(g, g.trader);
   }
+  // ---------- 策划调参面板 ----------
+  function showTuning() {
+    $('tuning-overlay').style.display = 'flex';
+    renderTuning();
+  }
+  function closeTuning() { $('tuning-overlay').style.display = 'none'; }
+  function renderTuning() {
+    $('tuning-body').innerHTML = '<div class="tuning-grid">' + TUNE_DEFS.map(t => {
+      const v = tune(t.id);
+      return `
+      <div class="tuning-row">
+        <span class="tuning-name">${t.name}</span>
+        <input type="range" min="${t.min}" max="${t.max}" step="${t.step}" value="${v}"
+               oninput="UI.setTune('${t.id}', this.value)">
+        <span class="tuning-val" id="tune-val-${t.id}">${Number(v).toFixed(2).replace(/\.?0+$/, '') || '0'}</span>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  function setTune(id, v) {
+    if (!SAVE.tuning) SAVE.tuning = {};
+    SAVE.tuning[id] = parseFloat(v);
+    persistSave();
+    const el = $('tune-val-' + id);
+    if (el) el.textContent = parseFloat(v).toFixed(2).replace(/\.?0+$/, '') || '0';
+  }
+  function resetTuning() {
+    delete SAVE.tuning;
+    persistSave();
+    renderTuning();
+    Sfx.buy();
+  }
+
   // ---------- 键位设置 ----------
   let bindWait = null;   // { p, action }
   function showKeybinds() {
@@ -702,6 +734,7 @@ const UI = (() => {
   return { showScreen, showMenu, showSetup, showShop, showCodex, showResult, showDetail, closeDetail,
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
+           showTuning, closeTuning, setTune, resetTuning,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell };

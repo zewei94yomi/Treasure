@@ -43,6 +43,10 @@ class Player {
     this.tempShield = 0;                   // 临时护盾（圣盾/泡泡道具）
     this.mags = [null, null];              // 每把武器的当前弹夹
     this.reloadT = 0;                      // 换弹剩余时间
+    this.poisonT = 0;                      // 中毒（毒蛇）持续掉血
+    this.rootT = 0;                        // 定身（缚魂术士）
+    this.paraT = 0;                        // 麻痹（巨蝎）移速骤降
+    this.burnT2 = 0;                       // 灼烧（巨龙吐息）
     this.wasSpotted = false;               // 本局是否被怪物盯上过（奖杯用）
     this.tookDamage = false;
     this.backstabKills = 0;
@@ -363,7 +367,7 @@ class Monster {
     const baseSpd = this.type.spdMul;
     let spd = cfg.patrolSpeed * baseSpd, goal = null;
     if (this.state === 'chase' && this.target) {
-      spd = cfg.chaseSpeed * baseSpd;
+      spd = cfg.chaseSpeed * baseSpd * (this.enraged ? HORDE_ENRAGE.speedMul : 1) * (typeof tune === 'function' ? tune('mSpeed') : 1);
       goal = this.lastKnown;
       // 尖啸者逃离玩家；幽火保持距离放风筝
       if (this.type.screamer && this.fleeT > 0) {
@@ -414,11 +418,65 @@ class Monster {
     }
     unstick(this);
 
+    // —— Boss 专属招式 ——
+    if (this.type.boss && this.state === 'chase' && this.target && this.target.active) {
+      this.bossT = Math.max(0, (this.bossT || 2) - dt);
+      this.bossT2 = Math.max(0, (this.bossT2 || 4) - dt);
+      const bd = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      if (this.type.id === 'boss_cyclops' && this.bossT <= 0 && bd > 100) {
+        // 独眼巨人：掷巨石（落点预警圈 → 爆炸）
+        this.bossT = 3.4;
+        this.windupT = 0.6;
+        this.pendingBoulder = { x: this.target.x, y: this.target.y };
+        Sfx.brute();
+        return;
+      }
+      if (this.type.id === 'boss_stormdragon') {
+        if (this.bossT <= 0 && bd < 240) {
+          // 吐息：正面扇形灼烧
+          this.bossT = 4.2;
+          this.windupT = 0.5;
+          this.pendingBreath = true;
+          Sfx.wisp();
+          return;
+        }
+        if (this.bossT2 <= 0) {
+          // 召雷：玩家脚下落雷预警
+          this.bossT2 = 7.5;
+          for (const p of game.players) if (p.active) game.bossZones.push({ x: p.x, y: p.y, r: 62, t: 0.85, dmg: Math.round(this.cfg.mDmg * 1.6 * (this.hordeDmgMul || 1)), kind: 'bolt' });
+          Sfx.banshee();
+        }
+      }
+      if (this.type.id === 'boss_lich') {
+        if (this.bossT <= 0) {
+          // 暗影三连弹
+          this.bossT = 3.2;
+          this.windupT = 0.5;
+          this.pendingVolley = true;
+          return;
+        }
+        if (this.bossT2 <= 0 && game.monsters.length < HORDE_CAP + 8) {
+          // 召唤幽影仆从
+          this.bossT2 = 6.5;
+          for (let i = 0; i < 2; i++) {
+            const mn = new Monster(this.x + (i ? 40 : -40), this.y + 20, this.cfg, 'shade');
+            mn.hp *= 1.2; mn.maxHp = mn.hp;
+            mn.state = 'chase'; mn.target = this.target; mn.lastKnown = { x: this.target.x, y: this.target.y }; mn.memoryT = 99;
+            unstick(mn);
+            game.monsters.push(mn);
+          }
+          game.floater(this.x, this.y - 34, '☠️ 起来吧，仆从！', '#b48aff');
+          Sfx.lurker();
+        }
+      }
+    }
+
     // —— 冲撞蛮牛：中距离蓄力冲锋 ——
     if (this.type.charger && this.state === 'chase' && this.target && this.target.active) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
       this.chargeCd = Math.max(0, (this.chargeCd || 0) - dt);
-      if (d > 110 && d < 380 && this.chargeCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
+      const minD = this.type.leap ? 80 : 110, maxD = this.type.leap ? 260 : 380;
+      if (d > minD && d < maxD && this.chargeCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
         this.chargeCd = 4.5;
         this.windupT = this.type.windup;
         this.pendingCharge = Math.atan2(this.target.y - this.y, this.target.x - this.x);
@@ -426,6 +484,26 @@ class Monster {
         return;
       }
     }
+    // —— 缚魂术士：中距离吟唱定身术 ——
+    if (this.type.caster && this.state === 'chase' && this.target && this.target.active) {
+      const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      this.castCd = Math.max(0, (this.castCd || 0) - dt);
+      if (d < 340 && d > 120 && this.castCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
+        this.castCd = 5.5;
+        this.windupT = this.type.windup;
+        this.pendingRoot = this.target;
+        Sfx.banshee();
+        game.floater(this.x, this.y - 26, '🔮 吟唱缚魂…', '#b48aff');
+        return;
+      }
+      if (d < 160) {   // 保持距离
+        const a = Math.atan2(this.y - this.target.y, this.x - this.target.x);
+        this.moveToward({ x: this.x + Math.cos(a) * 90, y: this.y + Math.sin(a) * 90 }, cfg.chaseSpeed * this.type.spdMul * slowMul * 0.9, dt, 1);
+        unstick(this);
+        return;
+      }
+    }
+
     // —— 毒爆菇：贴近后自爆 ——
     if (this.type.shroom && this.state === 'chase' && this.target && this.target.active) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
@@ -441,7 +519,7 @@ class Monster {
     if (this.state === 'chase' && this.target && this.target.active && !this.type.ranged) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
       if (d < PLAYER_R + this.r + 8 && this.attackCd <= 0) {
-        this.attackCd = this.type.id === 'brute' ? 1.5 : 1.1;
+        this.attackCd = (this.type.id === 'brute' ? 1.5 : 1.1) * (this.enraged ? HORDE_ENRAGE.atkMul : 1);
         this.windupT = this.type.windup || 0.32;
         this.pendingRanged = false;
         Sfx.windup();
@@ -452,9 +530,59 @@ class Monster {
   // 前摇结束：判定攻击（玩家若已拉开距离则挥空）
   resolveAttack(game) {
     this.recoverT = this.type.recover || 0.45;
+    // 缚魂术士：定身命中（有 LOS 即中，翻滚无敌帧可躲）
+    if (this.pendingRoot) {
+      const t = this.pendingRoot;
+      this.pendingRoot = null;
+      if (t.active && t.rollT <= 0 && losClear(this.x, this.y, t.x, t.y) &&
+          Math.hypot(t.x - this.x, t.y - this.y) < 400) {
+        t.rootT = Math.max(t.rootT, 1.2);
+        game.floater(t.x, t.y - 40, '⛓️ 被缚魂定身！', '#b48aff');
+        Sfx.lurker();
+      } else game.floater(this.x, this.y - 20, '施法落空', '#9fd8ff');
+      return;
+    }
+    // Boss：巨石落点 / 吐息 / 暗影弹
+    if (this.pendingBoulder) {
+      game.bossZones.push({ x: this.pendingBoulder.x, y: this.pendingBoulder.y, r: 88, t: 0.9,
+                            dmg: Math.round(this.cfg.mDmg * 2.2 * (this.hordeDmgMul || 1)), kind: 'boulder' });
+      this.pendingBoulder = null;
+      return;
+    }
+    if (this.pendingBreath) {
+      this.pendingBreath = false;
+      const fd = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+      this.faceDir = fd;
+      for (const p of game.players.concat(game.mercs)) {
+        const alive = p.isMerc ? p.hp > 0 : p.active;
+        if (!alive) continue;
+        const d = Math.hypot(p.x - this.x, p.y - this.y);
+        let da = Math.atan2(p.y - this.y, p.x - this.x) - fd;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        if (d < 250 && Math.abs(da) < 0.55) {
+          const dmg = Math.round(this.cfg.mDmg * 1.4 * (this.hordeDmgMul || 1));
+          if (p.isMerc) p.hurt(dmg, game);
+          else { game.damagePlayer(p, dmg, this); if (p.active) { p.burnT2 = Math.max(p.burnT2, 3); game.floater(p.x, p.y - 40, '🔥 灼烧！', '#ff8f5c'); } }
+        }
+      }
+      game.breathFx = { x: this.x, y: this.y, dir: fd, t: 0.5 };
+      Sfx.boom();
+      return;
+    }
+    if (this.pendingVolley) {
+      this.pendingVolley = false;
+      if (this.target && this.target.active) {
+        const base = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        for (const off of [-0.35, 0, 0.35]) {
+          game.monsterOrbs.push(new MonsterOrb(this.x, this.y, base + off, Math.round(this.cfg.mDmg * 1.2 * (this.hordeDmgMul || 1))));
+        }
+        Sfx.wisp();
+      }
+      return;
+    }
     // 冲撞蛮牛：前摇结束 → 起冲
     if (this.pendingCharge !== undefined && this.pendingCharge !== null) {
-      this.charging = { dir: this.pendingCharge, t: 0.6, speed: 560, hit: new Set() };
+      this.charging = { dir: this.pendingCharge, t: this.type.leap ? 0.42 : 0.6, speed: this.type.leap ? 500 : 560, hit: new Set() };
       this.pendingCharge = null;
       this.recoverT = 0;
       return;
@@ -497,7 +625,14 @@ class Monster {
     if (vd < PLAYER_R + this.r + 16) {
       const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1));
       if (victim.isMerc) victim.hurt(hitDmg, game);
-      else game.damagePlayer(victim, hitDmg, this);
+      else {
+        game.damagePlayer(victim, hitDmg, this);
+        // 附加效果：毒蛇→中毒 / 巨蝎→麻痹
+        if (!victim.isMerc && victim.active) {
+          if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT, this.type.poison); game.floater(victim.x, victim.y - 40, '🟢 中毒！', '#7ac74f'); }
+          if (this.type.paralyze) { victim.paraT = Math.max(victim.paraT, this.type.paralyze); game.floater(victim.x, victim.y - 40, '🦂 麻痹！', '#ffd93d'); }
+        }
+      }
       // 石巨魁震地：命中时溅射周围其他目标
       if (this.type.id === 'brute') {
         game.shake = Math.max(game.shake, 6);

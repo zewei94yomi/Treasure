@@ -462,3 +462,11 @@ body {
 .trainer-row { flex-wrap: nowrap; }
 .trainer-box { flex: 1; min-width: 0; }
 .trainer-box canvas { width: 100%; max-width: 380px; height: auto; }
+
+/* ---------- 策划调参面板 ---------- */
+#tuning-overlay .modal-box.help { width: min(680px, 95vw); max-height: 90vh; overflow-y: auto; }
+.tuning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+.tuning-row { display: flex; align-items: center; gap: 8px; }
+.tuning-name { font-size: 13px; color: var(--dim); width: 108px; flex-shrink: 0; }
+.tuning-row input[type=range] { flex: 1; accent-color: var(--gold); }
+.tuning-val { font-size: 13px; color: var(--gold); width: 38px; text-align: right; font-weight: 700; }

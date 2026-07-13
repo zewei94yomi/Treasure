@@ -109,6 +109,45 @@ Object.assign(Game.prototype, {
         Sfx.laser();
         break;
       }
+      case 'nuke': {
+        Sfx.boom();
+        this.shake = 12;
+        let bag = 0;
+        for (const m of this.monsters.slice()) {
+          for (let i = 0; i < 4; i++) this.spark(m.x, m.y, '#ffb347');
+          if (m.hurt(60, this)) { this.killMonster(m, p); bag++; }
+        }
+        this.toast(`💥 嘎嘎核弹！全场重创${bag ? `，${bag} 只当场蒸发` : ''}！`, '#ff8f5c');
+        break;
+      }
+      case 'magnetx': {
+        if (this.horde) for (const g of this.hordeState.gems) { g.x = p.x + (Math.random()-0.5)*30; g.y = p.y + (Math.random()-0.5)*30; }
+        for (const gd of this.goldDrops) { gd.x = p.x + (Math.random()-0.5)*30; gd.y = p.y + (Math.random()-0.5)*30; }
+        Sfx.coin();
+        this.toast('🧲 磁暴线圈！全场财宝飞入怀中！', '#5af0c8');
+        break;
+      }
+      case 'freeze': {
+        for (const m of this.monsters) { m.stunT = Math.max(m.stunT, 3); m.slowT = Math.max(m.slowT, 5); }
+        Sfx.laser();
+        this.toast('🥶 寒冰爆！全场怪物冻成冰坨 3 秒！', '#9fd8ff');
+        break;
+      }
+      case 'silverfeather': {
+        const mc = new Mercenary(p.x + 30, p.y + 30, MERCS.vet, p);
+        mc.despawnT = 40;
+        unstick(mc);
+        this.mercs.push(mc);
+        this.toast('🕊️ 银翎羽毛！独眼老兵驰援 40 秒！', '#9fd8ff');
+        break;
+      }
+      case 'goldpile': {
+        const v = 80 + Math.round(Math.random() * 70);
+        SAVE.gold += v; this.runCash += v;
+        Sfx.coin();
+        this.floater(p.x, p.y - 40, `+${v}💰`, '#ffd93d');
+        break;
+      }
       case 'hourgold':
         p.staminaFreeT = 10;
         this.toast('⌛ 金色沙漏：10 秒内翻滚不耗体力！', '#ffd93d');
