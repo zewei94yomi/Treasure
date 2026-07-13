@@ -34,11 +34,13 @@ const Trainer = (() => {
           s.rollT = STAMINA.rollDur; s.rollCd = STAMINA.rollCd;
           const d = moveDir(km);
           s.rollDir = d !== null ? d : s.facing;
+          if (s.sneak) { s.sneak = false; }
           say(s, '🤸 翻滚！（无敌帧）');
           Sfx.crossbow();
         } else if (s.stamina < STAMINA.rollCost) say(s, '体力不足，等蓝条回复');
       } else if (e.code === km.sneak) {
-        if (km.sneak === 'CapsLock') { s.sneak = !s.sneak; say(s, s.sneak ? '🤫 潜行开（再按关）' : '潜行关'); }
+        s.sneak = !s.sneak;
+        say(s, s.sneak ? '🤫 潜行开（再按关；翻滚/开枪会破隐）' : '潜行解除');
       } else if (e.code === km.reload) {
         if (s.weapon === 1 && s.mag < 6 && s.reloadT <= 0) { s.reloadT = 0.9; say(s, '🔄 换弹中…'); Sfx.tick(); }
       } else if (e.code === km.swap) {
@@ -70,7 +72,6 @@ const Trainer = (() => {
     s.swing = Math.max(0, s.swing - dt);
     s.msgT = Math.max(0, s.msgT - dt);
     s.stamina = Math.min(100, s.stamina + STAMINA.regen * dt);
-    if (km.sneak !== 'CapsLock') s.sneak = !!Input.keys[km.sneak];
     if (s.reloadT > 0) { s.reloadT -= dt; if (s.reloadT <= 0) { s.mag = 6; Sfx.tick(); say(s, '换弹完成 6/6'); } }
 
     // 移动 / 翻滚
@@ -93,6 +94,7 @@ const Trainer = (() => {
           if (s.mag > 0) {
             s.mag--; s.shootCd = 0.28;
             s.bullets.push({ x: s.x + Math.cos(s.facing) * 14, y: s.y + Math.sin(s.facing) * 14, a: s.facing, t: 0.8 });
+            if (s.sneak) { s.sneak = false; say(s, '开枪破隐！'); }
             Sfx.shoot();
             if (s.mag === 0) { s.reloadT = 0.9; say(s, '弹夹打空，自动换弹…'); }
           } else s.reloadT = 0.9;
@@ -245,15 +247,34 @@ const Trainer = (() => {
     }
   }
 
+  function tick(dt) {
+    if (!states) return;
+    try {
+      for (const s of states) {
+        update(s, dt);
+        const cv = document.getElementById(`trainer-p${s.pi + 1}`);
+        if (cv) draw(cv.getContext('2d'), s);
+      }
+    } catch (e) {
+      console.error('[Trainer]', e);
+      // 出错也别黑屏：画出错误提示
+      for (let i = 1; i <= 2; i++) {
+        const cv = document.getElementById(`trainer-p${i}`);
+        if (cv) {
+          const c = cv.getContext('2d');
+          c.fillStyle = '#241f38'; c.fillRect(0, 0, W, H);
+          c.fillStyle = '#ff8f8f'; c.font = '12px sans-serif'; c.textAlign = 'center';
+          c.fillText('练习场出错: ' + e.message, W / 2, H / 2);
+        }
+      }
+    }
+  }
+
   function loop(t) {
     if (!states) return;
     const dt = Math.min(0.05, (t - last) / 1000) || 0.016;
     last = t;
-    for (const s of states) {
-      update(s, dt);
-      const cv = document.getElementById(`trainer-p${s.pi + 1}`);
-      if (cv) draw(cv.getContext('2d'), s);
-    }
+    tick(dt);
     raf = requestAnimationFrame(loop);
   }
 
@@ -264,8 +285,10 @@ const Trainer = (() => {
       keyHandler = e => onKeyDown(e);
       document.addEventListener('keydown', keyHandler);
       last = performance.now();
+      tick(0.016);              // 同步先画一帧，避免任何情况下的黑屏
       raf = requestAnimationFrame(loop);
     },
+    tick,   // 供测试驱动
     stop() {
       states = null;
       if (raf) cancelAnimationFrame(raf);

@@ -164,7 +164,10 @@ class Game {
       const km = KEYMAP[p.idx];
       if (!p.active) continue;
       if (code === km.roll) this.tryRoll(p);
-      else if (code === km.sneak && km.sneak === 'CapsLock') Input.sneakToggle[p.idx] = !Input.sneakToggle[p.idx];
+      else if (code === km.sneak && !this.horde && p.active) {
+        p.sneak = !p.sneak;
+        this.floater(p.x, p.y - 34, p.sneak ? '🤫 潜行' : '解除潜行', '#9fd8ff');
+      }
       else if (code === km.reload) {
         const def = p.weaponDef();
         if (!def.melee && def.mag && p.magLeft() < def.mag && p.reloadT <= 0 &&
@@ -608,6 +611,7 @@ class Game {
     const free = p.staminaFreeT > 0;
     if (!free && p.stamina < STAMINA.rollCost) { Sfx.error(); this.floater(p.x, p.y - 34, '体力不足！', '#ff8f8f'); return; }
     if (!free) { p.stamina -= STAMINA.rollCost; p.staminaDelay = STAMINA.regenDelay; }
+    if (p.sneak) { p.sneak = false; this.floater(p.x, p.y - 46, '翻滚破隐', '#9fd8ff'); }
     p.rollT = STAMINA.rollDur;
     p.rollCd = STAMINA.rollCd;
     // 有方向键按方向翻，否则朝面向翻
@@ -664,8 +668,7 @@ class Game {
     }
 
     const km = KEYMAP[p.idx];
-    p.sneak = this.horde ? false
-      : (km.sneak === 'CapsLock' ? Input.sneakToggle[p.idx] : !!Input.keys[km.sneak]);
+    if (this.horde) p.sneak = false;   // 潜行为切换状态：翻滚/开枪/受伤会自动破隐
 
     let dx = 0, dy = 0;
     if (Input.keys[km.up]) dy--;
@@ -899,6 +902,7 @@ class Game {
     else if (def.id === 'cannon') Sfx.shotgun();
     else (def.pellets ? Sfx.shotgun : Sfx.shoot)();
     if (!def.silent && !this.horde) this.emitNoise(p.x, p.y, this.cfg.hear * (def.explosive ? 1.3 : 1));
+    if (!def.silent && p.sneak) { p.sneak = false; this.floater(p.x, p.y - 46, '枪声破隐！', '#ff8f8f'); }
     if (inst.dur <= 0 && !this.horde) this.breakWeapon(p);
   }
 
@@ -1040,6 +1044,7 @@ class Game {
       if (flash) { flash.style.opacity = '0.45'; setTimeout(() => flash.style.opacity = '0', 120); }
     }
     p.hurtCd = 0.35;
+    if (p.sneak && dmg > 0) { p.sneak = false; this.floater(p.x, p.y - 46, '受击破隐', '#ff8f8f'); }
     this.shake = src && src.type && src.type.id === 'brute' ? 9 : 5;
     // 荆棘羽甲：反弹伤害给近身攻击者
     if (this.horde && src && src.hurt && this.hordeState.skills.thorns > 0) {
