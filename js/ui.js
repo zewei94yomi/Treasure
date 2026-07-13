@@ -406,6 +406,7 @@ const UI = (() => {
       buyHtml += `
         <div class="shop-item">
           <div class="shop-item-head"><span class="shop-icon">${item.icon}</span><b>${item.label}</b></div>
+          ${item.note ? `<div class="shop-item-meta" style="color:#ffd93d">${item.note}</div>` : ''}
           <button class="btn small ${SAVE.gold < item.price ? 'disabled' : ''}" onclick="UI.merchantBuy(${i})">买 💰${item.price}</button>
         </div>`;
     });
@@ -436,9 +437,101 @@ const UI = (() => {
       SAVE.pouches++;
       if (g.trader && !g.trader.pouch) { g.trader.pouch = true; g.toast('腰包当场系上了！背包 +3 格', '#7dff9a'); }
     }
+    else if (item.kind === 'potionpack') {
+      for (const k of item.id.split(',')) SAVE.consumables[k]++;
+      g.toast('🎁 药剂礼包到手！', '#b48aff');
+    }
+    else if (item.kind === 'upgrade') {
+      g.hordeState.freeChoices++;
+      g.toast('⬆️ 强化券已激活——离开商店立即三选一！', '#ffd93d');
+    }
+    else if (item.kind === 'healall') {
+      for (const pl of g.players) if (pl.alive) pl.hp = pl.maxHp;
+      g.toast('❤️ 全队生命回满！', '#7dff9a');
+    }
+    else if (item.kind === 'mercace') {
+      const mc = new Mercenary(g.trader.x + 30, g.trader.y + 30, MERCS.ace, g.trader);
+      mc.despawnT = 40;
+      unstick(mc);
+      g.mercs.push(mc);
+      g.toast('🦅 佣兵王·灰羽驰援 40 秒！', '#ffd93d');
+    }
+    else if (item.kind === 'treasure') {
+      const t = TREASURE_BY_ID[item.id];
+      if (g.trader.addToBag(t)) { codexMarkSeen(t.id); g.toast(`${t.icon}${t.name} 已入背包——活着带出去才算图鉴收录！`, RARITIES[t.rarity].color); }
+      else { SAVE.gold += item.price; g.merchant.sold.delete(i); g.toast('背包放不下！已退款', '#ff8f8f'); Sfx.error(); return; }
+    }
     persistSave(); Sfx.trade();
     renderMerchant(g, g.trader);
   }
+  // ---------- 键位设置 ----------
+  let bindWait = null;   // { p, action }
+  function showKeybinds() {
+    $('keybind-overlay').style.display = 'flex';
+    renderKeybinds();
+    document.addEventListener('keydown', captureBind, true);
+  }
+  function closeKeybinds() {
+    $('keybind-overlay').style.display = 'none';
+    bindWait = null;
+    document.removeEventListener('keydown', captureBind, true);
+  }
+  function renderKeybinds() {
+    let html = '<table class="keybind-table"><tr><th>动作</th><th style="color:#ffd93d">1P 🟡</th><th style="color:#9fd8ff">2P 🔵</th></tr>';
+    for (const [action, label] of KEY_ACTIONS) {
+      html += `<tr><td>${label}</td>`;
+      for (let pi = 0; pi < 2; pi++) {
+        const waiting = bindWait && bindWait.p === pi && bindWait.action === action;
+        html += `<td><button class="btn small keybtn ${waiting ? 'waiting' : ''}" onclick="UI.startBind(${pi}, '${action}')">${waiting ? '按任意键…' : keyLabel(KEYMAP[pi][action])}</button></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    $('keybind-body').innerHTML = html;
+  }
+  function startBind(p, action) { bindWait = { p, action }; renderKeybinds(); }
+  function captureBind(e) {
+    if (!bindWait) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.code === 'Escape') { bindWait = null; renderKeybinds(); return; }
+    const { p, action } = bindWait;
+    if (!SAVE.settings.keys) SAVE.settings.keys = {};
+    if (!SAVE.settings.keys[p]) SAVE.settings.keys[p] = {};
+    // 同玩家冲突：与占用该键的动作互换
+    const cur = Object.assign({}, DEFAULT_KEYS[p], SAVE.settings.keys[p]);
+    for (const [a] of KEY_ACTIONS) {
+      if (a !== action && cur[a] === e.code) SAVE.settings.keys[p][a] = cur[action];
+    }
+    SAVE.settings.keys[p][action] = e.code;
+    persistSave();
+    buildKeymaps();
+    bindWait = null;
+    Sfx.tick();
+    renderKeybinds();
+  }
+  function resetKeybinds() {
+    delete SAVE.settings.keys;
+    persistSave();
+    buildKeymaps();
+    renderKeybinds();
+    Sfx.buy();
+  }
+
+  // 帮助表动态生成（跟随自定义键位）
+  function showHelp() {
+    const tb = $('help-keys');
+    if (tb) {
+      let rows = '';
+      for (const [action, label] of KEY_ACTIONS.filter(([a]) => !['up','down','left','right'].includes(a))) {
+        rows += `<tr><td>${label}</td><td>${keyLabel(KEYMAP[0][action])}</td><td>${keyLabel(KEYMAP[1][action])}</td></tr>`;
+      }
+      tb.innerHTML = `<tr><th></th><th style="color:#ffd93d">1P 🟡</th><th style="color:#9fd8ff">2P 🔵</th></tr>
+        <tr><td>移动</td><td>W A S D</td><td>方向键</td></tr>` + rows +
+        `<tr><td>暂停</td><td colspan="2">Esc</td></tr>`;
+    }
+    $('help-overlay').style.display = 'flex';
+  }
+
   function merchantSell(i) {
     const g = Game.current;
     if (!g || !g.trader) return;
@@ -605,7 +698,7 @@ const UI = (() => {
 
   return { showScreen, showMenu, showSetup, showShop, showCodex, showResult, showDetail, closeDetail,
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
-           renderLevelup, chooseLevelup,
+           renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell };

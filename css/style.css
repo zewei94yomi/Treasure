@@ -426,3 +426,22 @@ body {
 .bag-cell { width: 25px; height: 25px; font-size: 16px; }
 .toast { font-size: 15px; padding: 9px 24px; }
 #hud-supplies { font-size: 16px; padding: 8px 16px; }
+
+/* ---------- 键位设置 ---------- */
+.keybind-table { width: 100%; border-collapse: collapse; }
+.keybind-table th, .keybind-table td { border: 1px solid var(--line); padding: 5px 8px; font-size: 14px; text-align: center; }
+.keybtn { min-width: 86px; }
+.keybtn.waiting { border-color: var(--gold); color: var(--gold); animation: lowhp-pulse 0.8s infinite; }
+
+/* ---------- 对局状态栏再放大 ---------- */
+.bottom-bar { padding: 12px 22px; }
+.bb-left { width: 232px; gap: 6px; }
+.bb-name { font-size: 17px; }
+.bottom-bar .hp-bar { height: 14px; }
+.bottom-bar .armor-bar { height: 8px; }
+.wslot { font-size: 16px; padding: 4px 12px; }
+.bb-meta { font-size: 15px; }
+.bottom-bar .hud-fx { font-size: 14px; }
+.bottom-bar .hud-status { font-size: 14px; }
+.bag-cell { width: 30px; height: 30px; font-size: 19px; }
+#hud-toasts { bottom: 132px; }

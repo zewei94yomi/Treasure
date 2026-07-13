@@ -57,7 +57,7 @@ check('武器 16 种字段完整（重量/射程/击退）', run(`
     w.weight !== undefined && w.knock > 0 && (w.melee ? w.range > 0 : (w.range > 0 && AMMO_TYPES[w.ammo])))`));
 check('药品 6 种 & 顺序表一致', run(`CONSUM_ORDER.length === 6 && CONSUM_ORDER.every(k => CONSUMABLES[k])`));
 check('护甲 3 种 + 腰包', run(`Object.keys(ARMORS).length === 3 && GEAR.pouch.extraSlots === 3`));
-check('怪物 10 种', run('Object.keys(MONSTER_TYPES).length') === 10);
+check('怪物 12 种', run('Object.keys(MONSTER_TYPES).length') === 12);
 check('难度 4 档且 spawn 合法', run(`
   Object.keys(DIFFICULTIES).length === 4 &&
   Object.values(DIFFICULTIES).every(d => Object.keys(d.spawn).every(t => MONSTER_TYPES[t]))`));
@@ -150,8 +150,8 @@ check('奖杯授予幂等', run(`
 // ==================== 无双割草 ====================
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
 check('割草 600s/上限80/3个Boss波', run(`HORDE_DURATION === 600 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 3`));
-check('升级池 22 项字段完整', run(`HORDE_UPGRADES.length === 22 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
-check('11 个技能项 id 合法', run(`HORDE_UPGRADES.filter(u => u.skill).length === 11 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono'].includes(u.skill))`));
+check('升级池 28 项字段完整', run(`HORDE_UPGRADES.length === 28 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
+check('15 个技能项 id 合法', run(`HORDE_UPGRADES.filter(u => u.skill).length === 15 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
 
 // ==================== 第五轮：翻滚/弹夹/天气/道具 ====================
@@ -164,9 +164,38 @@ check('天气 5 种且倍率有意义', run(`
   WEATHERS.sandstorm.vision < 1 && WEATHERS.bloodmoon.mSpd > 1 && WEATHERS.bloodmoon.mDmg > 1`));
 check('rollWeather 只返回合法天气', run(`
   (() => { for (let i = 0; i < 200; i++) { const w = rollWeather(); if (!WEATHERS[w.id]) return false; } return true; })()`));
-check('道具 7 种定义完整', run(`POWERUP_KEYS.length === 7 && POWERUP_KEYS.every(k => POWERUPS[k].name && POWERUPS[k].icon && POWERUPS[k].desc)`));
+check('道具 12 种定义完整', run(`POWERUP_KEYS.length === 12 && POWERUP_KEYS.every(k => POWERUPS[k].name && POWERUPS[k].icon && POWERUPS[k].desc)`));
 check('追踪弹全局参数强化(转向≥5)', run(`HOMING.turn >= 5 && HOMING.cone >= 0.7 && HOMING.dist >= 400`));
 check('奖杯 14 个定义完整', run(`TROPHIES.length === 14 && TROPHIES.every(t => t.name && t.desc && t.icon)`));
+
+
+// ==================== 第六轮：键位/新怪/商人V2 ====================
+check('默认键位：动作齐全且同玩家无冲突', run(`
+  DEFAULT_KEYS.every(km => {
+    const codes = KEY_ACTIONS.map(([a]) => km[a]);
+    return codes.every(c => c) && new Set(codes).size === codes.length;
+  })`));
+check('1P 新默认键位符合定制（空格射击/左Shift翻滚/F互动/E药品/Q切枪/R换弹）', run(`
+  DEFAULT_KEYS[0].shoot === 'Space' && DEFAULT_KEYS[0].roll === 'ShiftLeft' && DEFAULT_KEYS[0].sneak === 'CapsLock' &&
+  DEFAULT_KEYS[0].interact === 'KeyF' && DEFAULT_KEYS[0].use === 'KeyE' && DEFAULT_KEYS[0].swap === 'KeyQ' && DEFAULT_KEYS[0].reload === 'KeyR'`));
+check('2P 新默认键位符合定制', run(`
+  DEFAULT_KEYS[1].sneak === 'Slash' && DEFAULT_KEYS[1].roll === 'ShiftRight' && DEFAULT_KEYS[1].interact === 'KeyJ' &&
+  DEFAULT_KEYS[1].use === 'Comma' && DEFAULT_KEYS[1].shoot === 'Period' && DEFAULT_KEYS[1].cycle === 'KeyK' && DEFAULT_KEYS[1].swap === 'KeyL'`));
+check('keyLabel 可读显示', run(`keyLabel('Space') === '空格' && keyLabel('KeyF') === 'F' && keyLabel('CapsLock') === 'Caps'`));
+check('新怪物字段（蛮牛冲锋/毒菇自爆）', run(`MONSTER_TYPES.charger.charger === true && MONSTER_TYPES.shroom.shroom === true`));
+check('割草刷怪池含新怪', run(`hordeSpawnPool(200).includes('charger') && hordeSpawnPool(250).includes('shroom')`));
+check('商人V2：必有特价武器+礼包+护甲', run(`
+  (() => { const s = merchantStock(false);
+    return s.some(i => i.kind === 'weapon' && i.note) && s.some(i => i.kind === 'potionpack') && s.some(i => i.kind === 'armor'); })()`));
+check('商人V2割草专属服务', run(`
+  (() => { const s = merchantStock(true);
+    return s.some(i => i.kind === 'upgrade') && s.some(i => i.kind === 'healall') && s.some(i => i.kind === 'mercace'); })()`));
+check('经典商人卖传说宝物', run(`
+  (() => { const s = merchantStock(false); const t = s.find(i => i.kind === 'treasure');
+    return t && TREASURE_BY_ID[t.id] && TREASURE_BY_ID[t.id].rarity === 'legendary'; })()`));
+check('天气晴朗概率降至 20%', run(`
+  (() => { let clear = 0; for (let i = 0; i < 3000; i++) if (rollWeather().id === 'clear') clear++;
+    return clear > 400 && clear < 800; })()`));
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);
 process.exit(fails ? 1 : 0);

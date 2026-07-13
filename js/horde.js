@@ -175,6 +175,60 @@ Object.assign(Game.prototype, {
       }
       ex.booms = ex.booms.filter(b => !b.done);
     }
+    // 🧄 蒜香领域（贴身持续灼烧）
+    if (S.garlic > 0) {
+      ex.garlicT = (ex.garlicT || 0) - dt;
+      if (ex.garlicT <= 0) {
+        ex.garlicT = 0.5;
+        for (const p of this.players) {
+          if (!p.active) continue;
+          const R = 88 + S.garlic * 12;
+          for (const m of this.monsters.slice()) {
+            if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
+            if (m.hurt(Math.round((5 + S.garlic * 3) * H.mods.dmg), this)) this.killMonster(m, p);
+          }
+        }
+      }
+    }
+    // 🦴 骨刺环发（八方radial弹）
+    if (S.spears > 0) {
+      ex.spearT = (ex.spearT === undefined ? 2 : ex.spearT) - dt;
+      if (ex.spearT <= 0) {
+        ex.spearT = Math.max(1.6, 3.5 - S.spears * 0.3);
+        for (const p of this.players) {
+          if (!p.active) continue;
+          const n = 6 + S.spears;
+          for (let i = 0; i < n; i++) {
+            const a = i * Math.PI * 2 / n + this.time;
+            this.bullets.push(new Bullet(p.x, p.y, a,
+              { id: 'spear', dmg: 10 + S.spears * 4, speed: 480, range: 230 + S.spears * 15, knock: 90 }, p, H.mods.dmg));
+          }
+        }
+        Sfx.crossbow();
+      }
+    }
+    // 🛸 无人机鸭（自动点射）
+    if (S.drone > 0) {
+      ex.droneT = (ex.droneT || 0) - dt;
+      if (ex.droneT <= 0) {
+        ex.droneT = Math.max(0.5, 1.6 - S.drone * 0.15);
+        for (const p of this.players) {
+          if (!p.active) continue;
+          const dx = p.x - Math.cos(this.time * 1.4) * 56;
+          const dy = p.y - Math.sin(this.time * 1.4) * 56 - 24;
+          let tgt = null, td = 430;
+          for (const m of this.monsters) {
+            const d = Math.hypot(m.x - dx, m.y - dy);
+            if (d < td) { tgt = m; td = d; }
+          }
+          if (tgt) {
+            const a = Math.atan2(tgt.y - dy, tgt.x - dx);
+            this.bullets.push(new Bullet(dx, dy, a,
+              { id: 'dronegun', dmg: 9 + S.drone * 4, speed: 620, range: 460, knock: 50 }, p, H.mods.dmg));
+          }
+        }
+      }
+    }
     // ⏱️ 时缓力场（被动光环）
     if (S.chrono > 0) {
       const R = 120 + S.chrono * 15;
@@ -203,7 +257,7 @@ Object.assign(Game.prototype, {
     const p = this.players.find(pl => pl.active) || this.players[0];
     const a = Math.random() * Math.PI * 2;
     const mx = p.x + Math.cos(a) * 240, my = p.y + Math.sin(a) * 240;
-    this.merchant = new Merchant(mx, my);
+    this.merchant = new Merchant(mx, my, true);
     const r = resolveCircle(this.merchant.x, this.merchant.y, 16);
     this.merchant.x = r.x; this.merchant.y = r.y;
     unstick(this.merchant);
@@ -251,6 +305,24 @@ Object.assign(Game.prototype, {
       ctx.beginPath();
       ctx.arc(sx, sy, fx.r * (1 - fx.t / 0.35 * 0.4), this.time * 10, this.time * 10 + Math.PI * 1.4);
       ctx.stroke();
+    }
+    if (H.skills.drone > 0) {
+      for (const p of this.players) {
+        if (!p.active) continue;
+        const [sx, sy] = W2S(p.x - Math.cos(this.time * 1.4) * 56, p.y - Math.sin(this.time * 1.4) * 56 - 24);
+        ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('🛸', sx, sy + Math.sin(this.time * 5) * 3 + 6);
+      }
+    }
+    if (H.skills.garlic > 0) {
+      const R = 88 + H.skills.garlic * 12;
+      for (const p of this.players) {
+        if (!p.active) continue;
+        const [sx, sy] = W2S(p.x, p.y);
+        ctx.strokeStyle = 'rgba(220,240,160,.18)';
+        ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(sx, sy, R, 0, Math.PI * 2); ctx.stroke();
+      }
     }
     if (H.skills.chrono > 0) {
       const R = 120 + H.skills.chrono * 15;

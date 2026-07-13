@@ -3,6 +3,7 @@
 
 window.addEventListener('DOMContentLoaded', () => {
   loadSave();
+  buildKeymaps();
   preloadSkins();
   UI.showMenu();
 

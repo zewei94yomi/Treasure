@@ -191,6 +191,35 @@ class Monster {
     }
     if (this.stunT > 0) { this.stunT -= dt; return; }
 
+    // —— 冲撞蛮牛：冲锋进行中 ——
+    if (this.charging) {
+      const c = this.charging;
+      c.t -= dt;
+      const ox = this.x, oy = this.y;
+      const nx = this.x + Math.cos(c.dir) * c.speed * dt;
+      const ny = this.y + Math.sin(c.dir) * c.speed * dt;
+      const r = resolveCircle(nx, ny, this.r);
+      this.x = r.x; this.y = r.y;
+      // 只有"前向几乎无位移"才算撞墙（允许贴墙滑行冲锋）
+      const fwd = (this.x - ox) * Math.cos(c.dir) + (this.y - oy) * Math.sin(c.dir);
+      const hitWall = fwd < c.speed * dt * 0.25;
+      this.faceDir = c.dir;
+      // 撞到玩家/佣兵
+      for (const v of game.players.concat(game.mercs)) {
+        if (c.hit.has(v)) continue;
+        const alive = v.isMerc ? v.hp > 0 : v.active;
+        if (!alive) continue;
+        if (Math.hypot(v.x - this.x, v.y - this.y) < this.r + PLAYER_R + 2) {
+          c.hit.add(v);
+          const dmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1));
+          if (v.isMerc) v.hurt(dmg, game); else game.damagePlayer(v, dmg, this);
+        }
+      }
+      if (hitWall) { this.charging = null; this.stunT = 0.9; game.shake = Math.max(game.shake, 5); game.spark(this.x, this.y, '#c9ced8'); }
+      else if (c.t <= 0) this.charging = null;
+      return;
+    }
+
     // —— 混乱蘑菇：怪物互相攻击 ——
     if (game.confusionT > 0 && !this.isBoss && this.windupT <= 0 && this.recoverT <= 0) {
       let foe = null, fd = 340;
@@ -375,6 +404,29 @@ class Monster {
     }
     unstick(this);
 
+    // —— 冲撞蛮牛：中距离蓄力冲锋 ——
+    if (this.type.charger && this.state === 'chase' && this.target && this.target.active) {
+      const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      this.chargeCd = Math.max(0, (this.chargeCd || 0) - dt);
+      if (d > 110 && d < 380 && this.chargeCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
+        this.chargeCd = 4.5;
+        this.windupT = this.type.windup;
+        this.pendingCharge = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        Sfx.brute();
+        return;
+      }
+    }
+    // —— 毒爆菇：贴近后自爆 ——
+    if (this.type.shroom && this.state === 'chase' && this.target && this.target.active) {
+      const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      if (d < 78 && this.windupT <= 0) {
+        this.windupT = 0.7;
+        this.pendingBoom = true;
+        Sfx.windup();
+        return;
+      }
+    }
+
     // —— 近战攻击进入前摇（硬直站桩，给玩家脱身窗口）——
     if (this.state === 'chase' && this.target && this.target.active && !this.type.ranged) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
@@ -390,6 +442,19 @@ class Monster {
   // 前摇结束：判定攻击（玩家若已拉开距离则挥空）
   resolveAttack(game) {
     this.recoverT = this.type.recover || 0.45;
+    // 冲撞蛮牛：前摇结束 → 起冲
+    if (this.pendingCharge !== undefined && this.pendingCharge !== null) {
+      this.charging = { dir: this.pendingCharge, t: 0.6, speed: 560, hit: new Set() };
+      this.pendingCharge = null;
+      this.recoverT = 0;
+      return;
+    }
+    // 毒爆菇：自爆成毒云
+    if (this.pendingBoom) {
+      this.pendingBoom = false;
+      game.shroomExplode(this, 84);
+      return;
+    }
     // 混乱状态：打的是别的怪
     if (this.confusedTarget) {
       const foe = this.confusedTarget;
@@ -423,6 +488,19 @@ class Monster {
       const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1));
       if (victim.isMerc) victim.hurt(hitDmg, game);
       else game.damagePlayer(victim, hitDmg, this);
+      // 石巨魁震地：命中时溅射周围其他目标
+      if (this.type.id === 'brute') {
+        game.shake = Math.max(game.shake, 6);
+        for (const v of game.players.concat(game.mercs)) {
+          if (v === victim) continue;
+          const alive = v.isMerc ? v.hp > 0 : v.active;
+          if (!alive) continue;
+          if (Math.hypot(v.x - this.x, v.y - this.y) < 95) {
+            const splash = Math.round(hitDmg * 0.5);
+            if (v.isMerc) v.hurt(splash, game); else game.damagePlayer(v, splash, this);
+          }
+        }
+      }
     } else {
       game.floater(this.x, this.y - 20, '挥空！', '#9fd8ff');
     }
@@ -430,12 +508,17 @@ class Monster {
 
   moveToward(goal, spd, dt, smart) {
     let tx = goal.x, ty = goal.y;
-    if (smart >= 2) {
+    this.forcePathT = Math.max(0, (this.forcePathT || 0) - dt);
+    // 聪明怪常态寻路；笨怪卡墙 0.35 秒后也临时开启寻路（解决"知道位置但被地形卡住"）
+    if (smart >= 2 || this.forcePathT > 0) {
       this.pathT -= dt;
       if (this.pathT <= 0) { this.pathT = 0.5; this.path = bfsPath(this.x, this.y, goal.x, goal.y); }
       while (this.path.length && Math.hypot(this.path[0].x - this.x, this.path[0].y - this.y) < TILE * 0.55) this.path.shift();
+      // 路径平滑：能直视的路点直接跳过
+      while (this.path.length > 1 && losClear(this.x, this.y, this.path[1].x, this.path[1].y)) this.path.shift();
       if (this.path.length) { tx = this.path[0].x; ty = this.path[0].y; }
     }
+    const _bx = this.x, _by = this.y;
     let a = Math.atan2(ty - this.y, tx - this.x);
     if (this.type.zigzag) a += Math.sin(this.anim * 7 + this.zigPhase) * 0.7;
     this.faceDir = a;
@@ -449,6 +532,12 @@ class Monster {
       r = (Math.hypot(r2.x - this.x, r2.y - this.y) > Math.hypot(r3.x - this.x, r3.y - this.y)) ? r2 : r3;
     }
     this.x = r.x; this.y = r.y;
+    // 卡墙侦测：实际位移远小于期望 → 累计后强制寻路
+    const moved = Math.hypot(this.x - _bx, this.y - _by);
+    if (moved < spd * dt * 0.3) {
+      this.stuckT = (this.stuckT || 0) + dt;
+      if (this.stuckT > 0.35) { this.stuckT = 0; this.forcePathT = 2.5; this.pathT = 0; }
+    } else this.stuckT = 0;
   }
 
   hurt(dmg, game) {
@@ -677,10 +766,10 @@ class Mercenary {
 
 // 神秘商人（不可攻击的 NPC）
 class Merchant {
-  constructor(x, y) {
+  constructor(x, y, isHorde) {
     this.x = x; this.y = y;
     this.anim = 0;
-    this.stock = merchantStock();
+    this.stock = merchantStock(!!isHorde);
     this.sold = new Set();      // 已售出的货位下标
   }
 }

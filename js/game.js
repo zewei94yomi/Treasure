@@ -3,16 +3,20 @@
 
 const VIEW_W = 1280, VIEW_H = 720;
 
-const KEYMAP = [
-  { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD', interact:'KeyE', shoot:'KeyF', shoot2:null, roll:'Space',
-    use:'KeyQ', cycle:'Tab', swap:'KeyR', sneak:'ShiftLeft',
-    labels:{ interact:'E', shoot:'F', use:'Q', cycle:'Tab', swap:'R', sneak:'左Shift', roll:'空格' } },
-  { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', interact:'Comma', shoot:'Period', shoot2:null, roll:'Slash',
-    use:'KeyM', cycle:'KeyK', swap:'KeyL', sneak:'ShiftRight',
-    labels:{ interact:',', shoot:'.', use:'M', cycle:'K', swap:'L', sneak:'右Shift', roll:'/' } },
-];
+let KEYMAP = [];
+function buildKeymaps() {
+  const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.settings && SAVE.settings.keys) || {};
+  KEYMAP = DEFAULT_KEYS.map((def, i) => {
+    const km = Object.assign({}, def, saved[i] || {});
+    km.shoot2 = null;
+    km.labels = {};
+    for (const [a] of KEY_ACTIONS) km.labels[a] = keyLabel(km[a]);
+    return km;
+  });
+}
+buildKeymaps();
 
-const Input = { keys: {} };
+const Input = { keys: {}, sneakToggle: [false, false] };
 window.addEventListener('keydown', e => {
   Input.keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)) e.preventDefault();
@@ -88,7 +92,7 @@ class Game {
     // 神秘商人（困难/地狱）
     this.merchant = null;
     if (this.cfg.merchant && MapData.merchantSpot) {
-      this.merchant = new Merchant(MapData.merchantSpot.x, MapData.merchantSpot.y);
+      this.merchant = new Merchant(MapData.merchantSpot.x, MapData.merchantSpot.y, false);
       const r = resolveCircle(this.merchant.x, this.merchant.y, 16);
       this.merchant.x = r.x; this.merchant.y = r.y; unstick(this.merchant);
     }
@@ -117,7 +121,7 @@ class Game {
       this.merchant = null;
       this.monsters = [];
       this.hordeState = {
-        level: 1, xp: 0, xpNeed: 8,
+        level: 1, xp: 0, xpNeed: Math.round(8 * (mode === 2 ? 1.35 : 1)),
         mods: { dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 },
         skills: { orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0 },
         spawnT: 1.2, missileT: 2, novaT: 4, boltT: 3, trailT: 0, fireTickT: 0,
@@ -160,6 +164,12 @@ class Game {
       const km = KEYMAP[p.idx];
       if (!p.active) continue;
       if (code === km.roll) this.tryRoll(p);
+      else if (code === km.sneak && km.sneak === 'CapsLock') Input.sneakToggle[p.idx] = !Input.sneakToggle[p.idx];
+      else if (code === km.reload) {
+        const def = p.weaponDef();
+        if (!def.melee && def.mag && p.magLeft() < def.mag && p.reloadT <= 0 &&
+            (this.horde || SAVE.ammo[def.ammo] > 0)) { p.startReload(); Sfx.tick(); }
+      }
       else if (code === km.use) this.useConsumable(p);
       else if (code === km.cycle) this.cycleConsumable(p);
       else if (code === km.swap) { p.switchWeapon(); Sfx.tick(); }
@@ -196,6 +206,8 @@ class Game {
     this.merchantOpen = false;
     this.paused = false;
     document.getElementById('merchant-overlay').style.display = 'none';
+    // 强化券：出店即三选一
+    if (this.horde && this.hordeState.freeChoices > 0 && !this.levelupOpen) this.openLevelup();
   }
 
   // ---------- 主循环 ----------
@@ -211,6 +223,7 @@ class Game {
   update(dt) {
     this.time += dt;
     this.revealT = Math.max(0, this.revealT - dt);
+    this.gemComboT = Math.max(0, (this.gemComboT || 0) - dt);
     this.monsterSlowT = Math.max(0, this.monsterSlowT - dt);
     this.shake = Math.max(0, this.shake - dt * 18);
 
@@ -239,6 +252,20 @@ class Game {
 
     for (const mc of this.mercs) mc.update(dt, this);
     this.mercs = this.mercs.filter(mc => mc.hp > 0);
+
+    // 毒云：范围伤害滴答
+    if (this.poisonClouds && this.poisonClouds.length) {
+      for (const pc of this.poisonClouds) {
+        pc.t -= dt; pc.tick -= dt;
+        if (pc.tick <= 0) {
+          pc.tick = 0.55;
+          for (const p of this.players) {
+            if (p.active && Math.hypot(p.x - pc.x, p.y - pc.y) < pc.r) this.damagePlayer(p, 6, null);
+          }
+        }
+      }
+      this.poisonClouds = this.poisonClouds.filter(pc => pc.t > 0);
+    }
 
     this.bullets = this.bullets.filter(b => b.update(dt, this));
     this.monsterOrbs = this.monsterOrbs.filter(o => o.update(dt, this));
@@ -281,13 +308,37 @@ class Game {
 
     // —— 刷怪泵：随时间加速加量 ——
     H.spawnT -= dt;
-    const interval = Math.max(0.35, 2.3 - t * 0.0033);
+    const interval = Math.max(0.28, 2.2 - t * 0.004);   // 中期收紧、后期 0.28s
     if (H.spawnT <= 0) {
       H.spawnT = interval;
-      const batch = 1 + Math.floor(t / 70);
+      let batch = 1 + Math.floor(t / 60);
+      if (this.mode === 2) batch = Math.ceil(batch * 1.6);   // 双人：更多怪
       for (let i = 0; i < batch; i++) {
         if (this.monsters.length >= HORDE_CAP) break;
         this.spawnHordeMonster();
+      }
+    }
+    // —— 涌潮：周期性一圈怪从四面八方合围 ——
+    if (H.surgeT === undefined) H.surgeT = 90;
+    H.surgeT -= dt;
+    if (H.surgeT <= 0) {
+      H.surgeT = 75;
+      const tgt = this.players.filter(p => p.active)[0];
+      if (tgt) {
+        this.toast('🌊 怪潮涌动！它们从四面八方围过来了！', '#ff8f5c');
+        Sfx.banshee();
+        const pool = hordeSpawnPool(t);
+        for (let i = 0; i < 8; i++) {
+          if (this.monsters.length >= HORDE_CAP + 10) break;
+          const a = i * Math.PI / 4;
+          const m = new Monster(tgt.x + Math.cos(a) * 460, tgt.y + Math.sin(a) * 460,
+                                this.cfg, pool[Math.floor(Math.random() * pool.length)]);
+          const hpScale = (1 + t / 50 * 0.25 + Math.max(0, t - 300) / 60 * 0.35) * (this.mode === 2 ? 1.3 : 1);
+          m.hp *= hpScale; m.maxHp = m.hp;
+          m.hordeDmgMul = 1 + t / 120 * 0.32;
+          unstick(m);
+          this.monsters.push(m);
+        }
       }
     }
     // —— Boss 波 ——
@@ -448,7 +499,13 @@ class Game {
         g.x += Math.cos(a) * sp * dt;
         g.y += Math.sin(a) * sp * dt;
       }
-      if (bd < 22) { g.taken = true; this.hordeAddXp(g.v); }
+      if (bd < 22) {
+        g.taken = true;
+        this.gemCombo = (this.gemComboT > 0 ? this.gemCombo : 0) + 1;
+        this.gemComboT = 1.0;
+        Sfx.gem(this.gemCombo);
+        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1)));
+      }
     }
     H.gems = H.gems.filter(g => !g.taken);
     if (H.gems.length > 220) H.gems.splice(0, H.gems.length - 220);
@@ -457,11 +514,10 @@ class Game {
   hordeAddXp(v) {
     const H = this.hordeState;
     H.xp += v;
-    Sfx.tick();
     while (H.xp >= H.xpNeed) {
       H.xp -= H.xpNeed;
       H.level++;
-      H.xpNeed = Math.round(8 + H.level * 4.5);
+      H.xpNeed = Math.round((8 + H.level * 4.5) * (this.mode === 2 ? 1.35 : 1));
       H.freeChoices++;
       Sfx.extract();
       this.floater(this.players[0].x, this.players[0].y - 40, `⬆ 升级 Lv.${H.level}！`, '#ffd93d');
@@ -513,10 +569,17 @@ class Game {
       this.players.every(p => !p.active || Math.hypot(n.x - p.x, n.y - p.y) > 520));
     const n = (nodes.length ? nodes : MapData.monsterNodes)[Math.floor(Math.random() * (nodes.length ? nodes.length : MapData.monsterNodes.length))];
     const m = new Monster(n.x + (Math.random() - 0.5) * 60, n.y + (Math.random() - 0.5) * 60, this.cfg, typeId);
-    // 成长曲线：血量/伤害随时间膨胀
-    const hpScale = 1 + t / 45 * 0.28;
+    // 成长曲线：中期抬升、300 秒后二段加速；双人整体 +30% 血
+    let hpScale = (1 + t / 50 * 0.25 + Math.max(0, t - 300) / 60 * 0.35) * (this.mode === 2 ? 1.3 : 1);
+    m.hordeDmgMul = 1 + t / 120 * 0.32;
+    // 精英怪：4 分钟后 12% 概率，金光描边、更大更狠、掉 4 倍经验
+    if (t > 240 && Math.random() < 0.12) {
+      m.isElite = true;
+      hpScale *= 2.5;
+      m.hordeDmgMul *= 1.5;
+      m.r += 4;
+    }
     m.hp *= hpScale; m.maxHp = m.hp;
-    m.hordeDmgMul = 1 + t / 130 * 0.3;
     unstick(m);
     this.monsters.push(m);
   }
@@ -601,7 +664,8 @@ class Game {
     }
 
     const km = KEYMAP[p.idx];
-    p.sneak = this.horde ? false : !!Input.keys[km.sneak];
+    p.sneak = this.horde ? false
+      : (km.sneak === 'CapsLock' ? Input.sneakToggle[p.idx] : !!Input.keys[km.sneak]);
 
     let dx = 0, dy = 0;
     if (Input.keys[km.up]) dy--;
@@ -614,7 +678,14 @@ class Game {
     let wishX = 0, wishY = 0;
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
-      p.facing = Math.atan2(dy, dx);
+      const cand = Math.atan2(dy, dx);
+      if (dx !== 0 && dy !== 0) {          // 斜向输入立即采用并"粘住"
+        p.facing = cand;
+        p.faceStick = 0.12;
+      } else {                              // 单轴输入需持续片刻才覆盖斜角（消除松键抖动）
+        p.faceStick = Math.max(0, (p.faceStick || 0) - dt);
+        if (p.faceStick <= 0) p.facing = cand;
+      }
       wishX = (dx / len) * spd; wishY = (dy / len) * spd;
     }
     // 冰面滑行：速度缓慢逼近目标方向；普通地面直接响应
@@ -665,16 +736,27 @@ class Game {
     }
     this.groundLoot = this.groundLoot.filter(g => g.items.length);
 
-    // 碎金自动拾取
-    for (const gd of this.goldDrops) {
-      if (Math.hypot(gd.x - p.x, gd.y - p.y) > 34) continue;
-      SAVE.gold += gd.value;
-      this.runCash += gd.value;
-      gd.taken = true;
-      Sfx.coin();
-      this.floater(gd.x, gd.y - 14, `+${gd.value}💰`, '#ffd93d');
+    // 碎金磁吸拾取（与经验宝石同款磁场）
+    {
+      const magR = this.horde ? 95 * this.hordeState.mods.magnet : 80;
+      for (const gd of this.goldDrops) {
+        const d = Math.hypot(gd.x - p.x, gd.y - p.y);
+        if (d < magR && d > 20) {
+          const a = Math.atan2(p.y - gd.y, p.x - gd.x);
+          const sp = 240 + (magR - d) * 3.5;
+          gd.x += Math.cos(a) * sp * dt;
+          gd.y += Math.sin(a) * sp * dt;
+        }
+        if (d <= 24) {
+          SAVE.gold += gd.value;
+          this.runCash += gd.value;
+          gd.taken = true;
+          Sfx.coin();
+          this.floater(gd.x, gd.y - 14, `+${gd.value}💰`, '#ffd93d');
+        }
+      }
+      this.goldDrops = this.goldDrops.filter(g => !g.taken);
     }
-    this.goldDrops = this.goldDrops.filter(g => !g.taken);
 
     if (this.horde) return;   // 割草模式没有撤离，只有生存
     const er = MapData.exitRect;
@@ -803,10 +885,13 @@ class Game {
         knock: (def.knock || 80) * H.knock,
       });
     }
+    const critC = H ? (H.crit || 0) : 0;
     for (let i = 0; i < n; i++) {
       const fan = def.pellets ? 0 : (i - (n - 1) / 2) * 0.13;   // 非霰弹的分裂弹道呈扇形
       const a = angle + fan + (Math.random() - 0.5) * 2 * def.spread;
-      this.bullets.push(new Bullet(p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 20, a, bdef, p, p.dmgMul() * (H ? H.dmg : 1)));
+      const crit = Math.random() < critC;
+      this.bullets.push(new Bullet(p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 20, a, bdef, p,
+        p.dmgMul() * (H ? H.dmg : 1) * (crit ? 2 : 1)));
     }
     this.spark(p.x + Math.cos(angle) * 24, p.y + Math.sin(angle) * 24, '#ffe28a');
     if (def.id === 'laser') Sfx.laser();
@@ -843,6 +928,16 @@ class Game {
     if (p.weapons[other] && p.weapons[other].dur > 0) p.activeSlot = other;
   }
 
+  // 毒爆菇自爆/被击杀 → 毒云（区域持续伤害）
+  shroomExplode(m, radius) {
+    m._boomed = true;
+    if (!this.poisonClouds) this.poisonClouds = [];
+    this.poisonClouds.push({ x: m.x, y: m.y, r: radius, t: 5, tick: 0 });
+    Sfx.boom();
+    for (let i = 0; i < 10; i++) this.spark(m.x, m.y, '#7ac74f');
+    this.killMonster(m, null);
+  }
+
   emitNoise(x, y, radius) {
     if (radius <= 0) return;
     for (const m of this.monsters) {
@@ -866,6 +961,12 @@ class Game {
     }
     for (let i = 0; i < 8; i++) this.spark(m.x, m.y, '#b48aff');
     this.floater(m.x, m.y - 20, `${m.type.name}被击败！`, '#b48aff');
+    if (m.type.shroom && !m._boomed) {
+      m._boomed = true;
+      if (!this.poisonClouds) this.poisonClouds = [];
+      this.poisonClouds.push({ x: m.x, y: m.y, r: 60, t: 4, tick: 0 });
+      for (let i = 0; i < 8; i++) this.spark(m.x, m.y, '#7ac74f');
+    }
     if (m.type.splits && !m.isMini) {
       for (let i = 0; i < 2; i++) {
         const mini = new Monster(m.x + (i ? 18 : -18), m.y + 6, this.cfg, 'slime', true);
@@ -889,7 +990,7 @@ class Game {
     if (this.horde) {
       const H = this.hordeState;
       // 经验宝石
-      const xv = m.isBoss ? 12 : (m.type.id === 'brute' || m.type.id === 'skeleton') ? 3 : m.isMini ? 1 : (Math.random() < 0.3 ? 2 : 1);
+      const xv = m.isBoss ? 12 : m.isElite ? 4 : (m.type.id === 'brute' || m.type.id === 'skeleton') ? 3 : m.isMini ? 1 : (Math.random() < 0.3 ? 2 : 1);
       H.gems.push(new XPGem(m.x + (Math.random() - 0.5) * 14, m.y + (Math.random() - 0.5) * 14, xv));
       // 吸血
       if (owner && owner.maxHp && H.mods.lifesteal > 0) owner.hp = Math.min(owner.maxHp, owner.hp + H.mods.lifesteal);
@@ -940,6 +1041,12 @@ class Game {
     }
     p.hurtCd = 0.35;
     this.shake = src && src.type && src.type.id === 'brute' ? 9 : 5;
+    // 荆棘羽甲：反弹伤害给近身攻击者
+    if (this.horde && src && src.hurt && this.hordeState.skills.thorns > 0) {
+      const th = 8 + this.hordeState.skills.thorns * 6;
+      if (src.hurt(th, this)) this.killMonster(src, p);
+      else this.floater(src.x, src.y - 20, `🌵${th}`, '#7ac74f');
+    }
     Sfx.hurt();
     if (p.hp <= 0) {
       p.hp = 0;
@@ -1310,6 +1417,21 @@ class Game {
     ctx.textAlign = 'center';
     ctx.font = 'bold 14px "PingFang SC",sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,.75)';
+    if (this.weather && this.weather.id !== 'clear') {
+      ctx.font = 'bold 15px "PingFang SC",sans-serif';
+      ctx.fillStyle = '#9fd8ff';
+      ctx.fillText(`${this.weather.icon}${this.weather.name}`, VIEW_W/2 + 210, MapData.minimap.height + 26);
+      if (this.time < 3.5) {
+        ctx.globalAlpha = Math.min(1, 3.5 - this.time);
+        ctx.font = 'bold 30px "PingFang SC",sans-serif';
+        ctx.fillStyle = '#ffd93d';
+        ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 5;
+        const txt = `${this.weather.icon} ${this.weather.name} — ${this.weather.desc}`;
+        ctx.strokeText(txt, VIEW_W/2, 220);
+        ctx.fillText(txt, VIEW_W/2, 220);
+        ctx.globalAlpha = 1;
+      }
+    }
     if (this.horde) {
       const H = this.hordeState;
       const left = Math.max(0, HORDE_DURATION - this.time);
@@ -1411,6 +1533,22 @@ class Game {
       }
     }
 
+    // —— 毒云 ——
+    if (this.poisonClouds) {
+      for (const pc of this.poisonClouds) {
+        const [sx, sy] = W2S(pc.x, pc.y);
+        if (!onScreen(sx, sy, 120)) continue;
+        ctx.fillStyle = `rgba(110,200,80,${Math.min(0.3, pc.t * 0.12)})`;
+        ctx.beginPath(); ctx.arc(sx, sy, pc.r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(70,140,50,.35)';
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(sx + Math.cos(this.time * 2 + i * 1.6) * pc.r * 0.5,
+                  sy + Math.sin(this.time * 1.6 + i * 2.1) * pc.r * 0.5, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     // —— 割草模式地面层：火焰足迹 / 经验宝石 ——
     if (this.horde) {
       const H = this.hordeState;

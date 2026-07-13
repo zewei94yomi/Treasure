@@ -54,6 +54,9 @@ const Sfx = (() => {
     coin()    { tone(988, 0.06, 'square', 0.08); setTimeout(() => tone(1319, 0.1, 'square', 0.08), 60); },
     trade()   { tone(523, 0.08, 'sine', 0.1); setTimeout(() => tone(784, 0.1, 'sine', 0.1), 80); },
     tick()    { tone(500, 0.04, 'square', 0.06); },
+    // 宝石连击：音高随连击攀升（多巴胺注入）
+    gem(n)    { const f = 620 * Math.pow(2, Math.min(n, 14) / 12);
+                tone(f, 0.07, 'sine', 0.13); setTimeout(() => tone(f * 1.5, 0.09, 'sine', 0.08), 45); },
     revive()  { tone(392, 0.12, 'sine', 0.13); setTimeout(() => tone(523, 0.15, 'sine', 0.13), 100); },
     heal()    { tone(494, 0.1, 'sine', 0.12); setTimeout(() => tone(587, 0.12, 'sine', 0.12), 80); },
     broke()   { noise(0.12, 0.18, 600); tone(80, 0.25, 'square', 0.1, -30); },

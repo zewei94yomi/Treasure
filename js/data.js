@@ -214,6 +214,8 @@ const MONSTER_TYPES = {
   skeleton: { id:'skeleton', name:'骨戟卫兵', hpMul:1.5,  spdMul:0.85, dmgMul:1.25, visMul:0.95, r:17, kbMul:0.5, shieldFront:true, windup:0.4, recover:0.55 },
   watcher:  { id:'watcher',  name:'咒眼',     hpMul:0.6,  spdMul:0.7,  dmgMul:0.4, visMul:1.5,  r:14, kbMul:1.3, watcher:true },
   mimic:    { id:'mimic',    name:'宝箱怪',   hpMul:1.6,  spdMul:1.25, dmgMul:1.2, visMul:1.1,  r:16, kbMul:0.6 },
+  charger:  { id:'charger',  name:'冲撞蛮牛', hpMul:1.3,  spdMul:0.9,  dmgMul:1.4, visMul:1.0,  r:18, kbMul:0.4, charger:true, windup:0.55, recover:0.6 },
+  shroom:   { id:'shroom',   name:'毒爆菇',   hpMul:0.8,  spdMul:0.5,  dmgMul:0,   visMul:0.9,  r:14, kbMul:1.3, shroom:true },
 };
 
 // ============ 难度 ============
@@ -235,19 +237,46 @@ const DIFFICULTIES = {
   hard: {
     id:'hard', name:'困难', icon:'👹',
     desc:'潜伏者蹲守高级宝箱，咒眼在暗中凝视。神秘商人出没。',
-    spawn:{ shade:4, skitter:3, brute:2, lurker:1, wisp:2, slime:1, skeleton:1, watcher:1 }, lurkerGuard:true, merchant:true,
+    spawn:{ shade:4, skitter:3, brute:2, lurker:1, wisp:2, slime:1, skeleton:1, watcher:1, charger:1, shroom:1 }, lurkerGuard:true, merchant:true,
     mHp:70, mDmg:22, chaseSpeed:128, patrolSpeed:58, vision:300, hear:540, memory:8, smart:2, huntInterval:20,
     chests:{ wood:8, silver:6, gold:3, mystery:2 },
   },
   hell: {
     id:'hell', name:'地狱', icon:'🔥',
     desc:'全种类倾巢而出，尖啸者会召集猎杀。宝箱最豪华，商人必定出没。',
-    spawn:{ shade:5, skitter:4, brute:3, lurker:2, wisp:3, slime:2, banshee:1, skeleton:2, watcher:1 }, lurkerGuard:true, merchant:true,
+    spawn:{ shade:5, skitter:4, brute:3, lurker:2, wisp:3, slime:2, banshee:1, skeleton:2, watcher:1, charger:2, shroom:2 }, lurkerGuard:true, merchant:true,
     mHp:95, mDmg:26, chaseSpeed:138, patrolSpeed:62, vision:330, hear:620, memory:10, smart:2, huntInterval:14,
     chests:{ wood:7, silver:7, gold:4, mystery:2 },
   },
 };
 const DIFF_RANK = { easy:0, normal:1, hard:2, hell:3 };
+
+// ============ 键位系统：默认布局（可在"键位设置"中自定义，存至 SAVE.settings.keys） ============
+const KEY_ACTIONS = [
+  ['up', '上移'], ['down', '下移'], ['left', '左移'], ['right', '右移'],
+  ['shoot', '射击/攻击'], ['roll', '翻滚'], ['sneak', '潜行'], ['reload', '换弹'],
+  ['swap', '切换武器'], ['use', '使用药品'], ['cycle', '切换药品'], ['interact', '开箱/救人/互动'],
+];
+const DEFAULT_KEYS = [
+  { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
+    shoot:'Space', roll:'ShiftLeft', sneak:'CapsLock', reload:'KeyR',
+    swap:'KeyQ', use:'KeyE', cycle:'Tab', interact:'KeyF' },
+  { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
+    shoot:'Period', roll:'ShiftRight', sneak:'Slash', reload:'KeyI',
+    swap:'KeyL', use:'Comma', cycle:'KeyK', interact:'KeyJ' },
+];
+// 键码 → 友好显示
+function keyLabel(code) {
+  const map = { Space:'空格', ShiftLeft:'左Shift', ShiftRight:'右Shift', CapsLock:'Caps',
+    Tab:'Tab', Comma:'，', Period:'。', Slash:'/', Semicolon:';', Quote:"'", Backquote:'`',
+    ArrowUp:'↑', ArrowDown:'↓', ArrowLeft:'←', ArrowRight:'→', Escape:'Esc',
+    ControlLeft:'左Ctrl', ControlRight:'右Ctrl', AltLeft:'左Alt', AltRight:'右Alt',
+    BracketLeft:'[', BracketRight:']', Minus:'-', Equal:'=', Enter:'回车', Backspace:'退格' };
+  if (map[code]) return map[code];
+  if (/^Key([A-Z])$/.test(code)) return code.slice(3);
+  if (/^Digit(\d)$/.test(code)) return code.slice(5);
+  return code;
+}
 
 // ============ 收藏家等级（66 件宝物，总点数 5675）============
 const COLLECTOR_LEVELS = [
@@ -349,29 +378,35 @@ function weightedPick(table) {
   return Object.keys(table)[0];
 }
 
-// ============ 神秘商人 ============
-// 出售 4-5 件随机货（加价），并按 55% 价值收购宝物
-function merchantStock() {
+// ============ 神秘商人 V2 ============
+// 必有 1 件特价高级武器 + 药剂礼包 + 好护甲；割草模式追加专属强力服务
+function merchantStock(isHorde) {
   const stock = [];
-  const push = (kind, id, price, label, icon) => stock.push({ kind, id, price, label, icon });
-  // 必有一种药品和一种弹药
-  const cKeys = CONSUM_ORDER.slice().sort(() => Math.random() - 0.5);
-  for (const k of cKeys.slice(0, 2)) push('consumable', k, Math.ceil(CONSUMABLES[k].price * 1.3), `${CONSUMABLES[k].name}`, CONSUMABLES[k].icon);
-  const aKeys = Object.keys(AMMO_TYPES).sort(() => Math.random() - 0.5);
-  const ak = aKeys[0];
-  push('ammo', ak, Math.ceil(AMMO_TYPES[ak].price * 1.25), `${AMMO_TYPES[ak].name} ×${AMMO_TYPES[ak].pack}`, AMMO_TYPES[ak].icon);
-  // 随机一件大货：武器 / 护甲 / 腰包
-  const roll = Math.random();
-  if (roll < 0.4) {
-    const ws = Object.values(WEAPONS).filter(w => w.price);
-    const w = ws[Math.floor(Math.random() * ws.length)];
-    push('weapon', w.id, Math.ceil(w.price * 1.15), w.name, w.icon);
-  } else if (roll < 0.75) {
-    const as = Object.values(ARMORS);
-    const a = as[Math.floor(Math.random() * as.length)];
-    push('armor', a.id, Math.ceil(a.price * 1.15), a.name, a.icon);
+  const push = (kind, id, price, label, icon, note) => stock.push({ kind, id, price, label, icon, note });
+  // ① 特价高级武器（85 折）
+  const bigGuns = ['rifle', 'cannon', 'sniper', 'laser', 'crossbow', 'flamer', 'freezer'];
+  const gw = WEAPONS[bigGuns[Math.floor(Math.random() * bigGuns.length)]];
+  push('weapon', gw.id, Math.ceil(gw.price * 0.85), gw.name, gw.icon, '特价85折');
+  // ② 药剂大礼包（随机 3 瓶强力药剂）
+  const strong = ['adrenaline', 'stealth', 'rage', 'eagle'].sort(() => Math.random() - 0.5).slice(0, 3);
+  const packPrice = Math.ceil(strong.reduce((s, k) => s + CONSUMABLES[k].price, 0) * 0.9);
+  push('potionpack', strong.join(','), packPrice, `药剂礼包(${strong.map(k => CONSUMABLES[k].icon).join('')})`, '🎁', '9折');
+  // ③ 上等护甲（9 折）
+  const arm = Math.random() < 0.5 ? ARMORS.knight : ARMORS.iron;
+  push('armor', arm.id, Math.ceil(arm.price * 0.9), arm.name, arm.icon, '9折');
+  // ④ 弹药一组
+  const ak = Object.keys(AMMO_TYPES)[Math.floor(Math.random() * 4)];
+  push('ammo', ak, Math.ceil(AMMO_TYPES[ak].price * 1.1), `${AMMO_TYPES[ak].name} ×${AMMO_TYPES[ak].pack}`, AMMO_TYPES[ak].icon);
+  if (isHorde) {
+    // 割草专属：免费升级券 / 全队回满 / 佣兵王驰援
+    push('upgrade', 'upgrade', 600, '强化券（立即三选一）', '⬆️');
+    push('healall', 'healall', 350, '全队生命回满', '❤️');
+    push('mercace', 'ace', 900, '佣兵王驰援 40 秒', '🦅');
   } else {
-    push('pouch', 'pouch', Math.ceil(GEAR.pouch.price * 1.1), GEAR.pouch.name, GEAR.pouch.icon);
+    // 经典专属：传说宝物直售（仍需活着带出撤离才计图鉴）
+    const legs = TREASURES.filter(t => t.rarity === 'legendary' && !t.mapId && !t.minDifficulty);
+    const tr = legs[Math.floor(Math.random() * legs.length)];
+    push('treasure', tr.id, Math.ceil(tr.value * 1.4), tr.name, tr.icon, '需带出撤离才入图鉴');
   }
   return stock;
 }
@@ -421,9 +456,9 @@ const HORDE_BOSS_AT = [150, 330, 510];  // Boss 波时间点
 // 随时间解锁的刷怪池
 function hordeSpawnPool(t) {
   if (t < 60)  return ['shade', 'shade', 'skitter'];
-  if (t < 180) return ['shade', 'skitter', 'slime', 'wisp'];
-  if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'skeleton', 'brute'];
-  return ['shade', 'skitter', 'slime', 'wisp', 'skeleton', 'brute', 'lurker', 'banshee', 'mimic'];
+  if (t < 180) return ['shade', 'skitter', 'slime', 'wisp', 'charger'];
+  if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom'];
+  return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'lurker', 'banshee', 'mimic'];
 }
 
 // 升级三选一的池子：mods 数值强化 + skill 奇招技能（可重复选升级）
@@ -450,6 +485,12 @@ const HORDE_UPGRADES = [
   { id:'meteor',    name:'天降正义', icon:'☄️', max:5, skill:'meteor',    desc:'陨石从天而降砸进怪群（附带灼烧）' },
   { id:'boomerang', name:'回旋飞盘', icon:'🥏', max:5, skill:'boomerang', desc:'掷出贯穿一切的飞盘，去而复返' },
   { id:'chrono',    name:'时缓力场', icon:'⏱️', max:5, skill:'chrono',    desc:'身边环绕减速力场，怪物近身如陷泥沼' },
+  { id:'garlic',    name:'蒜香领域', icon:'🧄', max:5, skill:'garlic',    desc:'贴身的气味结界持续灼烧近身怪物' },
+  { id:'spears',    name:'骨刺环发', icon:'🦴', max:5, skill:'spears',    desc:'周期向四面八方射出一圈骨刺' },
+  { id:'drone',     name:'无人机鸭', icon:'🛸', max:5, skill:'drone',     desc:'一架小飞鸭跟随你自动点射敌人' },
+  { id:'thorns',    name:'荆棘羽甲', icon:'🌵', max:5, skill:'thorns',    desc:'被近身击中时反弹伤害' },
+  { id:'luck',      name:'幸运骰',   icon:'🎲', max:4, desc:'经验宝石价值 +25%', mod:m => m.gemMul = (m.gemMul || 1) * 1.25 },
+  { id:'crit',      name:'会心之喙', icon:'💢', max:4, desc:'暴击率 +12%（双倍伤害）', mod:m => m.crit = (m.crit || 0) + 0.12 },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -464,7 +505,7 @@ const WEATHERS = {
 };
 function rollWeather() {
   const r = Math.random();
-  if (r < 0.34) return WEATHERS.clear;
+  if (r < 0.20) return WEATHERS.clear;
   const pool = ['rain', 'snow', 'sandstorm', 'bloodmoon'];
   return WEATHERS[pool[Math.floor(Math.random() * pool.length)]];
 }
@@ -478,6 +519,11 @@ const POWERUPS = {
   chaos:   { id:'chaos',   name:'混乱蘑菇', icon:'🍄', desc:'8 秒内怪物自相残杀！' },
   portal:  { id:'portal',  name:'紊乱传送门', icon:'🌀', desc:'随机传送到地图某处（福祸难料）' },
   hourgold:{ id:'hourgold',name:'金色沙漏', icon:'⌛', desc:'10 秒内翻滚不耗体力' },
+  nuke:    { id:'nuke',    name:'嘎嘎核弹', icon:'💥', desc:'对全场可见怪物造成 60 点伤害' },
+  magnetx: { id:'magnetx', name:'磁暴线圈', icon:'🧲', desc:'吸来全场经验宝石与金币' },
+  freeze:  { id:'freeze',  name:'寒冰爆',   icon:'🥶', desc:'冻结全场怪物 3 秒' },
+  silverfeather:{ id:'silverfeather', name:'银翎羽毛', icon:'🕊️', desc:'召唤独眼老兵助战 40 秒' },
+  goldpile:{ id:'goldpile',name:'金币袋',   icon:'💰', desc:'白捡 80~150 金币' },
 };
 const POWERUP_KEYS = Object.keys(POWERUPS);
 
