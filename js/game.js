@@ -56,7 +56,9 @@ class Game {
     this.mode = mode;
     this.escape = !!opts.escape;             // 大逃亡模式（复用割草的升级/无限弹药体系）
     this.arena = !!opts.arena;               // 🎯 调试练习场：无敌+木桩+工具条
+    this.versus = !!opts.versus;             // ⚔️ 双人对决：互伤 + 回合制三胜
     this.horde = !!opts.horde || this.escape || this.arena;
+    if (this.versus) this.vs = { score: [0, 0], round: 1, target: 3, freezeT: 3.2, roundEndT: 0, matchOver: false };
     this.cfg = this.escape ? ESCAPE_CFG : this.horde ? HORDE_CFG : DIFFICULTIES[diffId];
     this.diffId = this.horde ? 'normal' : diffId;
     loadMap(mapId);
@@ -80,20 +82,23 @@ class Game {
       const sp = MapData.spawns[i];
       const lo = loadouts[i] || {};
       // 割草/大逃亡：取消带入武器护甲——默认一把手枪起家，成长全靠升级与拾取
-      const w1 = this.horde ? { uid: -100 - i, id: 'pistol', dur: 99999, temp: true }
+      const vsCopy = (uid, k) => { const w = SAVE.weapons.find(x => x.uid === uid); return w ? { uid: -200 - i * 2 - k, id: w.id, dur: 99999, temp: true } : null; };
+      const w1 = this.versus ? (vsCopy(lo.w1, 0) || { uid: -200 - i * 2, id: 'pistol', dur: 99999, temp: true })
+               : this.horde ? { uid: -100 - i, id: 'pistol', dur: 99999, temp: true }
                : (SAVE.weapons.find(w => w.uid === lo.w1) || null);
-      const w2 = this.horde ? null : (SAVE.weapons.find(w => w.uid === lo.w2) || null);
+      const w2 = this.versus ? vsCopy(lo.w2, 1)
+               : this.horde ? null : (SAVE.weapons.find(w => w.uid === lo.w2) || null);
       const armor = this.horde ? null : (SAVE.armors.find(a => a.uid === lo.armor) || null);
       const p = new Player(i, sp.x, sp.y, [w1, w2], skinIds && skinIds[i], armor, this.horde ? false : lo.pouch, lo.acc);
       if (i === 0 && this.mouseAimRun) p.mouseAimed = true;
       p.maxHp = Math.round(p.maxHp * tune('pHp')); p.hp = p.maxHp;
       this.players.push(p);
-      if (lo.merc2 && MERCS[lo.merc2]) {
+      if (lo.merc2 && MERCS[lo.merc2] && !this.versus) {
         const mc2 = new Mercenary(sp.x + 34, sp.y - 26, MERCS[lo.merc2], p);
         unstick(mc2);
         this.mercs.push(mc2);
       }
-      if (lo.merc && MERCS[lo.merc]) {
+      if (lo.merc && MERCS[lo.merc] && !this.versus) {
         const mc = new Mercenary(sp.x - 30, sp.y + 30, MERCS[lo.merc], p);
         unstick(mc);
         this.mercs.push(mc);
@@ -116,6 +121,7 @@ class Game {
         state: i === 0 ? 'clear' : 'idle',      // 出生房免战
       }));
     }
+    if (this.versus) this.cfg = Object.assign({}, this.cfg, { spawn: {} });   // 对决：无怪
     for (const [typeId, count] of Object.entries(this.cfg.spawn)) {
       for (let k = 0; k < count; k++) {
         const n = nodes[ni++ % nodes.length];
@@ -169,13 +175,19 @@ class Game {
     if (this.horde) {
       this.merchant = null;
       if (!this.escape) this.monsters = [];   // 大逃亡保留沿途预置怪
+      // 双人升级分离：每位玩家独立的 等级/经验/技能/强化（P[idx]）；世界物件数组共享
+      const mkSkills = () => ({ orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0, arty: 0 });
+      const mkMods = () => ({ dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 });
       this.hordeState = {
-        level: 1, xp: 0, xpNeed: Math.round(8 * (mode === 2 ? 1.35 : 1)),
-        mods: { dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 },
-        skills: { orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0, arty: 0 },
-        spawnT: 1.2, missileT: 2, novaT: 4, boltT: 3, trailT: 0, fireTickT: 0,
-        gems: [], firePatches: [], novaRings: [], bolts: [],
-        bossIdx: 0, boss: null, victory: false, freeChoices: 0,
+        P: this.players.map(() => ({
+          level: 1, xp: 0, xpNeed: 8, freeChoices: 0,
+          skills: mkSkills(), mods: mkMods(), picked: {},
+          missileT: 2, novaT: 4, boltT: 3, trailT: 0,
+          exT: { whirlT: 2, barrierT: 5, mineT: 2, meteorT: 4, boomT: 2.5, garlicT: 0, spearT: 2, droneT: 0, fireT: 1.5, artyT: 6 },
+        })),
+        spawnT: 1.2, fireTickT: 0,
+        gems: [], firePatches: [], novaRings: [], bolts: [], chainJobs: [],
+        bossIdx: 0, boss: null, victory: false,
       };
       this.levelupOpen = false;
       for (const p of this.players) { p.maxHp = Math.round(500 * tune('pHp')); p.hp = p.maxHp; }
@@ -189,7 +201,8 @@ class Game {
     this.toastEl.innerHTML = '';
     this.initWeather();
     this.initPowerups();
-    if (this.horde) this.toast('🌾 无双割草！撑过 10 分钟——杀出一条路来！弹药无限！', '#ffd93d');
+    if (this.versus) this.toast('⚔️ 决斗场！互伤开启 · 率先拿下 3 回合者胜！', '#ffd93d');
+    else if (this.horde) this.toast('🌾 无双割草！撑过 10 分钟——杀出一条路来！弹药无限！', '#ffd93d');
     else this.toast(`【${this.mapName}】难度【${this.cfg.name}】— 搜刮宝箱，活着撤离！`, '#ffd93d');
     if (this.merchant) this.toast('听说这片区域有个神秘商人出没……', '#b48aff');
     Music.play(this.horde ? 'battle' : 'game');
@@ -230,6 +243,7 @@ class Game {
                Math.hypot(this.merchant.x - p.x, this.merchant.y - p.y) < 60) {
         this.openMerchant(p);
       }
+      else if (code === (km.pebble || (p.idx ? 'KeyO' : 'KeyG')) && !this.horde) this.throwPebble(p);
     }
   }
 
@@ -260,7 +274,7 @@ class Game {
     this.paused = false;
     document.getElementById('merchant-overlay').style.display = 'none';
     // 强化券：出店即三选一
-    if (this.horde && this.hordeState.freeChoices > 0 && !this.levelupOpen) this.openLevelup();
+    if (this.horde) this.levelupQueueCheck();
   }
 
   // ---------- 主循环 ----------
@@ -374,10 +388,12 @@ class Game {
     if (this.horde) this.hordeUpdate(dt);
 
     this.updateCameras(dt);
+    if (this.versus && this.vs) this.versusUpdate(dt);
+    this.updatePebbles(dt);
     this.updateHud();
     Music.setDanger(this.horde ? true : this.monsters.some(m => m.state === 'chase'));
 
-    if (this.players.every(p => p.dead || p.extracted)) this.settle();
+    if (!this.versus && this.players.every(p => p.dead || p.extracted)) this.settle();
   }
 
   // ================= 无双割草核心 =================
@@ -469,16 +485,16 @@ class Game {
     this.hordeGems(dt);
     this.updateHordeExtraSkills(dt);
 
-    // —— 玩家再生 ——
+    // —— 每玩家独立：再生 + 五个基础技能（升级分离后各调各的） ——
     for (const p of this.players) {
-      if (p.active && H.mods.regen > 0) p.hp = Math.min(p.maxHp, p.hp + H.mods.regen * dt);
-    }
-
-    // —— 技能：环绕飞锅（撞击伤害，独立冷却） ——
-    if (H.skills.orbit > 0) {
-      for (const p of this.players) {
-        if (!p.active) continue;
-        const n = H.skills.orbit;
+      if (!p.active) continue;
+      const PP = H.P[p.idx], S = PP.skills;
+      if (S.trail === undefined) continue;
+      // 再生
+      if (PP.mods.regen > 0) p.hp = Math.min(p.maxHp, p.hp + PP.mods.regen * dt);
+      // 环绕飞锅（撞击伤害，独立冷却）
+      if (S.orbit > 0) {
+        const n = S.orbit;
         for (let i = 0; i < n; i++) {
           const a = this.time * 3.6 + i * Math.PI * 2 / n + p.idx * 0.5;
           const ox = p.x + Math.cos(a) * 84, oy = p.y + Math.sin(a) * 84;
@@ -487,62 +503,74 @@ class Game {
             if (Math.hypot(m.x - ox, m.y - oy) < m.r + 16) {
               m.orbitCd = this.time + 0.38;
               m.knock(a + Math.PI / 2, 560);
-              if (m.hurt(24, this)) this.killMonster(m, p);
+              if (m.hurt(skillVal('orbit', 'dmg'), this)) this.killMonster(m, p);
               this.spark(ox, oy, '#ffd93d');
             }
           }
         }
       }
-    }
-    // —— 技能：追踪鸭雷 ——
-    if (H.skills.missile > 0) {
-      H.missileT -= dt;
-      if (H.missileT <= 0) {
-        H.missileT = Math.max(0.5, 1.6 - H.skills.missile * 0.2);
-        const shooters = this.players.filter(p => p.active);
-        for (const p of shooters) {
+      // 追踪鸭雷
+      if (S.missile > 0) {
+        PP.missileT -= dt;
+        if (PP.missileT <= 0) {
+          PP.missileT = Math.max(0.5, skillVal('missile', 'cd') - S.missile * skillVal('missile', 'cdLv'));
           const targets = this.monsters.filter(m => Math.hypot(m.x - p.x, m.y - p.y) < 700);
-          if (!targets.length) continue;
-          const count = 1 + Math.floor(H.skills.missile / 2);
-          for (let i = 0; i < count; i++) {
-            const tgt = targets[Math.floor(Math.random() * targets.length)];
-            const a = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (Math.random() - 0.5) * 0.6;
-            this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'duckmissile', dmg: 18 + H.skills.missile * 7, speed: 430, range: 1000,
-                knock: 160, turn: 7.5, duck: true }, p, 1));
+          if (targets.length) {
+            const count = 1 + Math.floor(S.missile / 2);
+            for (let i = 0; i < count; i++) {
+              const tgt = targets[Math.floor(Math.random() * targets.length)];
+              const a = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (Math.random() - 0.5) * 0.6;
+              this.bullets.push(new Bullet(p.x, p.y, a,
+                { id: 'duckmissile', dmg: skillVal('missile', 'dmg') + S.missile * skillVal('missile', 'dmgLv'), speed: 430, range: 1000,
+                  knock: 160, turn: 7.5, duck: true }, p, 1));
+            }
+            Sfx.crossbow();
           }
-          Sfx.crossbow();
         }
       }
-    }
-    // —— 技能：寒冰新星 ——
-    if (H.skills.nova > 0) {
-      H.novaT -= dt;
-      if (H.novaT <= 0) {
-        H.novaT = Math.max(2.6, 6.5 - H.skills.nova * 0.7);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          const R = 170 + H.skills.nova * 22;
+      // 寒冰新星
+      if (S.nova > 0) {
+        PP.novaT -= dt;
+        if (PP.novaT <= 0) {
+          PP.novaT = Math.max(2.6, skillVal('nova', 'cd') - S.nova * skillVal('nova', 'cdLv'));
+          const R = skillVal('nova', 'r') + S.nova * skillVal('nova', 'rLv');
           H.novaRings.push({ x: p.x, y: p.y, r: 10, max: R, t: 0.5 });
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
-            m.stunT = Math.max(m.stunT, 1 + H.skills.nova * 0.2);
+            m.stunT = Math.max(m.stunT, skillVal('nova', 'stun') + S.nova * skillVal('nova', 'stunLv'));
             m.slowT = Math.max(m.slowT, 2.5);
-            if (m.hurt(13 + H.skills.nova * 6, this)) this.killMonster(m, p);
+            if (m.hurt(skillVal('nova', 'dmg') + S.nova * skillVal('nova', 'dmgLv'), this)) this.killMonster(m, p);
           }
           Sfx.laser();
         }
       }
-    }
-    // —— 技能：火焰足迹 ——
-    if (H.skills.trail > 0) {
-      H.trailT -= dt;
-      if (H.trailT <= 0) {
-        H.trailT = 0.16;
-        for (const p of this.players) {
-          if (p.active && p.moving) H.firePatches.push({ x: p.x, y: p.y + 8, t: 2.2 });
+      // 火焰足迹（火焰片挂 owner：伤害按其等级、击杀归属他）
+      if (S.trail > 0) {
+        PP.trailT -= dt;
+        if (PP.trailT <= 0) {
+          PP.trailT = 0.16;
+          if (p.moving) H.firePatches.push({ x: p.x, y: p.y + 8, t: skillVal('trail', 'dur'), pl: p, lv: S.trail });
         }
       }
+      // 雷霆链爪
+      if (S.lightning > 0) {
+        PP.boltT -= dt;
+        if (PP.boltT <= 0) {
+          PP.boltT = Math.max(0.9, skillVal('lightning', 'cd') - S.lightning * skillVal('lightning', 'cdLv'));
+          let cur = null, curD = 520;
+          for (const m of this.monsters) {
+            const d = Math.hypot(m.x - p.x, m.y - p.y);
+            if (d < curD) { cur = m; curD = d; }
+          }
+          if (cur) {
+            H.chainJobs.push({ p, node: cur, from: { x: p.x, y: p.y }, left: skillVal('lightning', 'hops') + S.lightning, lv: S.lightning, hopT: 0, hit: new Set() });
+            Sfx.laser();
+          }
+        }
+      }
+    }
+    // 火焰足迹的灼烧结算（全场共享 tick，伤害按火焰片所属玩家等级）
+    if (H.firePatches.length) {
       H.fireTickT -= dt;
       const tick = H.fireTickT <= 0;
       if (tick) H.fireTickT = 0.4;
@@ -552,57 +580,38 @@ class Game {
         for (const m of this.monsters.slice()) {
           if (Math.hypot(m.x - fp.x, m.y - fp.y) < 36) {
             m.burnT = Math.max(m.burnT, 1);
-            if (m.hurt(5 + H.skills.trail * 3, this)) this.killMonster(m, this.players[0]);
+            if (m.hurt(skillVal('trail', 'dmg') + (fp.lv || 1) * skillVal('trail', 'dmgLv'), this)) this.killMonster(m, fp.pl || this.players[0]);
           }
         }
       }
       H.firePatches = H.firePatches.filter(fp => fp.t > 0);
     }
-    // —— 技能：雷霆链爪 ——
-    if (H.skills.lightning > 0) {
-      H.boltT -= dt;
-      if (H.boltT <= 0) {
-        H.boltT = Math.max(0.9, 2.6 - H.skills.lightning * 0.3);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          let cur = null, curD = 520;
-          for (const m of this.monsters) {
-            const d = Math.hypot(m.x - p.x, m.y - p.y);
-            if (d < curD) { cur = m; curD = d; }
-          }
-          if (!cur) continue;
-          // 逐跳传导：闪电一段一段跳向下一个目标（每跳 0.09s），不再瞬间全连
-          H.chainJobs = H.chainJobs || [];
-          H.chainJobs.push({ p, node: cur, from: { x: p.x, y: p.y }, left: 2 + H.skills.lightning, hopT: 0, hit: new Set() });
-          Sfx.laser();
+    // 闪电逐跳传导（作业挂发起者，伤害按其等级）
+    if (H.chainJobs.length) {
+      for (const job of H.chainJobs) {
+        job.hopT -= dt;
+        if (job.hopT > 0) continue;
+        job.hopT = tune('zapHop');
+        const node = job.node;
+        if (!node || job.left <= 0 || node.hp <= 0 || !this.monsters.includes(node)) { job.done = true; continue; }
+        job.left--;
+        job.hit.add(node);
+        H.bolts.push({ pts: [{ x: job.from.x, y: job.from.y }, { x: node.x, y: node.y }], t: 0.16 });
+        this.spark(node.x, node.y, '#ffe95c');
+        Sfx.zap();
+        job.from = { x: node.x, y: node.y };
+        if (node.hurt(skillVal('lightning', 'dmg') + (job.lv || 1) * skillVal('lightning', 'dmgLv'), this)) this.killMonster(node, job.p);
+        let next = null, nd = 240;
+        for (const m of this.monsters) {
+          if (job.hit.has(m)) continue;
+          const d = Math.hypot(m.x - job.from.x, m.y - job.from.y);
+          if (d < nd) { next = m; nd = d; }
         }
+        job.node = next;
+        if (!next) job.done = true;
+        this.shake = Math.max(this.shake, 2);
       }
-      if (H.chainJobs && H.chainJobs.length) {
-        for (const job of H.chainJobs) {
-          job.hopT -= dt;
-          if (job.hopT > 0) continue;
-          job.hopT = tune('zapHop');
-          const node = job.node;
-          if (!node || job.left <= 0 || node.hp <= 0 || !this.monsters.includes(node)) { job.done = true; continue; }
-          job.left--;
-          job.hit.add(node);
-          H.bolts.push({ pts: [{ x: job.from.x, y: job.from.y }, { x: node.x, y: node.y }], t: 0.16 });
-          this.spark(node.x, node.y, '#ffe95c');
-          Sfx.zap();
-          job.from = { x: node.x, y: node.y };
-          if (node.hurt(17 + H.skills.lightning * 6, this)) this.killMonster(node, job.p);
-          let next = null, nd = 240;
-          for (const m of this.monsters) {
-            if (job.hit.has(m)) continue;
-            const d = Math.hypot(m.x - job.from.x, m.y - job.from.y);
-            if (d < nd) { next = m; nd = d; }
-          }
-          job.node = next;
-          if (!next) job.done = true;
-          this.shake = Math.max(this.shake, 2);
-        }
-        H.chainJobs = H.chainJobs.filter(j => !j.done);
-      }
+      H.chainJobs = H.chainJobs.filter(j => !j.done);
     }
     for (const nr of H.novaRings) { nr.t -= dt; nr.r += (nr.max - nr.r) * Math.min(1, dt * 10); }
     H.novaRings = H.novaRings.filter(nr => nr.t > 0);
@@ -622,7 +631,7 @@ class Game {
         if (d < bd) { bd = d; best = p; }
       }
       if (!best) continue;
-      const magnetR = 95 * H.mods.magnet * tune('magnet');
+      const magnetR = 95 * this.hsP(best).mods.magnet * tune('magnet');
       if (bd < magnetR) {
         const a = Math.atan2(best.y - g.y, best.x - g.x);
         const sp = 260 + (magnetR - bd) * 4;
@@ -635,34 +644,46 @@ class Game {
         this.gemComboT = 1.0;
         Sfx.gem(this.gemCombo);
         // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）；开发者模式 ×10 快速验证技能
-        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300)
-          * (SAVE.settings.devMode ? tune('devXp') : 1) * (this.xpBuffT > 0 ? 1.5 : 1)));
+        this.hordeAddXp(Math.round(g.v * (this.hsP(best).mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300)
+          * (SAVE.settings.devMode ? tune('devXp') : 1) * (this.xpBuffT > 0 ? 1.5 : 1)), best);
       }
     }
     H.gems = H.gems.filter(g => !g.taken);
     if (H.gems.length > 220) H.gems.splice(0, H.gems.length - 220);
   }
 
-  hordeAddXp(v) {
+  // 某玩家的割草子状态（等级/技能/强化）；佣兵传 owner
+  hsP(p) {
     const H = this.hordeState;
-    H.xp += v;
-    while (H.xp >= H.xpNeed) {
-      H.xp -= H.xpNeed;
-      H.level++;
-      H.xpNeed = Math.round((8 + H.level * 4 + H.level * H.level * 0.15) * (this.mode === 2 ? 1.25 : 1));
-      // 升级回血：每级回复 6% 最大生命
-      for (const p of this.players) if (p.active) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.06);
-      H.freeChoices++;
+    return H.P[(p && p.idx !== undefined ? p.idx : 0)] || H.P[0];
+  }
+  // 任意玩家有待选强化就开面板（排队逐人选）
+  levelupQueueCheck() {
+    if (this.levelupOpen) return;
+    const p = this.players.find(pl => this.hsP(pl).freeChoices > 0 && (pl.active || pl.downed));
+    if (p) this.openLevelup(p);
+  }
+  hordeAddXp(v, who) {
+    const p = who && who.idx !== undefined ? who : this.players[0];
+    const PP = this.hsP(p);
+    PP.xp += v;
+    while (PP.xp >= PP.xpNeed) {
+      PP.xp -= PP.xpNeed;
+      PP.level++;
+      PP.xpNeed = Math.round(8 + PP.level * 4 + PP.level * PP.level * 0.15);
+      // 升级回血：该玩家回复 6% 最大生命
+      if (p.active) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.06);
+      PP.freeChoices++;
       Sfx.extract();
-      this.floater(this.players[0].x, this.players[0].y - 40, `⬆ 升级 Lv.${H.level}！`, '#ffd93d');
+      this.floater(p.x, p.y - 40, `⬆ ${this.pname(p)} 升级 Lv.${PP.level}！`, '#ffd93d');
     }
-    if (H.freeChoices > 0 && !this.levelupOpen) this.openLevelup();
+    this.levelupQueueCheck();
   }
 
-  openLevelup() {
-    const H = this.hordeState;
+  openLevelup(owner) {
+    const PP = this.hsP(owner || this.players[0]);
     const pool = HORDE_UPGRADES.filter(u => {
-      const cur = u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id]) || 0;
+      const cur = u.skill ? PP.skills[u.skill] : (PP.picked && PP.picked[u.id]) || 0;
       return cur < u.max;
     });
     const choices = [];
@@ -670,7 +691,8 @@ class Game {
     while (choices.length < 3 && bag.length) {
       choices.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
     }
-    if (!choices.length) { H.freeChoices = 0; return; }
+    if (!choices.length) { PP.freeChoices = 0; return; }
+    this.levelupFor = owner || this.players[0];
     this.levelupChoices = choices;
     this.levelupOpen = true;
     this.paused = true;
@@ -678,41 +700,36 @@ class Game {
   }
 
   applyUpgrade(u) {
-    const H = this.hordeState;
-    H.picked = H.picked || {};
-    H.picked[u.id] = (H.picked[u.id] || 0) + 1;
-    if (u.skill) H.skills[u.skill] = (H.skills[u.skill] || 0) + 1;
+    const owner = this.levelupFor || this.players[0];
+    const PP = this.hsP(owner);
+    PP.picked[u.id] = (PP.picked[u.id] || 0) + 1;
+    if (u.skill) PP.skills[u.skill] = (PP.skills[u.skill] || 0) + 1;
     else if (u.special === 'maxhp') {
-      for (const p of this.players) { p.maxHp = Math.round(p.maxHp * 1.3); p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5); }
+      owner.maxHp = Math.round(owner.maxHp * 1.3); owner.hp = Math.min(owner.maxHp, owner.hp + owner.maxHp * 0.5);
     } else if (u.special === 'recruit') {
-      // 双人模式：为每位在场玩家各招募一位
-      let recruited = 0;
-      for (const p0 of this.players) {
-        if (!p0.active) continue;
-        if (!this.canRecruitHero(p0)) continue;
-        const mc = new Mercenary(p0.x + 34, p0.y + 26, MERCS[u.mercId], p0);
+      // 升级分离后：只为选卡的玩家招募
+      if (this.canRecruitHero(owner)) {
+        const mc = new Mercenary(owner.x + 34, owner.y + 26, MERCS[u.mercId], owner);
         unstick(mc);
         this.mercs.push(mc);
-        recruited++;
-      }
-      if (recruited) {
-        this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} ×${recruited} 应招而来！（看左侧面板）`, '#7dff9a');
+        this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} 应 ${this.pname(owner)} 之邀入队！`, '#7dff9a');
         Sfx.revive();
       } else this.toast('⚠️ 随行英雄已满（每人 5 位）', '#ff8f8f');
     } else if (u.special === 'marinehp') {
-      for (const mc of this.mercs) if (mc.hp > 0 && mc.def.id === 'marine') { mc.maxHp = Math.round(mc.maxHp * 1.4); mc.hp = mc.maxHp; }
+      for (const mc of this.mercs) if (mc.hp > 0 && mc.def.id === 'marine' && mc.owner === owner) { mc.maxHp = Math.round(mc.maxHp * 1.4); mc.hp = mc.maxHp; }
     } else if (u.hmod) {
-      H.mods.hero = H.mods.hero || {};
-      H.mods.hero[u.hmod] = (H.mods.hero[u.hmod] || 0) + 1;
+      PP.mods.hero = PP.mods.hero || {};
+      PP.mods.hero[u.hmod] = (PP.mods.hero[u.hmod] || 0) + 1;
     } else if (u.special === 'merchp') {
-      H.mods.mercHp = (H.mods.mercHp || 1) * 1.3;
-      for (const mc of this.mercs) if (mc.hp > 0) { mc.maxHp = Math.round(mc.maxHp * 1.3); mc.hp = mc.maxHp; }
-    } else u.mod(H.mods);
-    this.toast(`${u.icon} ${u.name}！`, '#7dff9a');
+      PP.mods.mercHp = (PP.mods.mercHp || 1) * 1.3;
+      for (const mc of this.mercs) if (mc.hp > 0 && mc.owner === owner) { mc.maxHp = Math.round(mc.maxHp * 1.3); mc.hp = mc.maxHp; }
+    } else u.mod(PP.mods);
+    this.toast(`${u.icon} ${this.pname(owner)} · ${u.name}！`, '#7dff9a');
     Sfx.buy();
-    H.freeChoices = Math.max(0, H.freeChoices - 1);
-    if (H.freeChoices > 0) { this.openLevelup(); return; }
+    PP.freeChoices = Math.max(0, PP.freeChoices - 1);
     this.levelupOpen = false;
+    const next = this.players.find(pl => this.hsP(pl).freeChoices > 0 && (pl.active || pl.downed));
+    if (next) { this.openLevelup(next); return; }
     this.paused = false;
     document.getElementById('levelup-overlay').style.display = 'none';
   }
@@ -771,6 +788,7 @@ class Game {
 
   tryRoll(p) {
     if (!p.active || p.rollT > 0 || p.rollCd > 0) return;
+    if (this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0)) return;
     const free = p.staminaFreeT > 0;
     if (!free && p.stamina < STAMINA.rollCost) { Sfx.error(); this.floater(p.x, p.y - 34, '体力不足！', '#ff8f8f'); return; }
     if (!free) { p.stamina -= STAMINA.rollCost; p.staminaDelay = STAMINA.regenDelay; }
@@ -813,6 +831,8 @@ class Game {
     // Debuff：中毒 / 定身 / 麻痹 / 灼烧
     p.rootT = Math.max(0, p.rootT - dt);
     p.paraT = Math.max(0, p.paraT - dt);
+    p.blindT = Math.max(0, (p.blindT || 0) - dt);
+    p.pebbleCd = Math.max(0, (p.pebbleCd || 0) - dt);
     if (p.poisonT > 0) {
       p.poisonT -= dt;
       if (p.active) { p.hp -= 5 * dt; p.tookDamage = true; if (Math.random() < dt * 6) this.spark(p.x, p.y - 8, '#7ac74f'); if (p.hp <= 0) { p.hp = 1; p.poisonT = 0; } }
@@ -864,8 +884,9 @@ class Game {
     if (Input.keys[km.down]) dy++;
     if (Input.keys[km.left]) dx--;
     if (Input.keys[km.right]) dx++;
-    const spd = (this.horde
-      ? PLAYER_SPEED * 1.06 * this.hordeState.mods.speed * (p.sodaTime > 0 ? p.sodaMul : 1)
+    const vsFrozen = this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0);
+    const spd = vsFrozen ? 0 : (this.horde
+      ? PLAYER_SPEED * 1.06 * this.hsP(p).mods.speed * (p.sodaTime > 0 ? p.sodaMul : 1)
       : PLAYER_SPEED * p.speedMul()) * this.weatherPSpd();
     const mAim = this.mouseAimOn(p);
     let wishX = 0, wishY = 0;
@@ -946,7 +967,7 @@ class Game {
 
     // 碎金磁吸拾取（与经验宝石同款磁场）
     {
-      const magR = (this.horde ? 95 * this.hordeState.mods.magnet : 80) * tune('magnet');
+      const magR = (this.horde ? 95 * this.hsP(p).mods.magnet : 80) * tune('magnet');
       for (const gd of this.goldDrops) {
         const d = Math.hypot(gd.x - p.x, gd.y - p.y);
         if (d < magR && d > 20) {
@@ -1004,14 +1025,27 @@ class Game {
   // ---------- 战斗 ----------
   tryAttack(p) {
     if (p.shootCd > 0 || p.rollT > 0 || p.reloadT > 0) return;
+    if (this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0)) return;   // 对决读秒/回合间冻结
     const def = p.weaponDef();
     const inst = p.weaponInst();
     if (def.melee) {
-      p.shootCd = 1 / (def.rate * (this.horde ? this.hordeState.mods.rate : 1) * tune('wRate'));
+      p.shootCd = 1 / (def.rate * (this.horde ? this.hsP(p).mods.rate : 1) * tune('wRate'));
       p.swing = 0.22;
       Sfx.melee();
       if (!def.silent) this.emitNoise(p.x, p.y, 140);
       let hitAny = false;
+      if (this.versus) {
+        for (const foe of this.players) {
+          if (foe === p || !foe.active) continue;
+          const dF = Math.hypot(foe.x - p.x, foe.y - p.y);
+          if (dF > def.range + PLAYER_R) continue;
+          let daF = Math.atan2(foe.y - p.y, foe.x - p.x) - p.facing;
+          daF = Math.atan2(Math.sin(daF), Math.cos(daF));
+          if (Math.abs(daF) > 1.15) continue;
+          this.damagePlayer(foe, Math.round(def.dmg * p.dmgMul() * tune('pDmg')), p);
+          this.fxHit(foe.x, foe.y, p.facing);
+        }
+      }
       for (const m of this.monsters) {
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d > def.range + m.r) continue;
@@ -1020,7 +1054,7 @@ class Game {
         if (Math.abs(da) > 1.15) continue;
         hitAny = true;
         m.knock(p.facing, (def.knock || 100) * 3);
-        let dmg = def.dmg * p.dmgMul() * (this.horde ? this.hordeState.mods.dmg : 1) * tune('pDmg');
+        let dmg = def.dmg * p.dmgMul() * (this.horde ? this.hsP(p).mods.dmg : 1) * tune('pDmg');
         // 背刺：未察觉的怪物吃 N 倍伤害
         let backstab = false;
         if (def.backstab && m.state !== 'chase') {
@@ -1036,11 +1070,12 @@ class Game {
           if (Math.abs(bda) > 1.9) {
             dmg = m.hp + 999;
             backstab = true;
-            this.floater(m.x, m.y - 30, '💀 处决！', '#ff5c5c');
+            SAVE.gold += 15; this.runCash += 15;   // 处决赏金：干净利落值这个价
+            this.floater(m.x, m.y - 30, '💀 处决！+15💰', '#ff5c5c');
             this.shake = Math.max(this.shake, 4);
           }
         }
-        if (this.horde && this.hordeState.mods.vamp) p.hp = Math.min(p.maxHp, p.hp + dmg * this.hordeState.mods.vamp);
+        if (this.horde && this.hsP(p).mods.vamp) p.hp = Math.min(p.maxHp, p.hp + dmg * this.hsP(p).mods.vamp);
         if (m.hurt(Math.round(dmg), this)) { this.killMonster(m, p, { backstab }); this.hitPause(0.045); }
       }
       if (hitAny && inst && def.id !== 'fists' && isFinite(def.dur) && !this.horde) {
@@ -1050,8 +1085,9 @@ class Game {
       return;
     }
     if (!inst || inst.dur <= 0) return;
-    const H = this.horde ? this.hordeState.mods : null;
-    if (!this.horde) {
+    if (this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0)) return;   // 对决读秒/回合间冻结
+    const H = this.horde ? this.hsP(p).mods : null;
+    if (!this.horde && !this.versus) {
       const ammoType = def.ammo;
       if (SAVE.ammo[ammoType] <= 0) {
         p.shootCd = 0.35;
@@ -1147,6 +1183,15 @@ class Game {
       m.knock(Math.atan2(m.y - y, m.x - x), 900);
       if (m.hurt(Math.round(bullet.dmg * falloff), this)) this.killMonster(m, bullet.owner);
     }
+    if (this.versus) {
+      for (const p of this.players) {
+        if (!p.active) continue;
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d > R + PLAYER_R) continue;
+        const falloff = (1 - Math.max(0, d - 30) / R * 0.6) * (p === bullet.owner ? 0.5 : 1);
+        this.damagePlayer(p, Math.round(bullet.dmg * falloff), bullet.owner === p ? null : bullet.owner);
+      }
+    }
     this.emitNoise(x, y, this.cfg.hear * 1.4);
   }
 
@@ -1229,7 +1274,7 @@ class Game {
                : m.type.id === 'brute' ? 25 + Math.random() * 10
                : 8 + Math.random() * 12;
     // 割草模式碎金缩水（数量管够），主要奖励走经验宝石
-    const goldV = Math.round(base * diffMul * (m.isMini ? 0.4 : 1) * (this.horde ? 0.35 : 1) * tune('goldRate') * (this.horde ? (this.hordeState.mods.goldMul || 1) : 1));
+    const goldV = Math.round(base * diffMul * (m.isMini ? 0.4 : 1) * (this.horde ? 0.35 : 1) * tune('goldRate') * (this.horde ? (this.hsP(owner && owner.isMerc ? owner.owner : owner).mods.goldMul || 1) : 1));
     if (!this.horde || Math.random() < 0.5 || m.isBoss) this.goldDrops.push(new GoldDrop(m.x, m.y, goldV));
 
     if (this.horde) {
@@ -1238,19 +1283,175 @@ class Game {
       const xv = m.isBoss ? 12 : m.isElite ? 4 : (m.type.id === 'brute' || m.type.id === 'skeleton') ? 3 : m.isMini ? 1 : (Math.random() < 0.3 ? 2 : 1);
       H.gems.push(new XPGem(m.x + (Math.random() - 0.5) * 14, m.y + (Math.random() - 0.5) * 14, xv));
       // 吸血
-      if (owner && owner.maxHp && H.mods.lifesteal > 0) owner.hp = Math.min(owner.maxHp, owner.hp + H.mods.lifesteal);
+      if (owner && owner.maxHp && !owner.isMerc && this.hsP(owner).mods.lifesteal > 0) owner.hp = Math.min(owner.maxHp, owner.hp + this.hsP(owner).mods.lifesteal);
       // Boss 击杀：金币雨 + 免费升级 + 群体回复
       if (m.isBoss) {
         H.boss = null;
         for (let i = 0; i < 14; i++) this.goldDrops.push(new GoldDrop(m.x + (Math.random()-0.5)*90, m.y + (Math.random()-0.5)*90, 15 + Math.round(Math.random()*15)));
         for (const p of this.players) if (p.active) p.hp = Math.min(p.maxHp, p.hp + 120);
-        H.freeChoices++;
-        if (!this.levelupOpen) this.openLevelup();
+        for (const p of this.players) if (p.active || p.downed) this.hsP(p).freeChoices++;
+        this.levelupQueueCheck();
         this.shake = 12;
         this.toast('👑 巨魁王倒下了！金币雨 + 免费强化！', '#ffd93d');
         Sfx.boom();
         this.spawnHordeMerchant();
       }
+    }
+  }
+
+  // ---------- ⚔️ 双人对决：回合制互伤，三胜制 ----------
+  versusUpdate(dt) {
+    const V = this.vs;
+    if (V.freezeT > 0) {
+      const before = Math.ceil(V.freezeT);
+      V.freezeT -= dt;
+      const now = Math.max(0, Math.ceil(V.freezeT));
+      if (now !== before) {
+        for (const p of this.players) {
+          this.floater(p.x, p.y - 60, now > 0 ? String(now) : '⚔️ 决斗！', now > 0 ? '#ffd93d' : '#ff5c5c');
+        }
+        if (now > 0) Sfx.tick(); else Sfx.aggro();
+      }
+    }
+    if (V.roundEndT > 0) {
+      V.roundEndT -= dt;
+      if (V.roundEndT <= 0) {
+        if (V.matchOver) { this.settleVersus(); return; }
+        this.resetVersusRound();
+      }
+    }
+  }
+  versusKill(loser) {
+    const V = this.vs;
+    if (V.roundEndT > 0) return;   // 同帧重复击杀只算一次
+    const winner = this.players.find(o => o !== loser);
+    V.score[winner.idx]++;
+    this.fxDeath(loser.x, loser.y, true);
+    this.shake = 10;
+    Sfx.boom();
+    this.toast(`💥 ${this.pname(winner)} 拿下第 ${V.round} 回合！（${V.score[0]} : ${V.score[1]}）`, winner.idx === 1 ? '#5aa7e8' : '#f2c94c');
+    if (V.score[winner.idx] >= V.target) V.matchOver = true;
+    V.roundEndT = 2.2;
+  }
+  resetVersusRound() {
+    const V = this.vs;
+    V.round++;
+    for (const p of this.players) {
+      const sp = MapData.spawns[p.idx];
+      p.x = sp.x; p.y = sp.y;
+      p.hp = p.maxHp; p.tempShield = 0;
+      p.poisonT = p.rootT = p.paraT = p.burnT2 = 0; p.blindT = 0;
+      p.rollT = 0; p.rollCd = 0; p.stamina = STAMINA.max;
+      p.mags = [null, null]; p.reloadT = 0;
+      p.dead = false; p.downed = false;
+    }
+    this.bullets = [];
+    V.freezeT = 3.2;
+    this.toast(`—— 第 ${V.round} 回合 ——`, '#e0a63c');
+  }
+  settleVersus() {
+    const V = this.vs;
+    this.over = true;
+    const wIdx = V.score[0] >= V.target ? 0 : 1;
+    SAVE.stats.runs++;
+    persistSave();
+    UI.showResult({
+      versus: true, winnerIdx: wIdx, score: V.score.slice(), rounds: V.round,
+      mapName: this.mapName, mode: this.mode, time: this.time,
+      players: this.players.map(p => ({ idx: p.idx, kills: V.score[p.idx], status: p.idx === wIdx ? 'extracted' : 'dead' })),
+      newTrophies: [],
+    });
+  }
+
+  // ---------- 摸金潜行三件套：草丛隐匿 / 投石引开 / 噪音调查 ----------
+  bushAt(x, y) {
+    if (!MapData.bushes) return null;
+    for (const b of MapData.bushes) if (Math.hypot(b.x - x, b.y - y) < b.r) return b;
+    return null;
+  }
+  bushHides(p) {
+    return !this.horde && p.sneak && !!this.bushAt(p.x, p.y);
+  }
+  throwPebble(p) {
+    if ((p.pebbleCd || 0) > 0 || !p.active) return;
+    p.pebbleCd = 1.4;
+    const a = p.facing;
+    if (!this.pebbles) this.pebbles = [];
+    this.pebbles.push({ x: p.x, y: p.y - 10, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, t: 0.5 });
+    Sfx.tick();
+  }
+  updatePebbles(dt) {
+    if (!this.pebbles || !this.pebbles.length) return;
+    for (const s of this.pebbles) {
+      s.t -= dt;
+      const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt;
+      if (isSolidAt(nx, ny) || s.t <= 0) { s.land = true; s.x = isSolidAt(nx, ny) ? s.x : nx; s.y = isSolidAt(nx, ny) ? s.y : ny; }
+      else { s.x = nx; s.y = ny; }
+      if (s.land) {
+        Sfx.crossbow();
+        for (let i = 0; i < 5; i++) this.spark(s.x, s.y, '#c9c4a8');
+        this.floater(s.x, s.y - 16, '❗ 哐当', '#c9c4a8');
+        this.emitNoise(s.x, s.y, 300);
+        for (const m of this.monsters) {
+          if (m.state === 'investigate' && Math.hypot(m.x - s.x, m.y - s.y) < 300 && Math.random() < 0.6)
+            this.floater(m.x, m.y - m.r - 6, '❓', '#9fd8ff');
+        }
+      }
+    }
+    this.pebbles = this.pebbles.filter(s => !s.land);
+  }
+  // 致盲：视野骤缩到 32%（黑幕在 drawDarkness 的光照半径里生效）
+  blindPlayer(p, dur) {
+    if (!p || !p.active) return;
+    p.blindT = Math.max(p.blindT || 0, dur);
+    this.floater(p.x, p.y - 44, '🌑 致盲！视野骤缩！', '#b48aff');
+    const flash = document.getElementById('hurt-flash');
+    if (flash) { flash.style.opacity = '0.6'; setTimeout(() => flash.style.opacity = '0', 200); }
+    Sfx.banshee();
+  }
+  // Boss 技能结算（前摇由 Monster.pendingBossSkill 触发）
+  bossSkill(m) {
+    const id = m.type.id;
+    if (id === 'boss_cyclops') {
+      // 致盲重踏：范围震荡 + 致盲
+      const R = monsterVal(id, 'quakeR') || 260;
+      this.shake = 14;
+      this.fxExplosion(m.x, m.y, R * 0.7);
+      if (this.hordeState) this.hordeState.novaRings.push({ x: m.x, y: m.y, r: 20, max: R, t: 0.5 });
+      for (const p of this.players) {
+        if (!p.active) continue;
+        const d = Math.hypot(p.x - m.x, p.y - m.y);
+        if (d > R) continue;
+        this.damagePlayer(p, Math.round(this.cfg.mDmg * m.type.dmgMul * 0.8 * (monsterVal(id, 'dmg') || 1)), m);
+        this.blindPlayer(p, monsterVal(id, 'blindDur') || 2.5);
+      }
+      Sfx.boom();
+      this.toast('👁️ 独眼巨人的致盲重踏！', '#ff8f5c');
+    } else if (id === 'boss_stormdragon') {
+      // 风暴弹幕：全向电球
+      const n = monsterVal(id, 'orbN') || 14;
+      const dmg = Math.round(this.cfg.mDmg * m.type.dmgMul * 0.55 * (monsterVal(id, 'dmg') || 1));
+      for (let i = 0; i < n; i++) {
+        this.monsterOrbs.push(new MonsterOrb(m.x, m.y, i * Math.PI * 2 / n + Math.random() * 0.2, dmg, 'wisp', 280));
+      }
+      Sfx.zap();
+      this.toast('🌩️ 风暴巨龙释放环形弹幕！', '#7ef7ff');
+    } else if (id === 'boss_lich') {
+      // 亡灵召唤 + 暗影凝视（远程点名致盲）
+      const n = monsterVal(id, 'summonN') || 3;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sk = new Monster(m.x + Math.cos(a) * 70, m.y + Math.sin(a) * 70, this.cfg, 'skeleton');
+        sk.state = 'chase'; sk.target = m.target; sk.memoryT = 99;
+        sk.hordeDmgMul = m.hordeDmgMul;
+        if (sk.target) sk.lastKnown = { x: sk.target.x, y: sk.target.y };
+        unstick(sk);
+        this.monsters.push(sk);
+        this.spark(sk.x, sk.y, '#b48aff');
+      }
+      if (m.target && m.target.active) this.blindPlayer(m.target, monsterVal(id, 'blindDur') || 2.5);
+      Sfx.banshee();
+      this.toast('💀 巫妖王召唤亡灵 · 暗影凝视！', '#b48aff');
     }
   }
 
@@ -1261,23 +1462,23 @@ class Game {
     // 怪物图鉴：被它打过也算见过
     if (src && src.type && src.type.id) { if (!SAVE.monsterSeen) SAVE.monsterSeen = {}; SAVE.monsterSeen[src.type.id] = true; }
     // 荆棘羽甲的被动护甲：每级减免 1.5 点受击伤害（至少剩 1）
-    if (this.horde && this.hordeState.skills.thorns > 0 && dmg > 0) {
-      dmg = Math.max(1, dmg - this.hordeState.skills.thorns * 1.5 * tune('thorns'));
+    if (this.horde && this.hsP(p).skills.thorns > 0 && dmg > 0) {
+      dmg = Math.max(1, dmg - this.hsP(p).skills.thorns * skillVal('thorns', 'reduce') * tune('thorns'));
     }
     // 灵敏反射：闪避判定
-    if (this.horde && this.hordeState.mods.dodge && Math.random() < this.hordeState.mods.dodge) {
+    if (this.horde && this.hsP(p).mods.dodge && Math.random() < this.hsP(p).mods.dodge) {
       this.floater(p.x, p.y - 40, '💨 闪避！', '#9fd8ff');
       return;
     }
     // 复仇之焰：仅怪物直接攻击触发（中毒/毒雾/死亡之潮/落石等环境伤害与 DoT 不触发）
-    if (this.horde && this.hordeState.skills.revenge > 0 && dmg > 0 && src && src.hurt) {
-      const lv = this.hordeState.skills.revenge;
-      const R = 150;
+    if (this.horde && this.hsP(p).skills.revenge > 0 && dmg > 0 && src && src.hurt) {
+      const lv = this.hsP(p).skills.revenge;
+      const R = skillVal('revenge', 'r');
       for (const m of this.monsters.slice()) {
         if (Math.hypot(m.x - p.x, m.y - p.y) > R) continue;
         m.burnT = Math.max(m.burnT, 1.5);
         m.knock(Math.atan2(m.y - p.y, m.x - p.x), 620);
-        if (m.hurt(16 + lv * 10, this)) this.killMonster(m, p);
+        if (m.hurt(skillVal('revenge', 'dmg') + lv * skillVal('revenge', 'dmgLv'), this)) this.killMonster(m, p);
       }
       this.fxRevenge(p.x, p.y, R);
       Sfx.boom();
@@ -1315,12 +1516,13 @@ class Game {
     if (p.sneak && dmg > 0) { p.sneak = false; this.floater(p.x, p.y - 46, '受击破隐', '#ff8f8f'); }
     this.shake = src && src.type && src.type.id === 'brute' ? 9 : 5;
     // 荆棘羽甲：反弹伤害给近身攻击者
-    if (this.horde && src && src.hurt && this.hordeState.skills.thorns > 0) {
-      const th = Math.round((8 + this.hordeState.skills.thorns * 6) * tune('thorns'));
+    if (this.horde && src && src.hurt && this.hsP(p).skills.thorns > 0) {
+      const th = Math.round((skillVal('thorns', 'dmg') + this.hsP(p).skills.thorns * skillVal('thorns', 'dmgLv')) * tune('thorns'));
       if (src.hurt(th, this)) this.killMonster(src, p);
       else this.floater(src.x, src.y - 20, `🌵${th}`, '#7ac74f');
     }
     Sfx.hurt();
+    if (p.hp <= 0 && this.versus) { p.hp = 0; this.versusKill(p); return; }
     if (p.hp <= 0) {
       p.hp = 0;
       const othersActive = this.players.some(o => o !== p && o.active);
@@ -1450,6 +1652,7 @@ class Game {
   }
 
   useConsumable(p) {
+    if (this.versus) { this.toast('⚔️ 对决中禁用药品——真本事见真章', '#ff8f8f'); return; }
     const key = CONSUM_ORDER[p.consumSel];
     const c = CONSUMABLES[key];
     if (SAVE.consumables[key] <= 0) {
@@ -1590,7 +1793,7 @@ class Game {
     this.toast(`🔫 试用：${WEAPONS[id].icon}【${WEAPONS[id].name}】`, '#ffd93d');
   }
   arenaFreeLevel() {
-    this.hordeState.freeChoices++;
+    this.hsP(this.players[0]).freeChoices++;
     if (!this.levelupOpen) this.openLevelup();
   }
   arenaSpawnMonster(id) {
@@ -1862,18 +2065,19 @@ class Game {
 
   settleEscape() {
     const H = this.hordeState;
+    const topLv = Math.max(...H.P.map(pp => pp.level));
     SAVE.stats.runs++;
     const victory = this.players.some(p => p.extracted);
     const lead = Math.max(...this.players.map(p => p.x), 0);
     const progress = Math.min(1, lead / (MapData.exitRect.x + MapData.exitRect.w));
     let bonus = 0;
-    if (victory) { bonus = 500 + this.runKills * 2 + H.level * 15; SAVE.gold += bonus; }
+    if (victory) { bonus = 500 + this.runKills * 2 + topLv * 15; SAVE.gold += bonus; }
     SAVE.stats.goldEarned += this.runCash + bonus;
     const best = SAVE.escapeBest || { prog: 0, kills: 0, level: 0 };
     SAVE.escapeBest = {
       prog: Math.max(best.prog, Math.round(progress * 100)),
       kills: Math.max(best.kills, this.runKills),
-      level: Math.max(best.level, H.level),
+      level: Math.max(best.level, topLv),
     };
     const newTrophies = [];
     const grant = id => { const tp = awardTrophy(id); if (tp) newTrophies.push(tp); };
@@ -1886,7 +2090,7 @@ class Game {
       horde: true, escape: true, victory,
       progress: Math.round(progress * 100),
       mapName: this.mapName, mode: this.mode,
-      time: this.time, kills: this.runKills, level: H.level,
+      time: this.time, kills: this.runKills, level: topLv,
       cash: this.runCash, bonus, best: SAVE.escapeBest,
       players: this.players.map(p => ({ idx: p.idx, kills: p.kills, status: p.extracted ? 'extracted' : 'dead' })),
       newTrophies,
@@ -1895,6 +2099,7 @@ class Game {
 
   settleHorde() {
     const H = this.hordeState;
+    const topLv = Math.max(...H.P.map(pp => pp.level));
     SAVE.stats.runs++;
     // 胜利奖金：基础 400 + 每杀 2 金
     let bonus = 0;
@@ -1906,7 +2111,7 @@ class Game {
     SAVE.hordeBest = {
       time: Math.max(best.time, shownT),
       kills: Math.max(best.kills, this.runKills),
-      level: Math.max(best.level, H.level),
+      level: Math.max(best.level, topLv),
     };
     // 奖杯
     const newTrophies = [];
@@ -1915,10 +2120,10 @@ class Game {
     if (this.runKills >= 150) grant('horde_slayer');
     if (this.runKills >= 15) grant('slayer');
     if (SAVE.gold >= 10000) grant('tycoon');
-    // 结算抽卡：三只战利箱选一（胜利=金箱概率池，可开出神话红宝）
-    const drawTier = H.victory ? 'gold' : 'wood';
+    // 结算抽卡：三只战利箱选一——仅胜利才有资格开箱（金箱池可出神话红宝）
+    const drawTier = 'gold';
     const lootDraw = [];
-    for (let i = 0; i < 3; i++) {
+    if (H.victory) for (let i = 0; i < 3; i++) {
       lootDraw.push(rollTreasure(drawTier, { difficulty: 'hard', mapId: this.mapId, mythicSpawned: { v: false }, save: SAVE }));
     }
     persistSave();
@@ -1927,7 +2132,7 @@ class Game {
     UI.showResult({
       horde: true, victory: H.victory, lootDraw, lootTier: drawTier,
       mapName: this.mapName, mode: this.mode,
-      time: shownT, duration: Math.round(hordeDuration() / 60), kills: this.runKills, level: H.level,
+      time: shownT, duration: Math.round(hordeDuration() / 60), kills: this.runKills, level: topLv,
       cash: this.runCash, bonus, best: SAVE.hordeBest,
       players: this.players.map(p => ({ idx: p.idx, kills: p.kills, status: H.victory ? 'extracted' : 'dead' })),
       newTrophies,
@@ -2182,7 +2387,7 @@ class Game {
       const H = this.hordeState;
       // Boss 血条（保留画布绘制：顶部居中，戏剧感）
       if (H.boss && H.boss.hp > 0) {
-        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = 26;
+        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = 64;
         ctx.fillStyle = 'rgba(8,9,4,.85)';
         ctx.fillRect(bbx - 2, bby - 2, bbw + 4, 14);
         ctx.fillStyle = '#c2452a';
@@ -2374,10 +2579,11 @@ class Game {
       }
     }
     // —— 环绕飞锅 ——
-    if (this.horde && this.hordeState.skills.orbit > 0) {
-      const n = this.hordeState.skills.orbit;
+    if (this.horde && this.hordeState.P.some(pp => pp.skills.orbit > 0)) {
       for (const p of this.players) {
         if (!p.active) continue;
+        const n = this.hsP(p).skills.orbit;
+        if (!n) continue;
         for (let i = 0; i < n; i++) {
           const a = this.time * 3.2 + i * Math.PI * 2 / n + p.idx * 0.5;
           const [sx, sy] = W2S(p.x + Math.cos(a) * 78, p.y + Math.sin(a) * 78);
@@ -2390,9 +2596,39 @@ class Game {
         }
       }
     }
+    // 草丛（画在玩家之上：钻进去有被枝叶盖住的遮蔽感）
+    if (MapData.bushes) {
+      for (const b of MapData.bushes) {
+        const [sx, sy] = W2S(b.x, b.y);
+        if (sx < -60 || sy < -60 || sx > VIEW_W + 60 || sy > VIEW_H + 60) continue;
+        const sway = Math.sin(this.time * 1.3 + b.seed) * 1.6;
+        ctx.globalAlpha = 0.92;
+        for (let i = 0; i < 4; i++) {
+          const aa = b.seed + i * 1.7;
+          ctx.fillStyle = i % 2 ? '#2e4a26' : '#3a5a2e';
+          ctx.beginPath();
+          ctx.ellipse(sx + Math.cos(aa) * b.r * 0.4 + sway, sy + Math.sin(aa) * b.r * 0.3,
+                      b.r * 0.55, b.r * 0.42, aa, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(20,32,16,.5)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sx + sway, sy, b.r * 0.72, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+    // 飞行中的石子
+    if (this.pebbles) {
+      for (const s of this.pebbles) {
+        const [sx, sy] = W2S(s.x, s.y);
+        ctx.fillStyle = '#c9c4a8';
+        ctx.beginPath(); ctx.arc(sx, sy - Math.sin((0.5 - s.t) / 0.5 * Math.PI) * 22, 3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     for (const o of this.monsterOrbs) {
       const [sx, sy] = W2S(o.x, o.y);
-      ctx.fillStyle = 'rgba(126,247,255,.9)';
+      const oc = o.kind === 'poison' ? 'rgba(122,199,79,.9)' : o.kind === 'blind' ? 'rgba(180,138,255,.9)'
+               : o.kind === 'bone' ? 'rgba(232,228,216,.95)' : 'rgba(126,247,255,.9)';
+      ctx.fillStyle = oc;
       ctx.beginPath(); ctx.arc(sx, sy, 6 + Math.sin(o.anim * 12) * 1.5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.8)';
       ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI*2); ctx.fill();
@@ -2579,7 +2815,7 @@ class Game {
       }
     }
 
-    const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) * this.weatherVision() }));
+    const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) * this.weatherVision() * (p.blindT > 0 ? 0.32 : 1) }));
     for (const p of this.players) if (p.downed) lights.push({ x: p.x, y: p.y, radius: 90 });
     const glows = this.chests.filter(c => !c.opened && (c.tier === 'gold' || c.tier === 'mystery')).map(c => ({ x: c.x, y: c.y, r: 26 }));
     for (const t of MapData.torches) glows.push({ x: t.x, y: t.y - 8, r: 56 + Math.sin(this.time * 6 + t.y) * 7 });
@@ -3678,8 +3914,8 @@ class Game {
       </div>`);
     }
     // 鸭灵复活倒计时
-    if (this.horde && this.hordeState.ex && this.hordeState.ex.petQueue) {
-      for (const q of this.hordeState.ex.petQueue) {
+    if (this.horde && this.hordeState.petQueueAll) {
+      for (const q of this.hordeState.petQueueAll()) {
         rows.push(`<div class="ally-row dead">
           <img src="${this.allyAvatar({ id: 'petduck_gray', color: '#ffd93d' })}" class="ally-av">
           <div class="ally-info"><div class="ally-name">鸭灵</div><div class="ally-meta">💤 复活 ${Math.max(0, q).toFixed(1)}s</div></div>
@@ -3731,7 +3967,7 @@ class Game {
       }
       // 军衔星：割草按等级晋衔，搜打撤按身上宝物
       const stars = this.horde
-        ? 1 + (this.hordeState.level >= 6 ? 1 : 0) + (this.hordeState.level >= 12 ? 1 : 0)
+        ? 1 + (this.hsP(p).level >= 6 ? 1 : 0) + (this.hsP(p).level >= 12 ? 1 : 0)
         : (p.bag.length >= 1 ? 1 : 0) + (p.bag.length >= 3 ? 1 : 0) + (p.bag.length >= 6 ? 1 : 0);
       if (el._starSig !== stars) {
         el._starSig = stars;
@@ -3741,7 +3977,7 @@ class Game {
       const nm = el.querySelector('.np-name');
       if (nm && !nm.textContent) nm.textContent = (p.skin && p.skin.name || `${p.idx + 1}P`).replace(/^[^\u4e00-\u9fa5a-zA-Z]+/, '');
       const lvEl = el.querySelector('.np-lv');
-      if (lvEl) lvEl.textContent = this.horde ? `LV.${this.hordeState.level}` : '';
+      if (lvEl) lvEl.textContent = this.horde ? `LV.${this.hsP(p).level}` : '';
       // 立绘：离屏调用游戏本体的玩家绘制（每 30 帧刷新）
       el._faceT = (el._faceT || 0) - 1;
       if (el._faceT <= 0) {
@@ -3792,7 +4028,7 @@ class Game {
       wEl.textContent = `⚖️${Math.round(lf * 100)}%`;
       wEl.style.color = lf >= 0.8 ? '#ff5c5c' : lf <= 0.35 ? '#7dff9a' : '#a99fc7';
       el.querySelector('.hud-bag-info').textContent = this.horde
-        ? `Lv.${this.hordeState.level} · ⚔️${p.kills}`
+        ? `Lv.${this.hsP(p).level} · ⚔️${p.kills}`
         : `🎒${p.bagUsed}/${p.bagCap} · 💰${p.carriedValue}`;
       const sig = p.bag.map(t => t.id).join(',') + '|' + p.bagCap;
       if (this.bagSig[p.idx] !== sig) {
@@ -3808,7 +4044,8 @@ class Game {
         el.querySelector('.bag-strip').innerHTML = html;
       }
       const fx = [];
-      if (p.sneak) fx.push('🤫潜行');
+      if (this.bushHides(p)) fx.push('🌿隐匿'); else if (p.sneak) fx.push('🤫潜行');
+      if (p.blindT > 0) fx.push(`🌑致盲${Math.ceil(p.blindT)}s`);
       if (p.invisT > 0) fx.push(`🌫️隐身${Math.ceil(p.invisT)}s`);
       if (p.rageT > 0) fx.push('😡狂暴');
       if (p.sodaTime > 0) fx.push('🥤加速');
@@ -3830,7 +4067,16 @@ class Game {
     const hmT = $id('hm-time'); if (!hmT) return;
     const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     let timeTxt, subTxt, objTxt, pipsHtml, urgent = false;
-    if (this.horde && this.escape) {
+    if (this.versus && this.vs) {
+      const V = this.vs;
+      timeTxt = `${V.score[0]} : ${V.score[1]}`;
+      subTxt = '双人对决 · 三胜制';
+      urgent = V.score.some(sc => sc === V.target - 1);
+      objTxt = `第 <b>${V.round}</b> 回合 · 击倒对方得分`;
+      pipsHtml = [0, 1, 2].map(i => `<span class="${i < V.score[0] ? 'on' : ''}"></span>`).join('')
+        + '<span style="width:8px;background:transparent"></span>'
+        + [0, 1, 2].map(i => `<span class="${i < V.score[1] ? 'on' : ''}" style="${i < V.score[1] ? 'background:var(--p2)' : ''}"></span>`).join('');
+    } else if (this.horde && this.escape) {
       const lead = Math.max(0, ...this.players.filter(p => p.active || p.extracted).map(p => p.x));
       const pct = Math.min(100, Math.round(lead / (MapData.exitRect.x + MapData.exitRect.w * 0.5) * 100));
       timeTxt = `${pct}%`;
@@ -3841,13 +4087,12 @@ class Game {
       objTxt = '一路向东 · 抵达撤离点';
       pipsHtml = `<i style="width:${pct}%"></i>`;
     } else if (this.horde) {
-      const H = this.hordeState;
       const left = Math.max(0, hordeDuration() - this.time);
       timeTxt = fmt(left);
       subTxt = '距怪潮溃散 · 弹药无限';
       urgent = left < 60;
-      objTxt = `LV.${H.level} — 经验 ${Math.floor(H.xp)} / ${H.xpNeed}`;
-      pipsHtml = `<i style="width:${Math.min(100, H.xp / H.xpNeed * 100)}%"></i>`;
+      objTxt = `场上敌人 <b>${this.monsters.length}</b> · 撑到怪潮溃散`;
+      pipsHtml = `<i style="width:${Math.min(100, this.time / hordeDuration() * 100)}%"></i>`;
     } else {
       timeTxt = fmt(this.time);
       subTxt = '已潜入时长 · 撤离才算数';
@@ -3861,6 +4106,31 @@ class Game {
     const hmO = $id('hm-obj'); if (this._hmO !== objTxt) { this._hmO = objTxt; hmO.innerHTML = objTxt; }
     const hmP = $id('hm-pips'); if (this._hmP !== pipsHtml) { this._hmP = pipsHtml; hmP.innerHTML = pipsHtml; }
     const hmK = $id('hm-kills'); const k = String(this.runKills); if (this._hmK !== k) { this._hmK = k; hmK.textContent = k; }
+    // 顶部中央大经验条（升级分离后每人一条；经典模式隐藏）
+    const hx = $id('hud-xp');
+    if (hx) {
+      if (!this.horde) {
+        if (this._hxSig !== 'off') { this._hxSig = 'off'; hx.style.display = 'none'; }
+      } else {
+        const rows = this.players.map(p => {
+          const PP = this.hsP(p);
+          return `${p.idx}:${PP.level}:${Math.floor(PP.xp)}:${PP.xpNeed}:${p.active ? 1 : 0}`;
+        }).join('|');
+        if (this._hxSig !== rows) {
+          this._hxSig = rows;
+          hx.style.display = '';
+          hx.innerHTML = this.players.map(p => {
+            const PP = this.hsP(p);
+            const pct = Math.min(100, PP.xp / PP.xpNeed * 100);
+            return `<div class="xp-row p${p.idx + 1}${p.active ? '' : ' out'}">
+              <span class="xp-lv">${p.idx + 1}P LV.${PP.level}</span>
+              <div class="xp-bar"><i style="width:${pct}%"></i></div>
+              <span class="xp-num">${Math.floor(PP.xp)}/${PP.xpNeed}</span>
+            </div>`;
+          }).join('');
+        }
+      }
+    }
     // 世界层：小地图正下方 = 天气 chip / 神话警报 / 击杀播报 feed
     const hw = $id('hud-world');
     if (hw) {

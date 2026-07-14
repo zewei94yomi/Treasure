@@ -5,22 +5,24 @@
 Object.assign(Game.prototype, {
 
   // —— 智能三选一：优先贴合已选技能与当前状态（覆盖 game.js 基础版） ——
-  openLevelup() {
+  openLevelup(owner) {
     const H = this.hordeState;
-    H.picked = H.picked || {};
-    const owned = u => (u.skill ? H.skills[u.skill] : H.picked[u.id]) || 0;
+    owner = owner || this.players.find(pl => this.hsP(pl).freeChoices > 0) || this.players[0];
+    const PP = this.hsP(owner);
+    PP.picked = PP.picked || {};
+    const owned = u => (u.skill ? PP.skills[u.skill] : PP.picked[u.id]) || 0;
     const pool = HORDE_UPGRADES.filter(u => {
       if (owned(u) >= u.max) return false;
-      if (u.requires && !(H.skills[u.requires] > 0)) return false;   // 变体：先有母技能
-      if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0)) return false;   // 招募流：有佣兵在场才出
-      if (u.gate && !u.gate(H)) return false;                              // 门槛型升级（呼叫支援等）
-      if (u.heroUp && !this.mercs.some(mc => mc.hp > 0 && mc.def.id === u.heroUp)) return false;   // 英雄专属卡：该英雄在场才出
+      if (u.requires && !(PP.skills[u.requires] > 0)) return false;   // 变体：先有母技能
+      if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0 && mc.owner === owner)) return false;   // 招募流：自己有佣兵才出
+      if (u.gate && !u.gate({ skills: PP.skills, mods: PP.mods, picked: PP.picked, level: PP.level })) return false;
+      if (u.heroUp && !this.mercs.some(mc => mc.hp > 0 && mc.def.id === u.heroUp && mc.owner === owner)) return false;   // 英雄专属卡：自己的英雄在场才出
       return true;
     });
-    if (!pool.length) { H.freeChoices = 0; return; }
+    if (!pool.length) { PP.freeChoices = 0; return; }
 
-    const anySkill = Object.values(H.skills).some(v => v > 0);
-    const lowHp = this.players.some(p => p.active && p.hp < p.maxHp * 0.4);
+    const anySkill = Object.values(PP.skills).some(v => v > 0);
+    const lowHp = owner.active && owner.hp < owner.maxHp * 0.4;
     const weights = new Map();
     for (const u of pool) {
       let w = 10;
@@ -29,10 +31,10 @@ Object.assign(Game.prototype, {
       if (u.skill && !anySkill) w *= 1.7;                    // 还没技能时鼓励开技能
       if (u.requires) w *= 1.6;                              // 变体强化贴合已有 build
       if (lowHp && (u.id === 'maxhp' || u.id === 'steal' || u.id === 'regen' || u.id === 'barrier')) w *= 2.2;  // 残血时供生存牌
-      if (u.special === 'recruit') w *= this.mercs.some(mc => mc.hp > 0) ? 1.2 : 1.8;   // 招募卡：无佣兵时更常见
+      if (u.special === 'recruit') w *= this.mercs.some(mc => mc.hp > 0 && mc.owner === owner) ? 1.2 : 1.8;   // 招募卡：无佣兵时更常见
       if (u.heroUp) w *= 1.5;                                                             // 英雄专属卡贴合 build
       // 近战流没有弹道类需求
-      const def = this.players[0].weaponDef();
+      const def = owner.weaponDef();
       if (def.melee && (u.id === 'multi' || u.id === 'pierce' || u.id === 'range')) w *= 0.35;
       weights.set(u, w);
     }
@@ -47,195 +49,117 @@ Object.assign(Game.prototype, {
       choices.push(pick);
       bag.splice(bag.indexOf(pick), 1);
     }
+    this.levelupFor = owner;
     this.levelupChoices = choices;
     this.levelupOpen = true;
     this.paused = true;
     UI.renderLevelup(this, choices);
   },
 
-  // —— 六个新技能（由 hordeUpdate 调用） ——
+  // —— 扩展技能引擎：升级分离后每位玩家用自己的等级/强化/冷却；世界物件共享给绘制层 ——
   updateHordeExtraSkills(dt) {
     const H = this.hordeState;
-    if (!H.ex) H.ex = { whirlT: 2, barrierT: 5, mineT: 2, meteorT: 4, boomT: 2.5, mines: [], meteors: [], booms: [], whirlFx: [] };
+    if (!H.ex) H.ex = { mines: [], meteors: [], booms: [], whirlFx: [], pets: [], petQueue: [], droneAims: [] };
+    if (!H.petQueueAll) H.petQueueAll = () => H.ex.petQueue.map(e => e.t);
     const ex = H.ex;
-    const S = H.skills;
 
-    // 🌪️ 旋风斩
-    if (S.whirlwind > 0) {
-      ex.whirlT -= dt;
-      if (ex.whirlT <= 0) {
-        ex.whirlT = Math.max(1.2, 2.6 - S.whirlwind * 0.25);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          const R = 90 + S.whirlwind * 8;
+    for (const p of this.players) {
+      if (!p.active) continue;
+      const PP = H.P[p.idx], S = PP.skills, T = PP.exT;
+
+      // 🗡️ 旋风斩
+      if (S.whirlwind > 0) {
+        T.whirlT -= dt;
+        if (T.whirlT <= 0) {
+          T.whirlT = Math.max(1.2, skillVal('whirlwind', 'cd') - S.whirlwind * skillVal('whirlwind', 'cdLv'));
+          const R = skillVal('whirlwind', 'r') + S.whirlwind * skillVal('whirlwind', 'rLv');
           ex.whirlFx.push({ x: p.x, y: p.y, r: R, t: 0.35, pl: p, a0: p.facing });
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
             m.knock(Math.atan2(m.y - p.y, m.x - p.x), 700);
-            if (m.hurt(18 + S.whirlwind * 8, this)) this.killMonster(m, p);
+            if (m.hurt(skillVal('whirlwind', 'dmg') + S.whirlwind * skillVal('whirlwind', 'dmgLv'), this)) this.killMonster(m, p);
           }
-          Sfx.melee();
+          Sfx.sword();
         }
       }
-    }
-    // 🛡️ 圣盾守护
-    if (S.barrier > 0) {
-      ex.barrierT -= dt;
-      if (ex.barrierT <= 0) {
-        ex.barrierT = Math.max(5, 12 - S.barrier);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          p.tempShield = Math.min(150, p.tempShield + 20 + S.barrier * 10);
-        }
-        Sfx.buy();
-        this.floater(this.players[0].x, this.players[0].y - 46, '🛡️ 圣盾展开！', '#9fd8ff');
-      }
-    }
-    // 🧨 鸭式地雷
-    if (S.mines > 0) {
-      ex.mineT -= dt;
-      if (ex.mineT <= 0) {
-        ex.mineT = Math.max(1.2, 3.2 - S.mines * 0.3);
-        for (const p of this.players) {
-          if (!p.active || !p.moving) continue;
-          if (ex.mines.length >= 6 + S.mines) ex.mines.shift();
-          ex.mines.push({ x: p.x, y: p.y + 10, t: 30 });
+      // 🛡️ 圣盾守护
+      if (S.barrier > 0) {
+        T.barrierT -= dt;
+        if (T.barrierT <= 0) {
+          T.barrierT = Math.max(5, skillVal('barrier', 'cd') - S.barrier * skillVal('barrier', 'cdLv'));
+          p.tempShield = Math.min(150, p.tempShield + skillVal('barrier', 'shield') + S.barrier * skillVal('barrier', 'shieldLv'));
+          Sfx.buy();
+          this.floater(p.x, p.y - 46, '🛡️ 圣盾展开！', '#9fd8ff');
         }
       }
-      for (const mine of ex.mines) {
-        mine.t -= dt;
-        for (const m of this.monsters) {
-          if (Math.hypot(m.x - mine.x, m.y - mine.y) < m.r + 20) { mine.boom = true; break; }
-        }
-        if (mine.boom || mine.t <= 0) {
-          if (mine.boom) {
-            Sfx.boom();
-            this.shake = Math.max(this.shake, 5);
-            this.fxExplosion(mine.x, mine.y, 74);
-            for (const m of this.monsters.slice()) {
-              const d = Math.hypot(m.x - mine.x, m.y - mine.y);
-              if (d > 74 + m.r) continue;
-              m.knock(Math.atan2(m.y - mine.y, m.x - mine.x), 800);
-              if (m.hurt(26 + S.mines * 10, this)) this.killMonster(m, this.players[0]);
-            }
+      // 🧨 鸭式地雷（挂 owner：伤害按其等级、击杀归属他）
+      if (S.mines > 0) {
+        T.mineT -= dt;
+        if (T.mineT <= 0) {
+          T.mineT = Math.max(1.2, skillVal('mines', 'cd') - S.mines * skillVal('mines', 'cdLv'));
+          if (p.moving) {
+            const mine = ex.mines.filter(mn => mn.pl === p);
+            if (mine.length >= 6 + S.mines) { const old = mine[0]; ex.mines.splice(ex.mines.indexOf(old), 1); }
+            ex.mines.push({ x: p.x, y: p.y + 10, t: 30, pl: p, lv: S.mines });
           }
         }
       }
-      ex.mines = ex.mines.filter(mn => !mn.boom && mn.t > 0);
-    }
-    // ☄️ 天降正义：排程仅在持有技能时；下坠/引爆/清理永远执行
-    //（修复：无人机·空袭在未点陨石时砸下的陨石曾因守卫跳过结算，红圈永久残留）
-    if (S.meteor > 0) {
-      ex.meteorT -= dt;
-      if (ex.meteorT <= 0) {
-        ex.meteorT = Math.max(1.6, (5.5 - S.meteor * 0.5) * (H.mods.meteorCd || 1));
-        const count = 1 + Math.floor(S.meteor / 2) + (H.mods.meteorN || 0);
-        for (let i = 0; i < count && this.monsters.length; i++) {
-          const m = this.monsters[Math.floor(Math.random() * this.monsters.length)];
-          ex.meteors.push({ x: m.x, y: m.y, t: 0.8 });
-        }
-      }
-    }
-    {
-      for (const mt of ex.meteors) {
-        mt.t -= dt;
-        // 下坠中的火焰彗尾
-        const fall = Math.max(0, mt.t / 0.8);
-        if (Math.random() < dt * 40) this.fxTrailFire(mt.x + fall * 90, mt.y - fall * 260, 24);
-        if (mt.t <= 0) {
-          Sfx.boom();
-          this.shake = Math.max(this.shake, 7);
-          const mR = 84 * (H.mods.meteorR || 1);
-          this.fxExplosion(mt.x, mt.y, mR);
-          for (const m of this.monsters.slice()) {
-            const d = Math.hypot(m.x - mt.x, m.y - mt.y);
-            if (d > mR + m.r) continue;
-            m.burnT = Math.max(m.burnT, 1.5);
-            if (m.hurt(mt.arty ? 26 + (mt.lv || 1) * 9 : 30 + S.meteor * 12, this)) this.killMonster(m, this.players[0]);
+      // ☄️ 天降正义（排程；下坠/引爆在共享段）
+      if (S.meteor > 0) {
+        T.meteorT -= dt;
+        if (T.meteorT <= 0) {
+          T.meteorT = Math.max(1.6, (skillVal('meteor', 'cd') - S.meteor * skillVal('meteor', 'cdLv')) * (PP.mods.meteorCd || 1));
+          const count = 1 + Math.floor(S.meteor / 2) + (PP.mods.meteorN || 0);
+          for (let i = 0; i < count && this.monsters.length; i++) {
+            const m = this.monsters[Math.floor(Math.random() * this.monsters.length)];
+            ex.meteors.push({ x: m.x, y: m.y, t: 0.8, pl: p, dmg: skillVal('meteor', 'dmg') + S.meteor * skillVal('meteor', 'dmgLv'), rMul: PP.mods.meteorR || 1 });
           }
         }
       }
-      ex.meteors = ex.meteors.filter(mt => mt.t > 0);
-    }
-    // 🪚 回旋飞盘 → 巨型锯盘：一路碾过去再碾回来，同一目标可被反复切割（与追踪鸭雷彻底区分：
-    // 鸭雷=单点追踪导弹，锯盘=一条血路的清线器）
-    if (S.boomerang > 0) {
-      ex.boomT -= dt;
-      if (ex.boomT <= 0) {
-        ex.boomT = Math.max(1.2, 2.8 - S.boomerang * 0.28);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          ex.booms.push({ x: p.x, y: p.y, a: p.facing, d: 0, max: 300 + S.boomerang * 30, back: false, pl: p, spin: 0 });
-          if (S.boomerang >= 3) ex.booms.push({ x: p.x, y: p.y, a: p.facing + Math.PI, d: 0, max: 300 + S.boomerang * 30, back: false, pl: p, spin: 0 });  // 3 级起背后再甩一片
-        }
-        Sfx.crossbow();
-      }
-      for (const b of ex.booms) {
-        b.spin += dt * 18;
-        const sp = 500 * dt;
-        if (!b.back) {
-          b.x += Math.cos(b.a) * sp; b.y += Math.sin(b.a) * sp;
-          b.d += sp;
-          if (b.d >= b.max || isSolidAt(b.x, b.y)) b.back = true;
-        } else {
-          const ang = Math.atan2(b.pl.y - b.y, b.pl.x - b.x);
-          b.x += Math.cos(ang) * sp * 1.3; b.y += Math.sin(ang) * sp * 1.3;
-          if (Math.hypot(b.pl.x - b.x, b.pl.y - b.y) < 26) b.done = true;
-        }
-        for (const m of this.monsters.slice()) {
-          if ((m.sawCd || 0) > this.time) continue;          // 0.3s 后可被同一锯盘再次切割
-          if (Math.hypot(m.x - b.x, m.y - b.y) < m.r + 20) {
-            m.sawCd = this.time + 0.3;
-            m.knock(b.back ? Math.atan2(m.y - b.y, m.x - b.x) : b.a, 260);
-            if (m.hurt(34 + S.boomerang * 14, this)) this.killMonster(m, b.pl);
-            this.spark(b.x, b.y, '#ffd93d');
-            this.fxHit(b.x, b.y, b.a);
-          }
+      // 🪚 巨型锯盘
+      if (S.boomerang > 0) {
+        T.boomT -= dt;
+        if (T.boomT <= 0) {
+          T.boomT = Math.max(1.2, skillVal('boomerang', 'cd') - S.boomerang * skillVal('boomerang', 'cdLv'));
+          const dmgB = skillVal('boomerang', 'dmg') + S.boomerang * skillVal('boomerang', 'dmgLv');
+          ex.booms.push({ x: p.x, y: p.y, a: p.facing, d: 0, max: skillVal('boomerang', 'dist') + S.boomerang * skillVal('boomerang', 'distLv'), back: false, pl: p, spin: 0, dmg: dmgB });
+          if (S.boomerang >= 3) ex.booms.push({ x: p.x, y: p.y, a: p.facing + Math.PI, d: 0, max: skillVal('boomerang', 'dist') + S.boomerang * skillVal('boomerang', 'distLv'), back: false, pl: p, spin: 0, dmg: dmgB });
+          Sfx.crossbow();
         }
       }
-      ex.booms = ex.booms.filter(b => !b.done);
-    }
-    // 🧄 蒜香领域（贴身持续灼烧）
-    if (S.garlic > 0) {
-      ex.garlicT = (ex.garlicT || 0) - dt;
-      if (ex.garlicT <= 0) {
-        ex.garlicT = 0.5;
-        for (const p of this.players) {
-          if (!p.active) continue;
-          const R = 88 + S.garlic * 12;
+      // 🧄 蒜香领域
+      if (S.garlic > 0) {
+        T.garlicT -= dt;
+        if (T.garlicT <= 0) {
+          T.garlicT = 0.5;
+          const R = skillVal('garlic', 'r') + S.garlic * skillVal('garlic', 'rLv');
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
-            if (m.hurt(5 + S.garlic * 3, this)) this.killMonster(m, p);
+            if (m.hurt(skillVal('garlic', 'dmg') + S.garlic * skillVal('garlic', 'dmgLv'), this)) this.killMonster(m, p);
           }
         }
       }
-    }
-    // 🦴 骨刺环发（八方radial弹）
-    if (S.spears > 0) {
-      ex.spearT = (ex.spearT === undefined ? 2 : ex.spearT) - dt;
-      if (ex.spearT <= 0) {
-        ex.spearT = Math.max(1.6, 3.5 - S.spears * 0.3);
-        for (const p of this.players) {
-          if (!p.active) continue;
-          const n = 8 + S.spears;
+      // 🦴 骨刺环发
+      if (S.spears > 0) {
+        T.spearT -= dt;
+        if (T.spearT <= 0) {
+          T.spearT = Math.max(1.6, skillVal('spears', 'cd') - S.spears * skillVal('spears', 'cdLv'));
+          const n = skillVal('spears', 'n') + S.spears;
           for (let i = 0; i < n; i++) {
             const a = i * Math.PI * 2 / n + this.time;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110, noHoming: true }, p, 1));
+              { id: 'spear', dmg: skillVal('spears', 'dmg') + S.spears * skillVal('spears', 'dmgLv'), speed: 560, range: skillVal('spears', 'range') + S.spears * 18, knock: 110, noHoming: true }, p, 1));
           }
+          Sfx.crossbow();
         }
-        Sfx.crossbow();
       }
-    }
-    // 🛸 无人机鸭：编队点射（僚机变体可加机，频率随级提升）
-    if (S.drone > 0) {
-      ex.droneT = (ex.droneT || 0) - dt;
-      const droneCount = 1 + (H.mods.droneN || 0);
-      if (ex.droneT <= 0) {
-        ex.droneT = Math.max(0.24, 0.92 - S.drone * 0.12);
-        if (!ex.droneAims) ex.droneAims = [];
-        for (const p of this.players) {
-          if (!p.active) continue;
+      // 🛸 无人机鸭
+      if (S.drone > 0) {
+        T.droneT -= dt;
+        const droneCount = 1 + (PP.mods.droneN || 0);
+        if (T.droneT <= 0) {
+          T.droneT = Math.max(0.24, skillVal('drone', 'cd') - S.drone * skillVal('drone', 'cdLv'));
+          if (!ex.droneAims[p.idx]) ex.droneAims[p.idx] = [];
           for (let di = 0; di < droneCount; di++) {
             const ph = this.time * 1.4 + di * Math.PI * 2 / droneCount;
             const dx = p.x - Math.cos(ph) * 56;
@@ -247,27 +171,24 @@ Object.assign(Game.prototype, {
             }
             if (tgt) {
               const a = Math.atan2(tgt.y - dy, tgt.x - dx);
-              ex.droneAims[di] = a;
+              ex.droneAims[p.idx][di] = a;
               this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
               this.bullets.push(new Bullet(dx, dy, a,
-                { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, 1));
+                { id: 'dronegun', dmg: skillVal('drone', 'dmg') + S.drone * skillVal('drone', 'dmgLv'), speed: 760, range: 560, knock: 80, pierce: 2 }, p, 1));
               // 无人机·空袭：概率呼叫天降正义
-              if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike && !isSolidAt(tgt.x, tgt.y)) {
-                ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
+              if (PP.mods.droneStrike && Math.random() < 0.12 * PP.mods.droneStrike && !isSolidAt(tgt.x, tgt.y)) {
+                ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7, pl: p, dmg: 30 + Math.max(1, S.meteor) * 12, rMul: PP.mods.meteorR || 1 });
                 this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
               }
             }
           }
         }
       }
-    }
-    // 🔥 火球术：掷向最近怪群，爆裂灼烧
-    if (S.fireball > 0) {
-      ex.fireT = (ex.fireT === undefined ? 1.5 : ex.fireT) - dt;
-      if (ex.fireT <= 0) {
-        ex.fireT = Math.max(1.1, 2.9 - S.fireball * 0.3);
-        for (const p of this.players) {
-          if (!p.active) continue;
+      // 🔥 火球术
+      if (S.fireball > 0) {
+        T.fireT -= dt;
+        if (T.fireT <= 0) {
+          T.fireT = Math.max(1.1, skillVal('fireball', 'cd') - S.fireball * skillVal('fireball', 'cdLv'));
           let tgt = null, td = 560;
           for (const m of this.monsters) {
             const d = Math.hypot(m.x - p.x, m.y - p.y);
@@ -276,48 +197,45 @@ Object.assign(Game.prototype, {
           if (tgt) {
             const a = Math.atan2(tgt.y - p.y, tgt.x - p.x);
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'fireball', dmg: 18 + S.fireball * 7, speed: 360, range: 560,
-                knock: 120, explosive: 58 + S.fireball * 7, burn: 2 }, p, 1));
+              { id: 'fireball', dmg: skillVal('fireball', 'dmg') + S.fireball * skillVal('fireball', 'dmgLv'), speed: 360, range: 560,
+                knock: 120, explosive: skillVal('fireball', 'boom') + S.fireball * skillVal('fireball', 'boomLv'), burn: 2 }, p, 1));
             Sfx.wisp();
           }
         }
       }
-    }
-    // 🐥 召唤鸭灵：持圣剑的小战士——每只阵亡后独立计时 5 秒并行复活（修复：团灭后只能 5 秒回一只）
-    if (S.summon > 0) {
-      if (!ex.pets) ex.pets = [];
-      if (!ex.petQueue) ex.petQueue = [];
-      const before = ex.pets.length;
-      ex.pets = ex.pets.filter(pet => pet.hp > 0);
-      for (let i = 0; i < before - ex.pets.length; i++) ex.petQueue.push(5);   // 每只阵亡挂一个 5s 复活计时
-      const petCap = S.summon + (H.mods.petN || 0);
-      const pow = 1 + (H.mods.petPow || 0) * 0.4;
-      while (ex.pets.length + ex.petQueue.length < petCap) ex.petQueue.push(0.5);  // 新升级立刻补编制
-      for (let i = ex.petQueue.length - 1; i >= 0; i--) {
-        ex.petQueue[i] -= dt;
-        if (ex.petQueue[i] > 0 || ex.pets.length >= petCap) continue;
-        ex.petQueue.splice(i, 1);
-        const owner = this.players.find(p => p.active);
-        if (!owner) continue;
-        const pet = new Mercenary(owner.x + 26, owner.y + 26,
-          { id: 'petduck', name: '鸭灵', icon: '🐥', hp: Math.round((100 + S.summon * 50) * pow), dmg: Math.round((14 + S.summon * 7) * pow),
-            rate: 1.6, melee: true, range: 70, sword: true, speed: 175 }, owner);
-        pet.isPet = true;
-        unstick(pet);
-        this.mercs.push(pet);
-        ex.pets.push(pet);
-        this.floater(pet.x, pet.y - 20, '🐥 鸭灵苏醒！', '#ffd93d');
+      // 🐥 召唤鸭灵（各自的编制：阵亡挂 5s 队列并行复活）
+      if (S.summon > 0) {
+        const mine = ex.pets.filter(pet => pet.owner === p);
+        const alive = mine.filter(pet => pet.hp > 0);
+        for (let i = 0; i < mine.length - alive.length; i++) ex.petQueue.push({ t: 5, pi: p.idx });
+        ex.pets = ex.pets.filter(pet => pet.hp > 0 || pet.owner !== p);
+        const petCap = S.summon + (PP.mods.petN || 0);
+        const pow = 1 + (PP.mods.petPow || 0) * 0.4;
+        const queued = ex.petQueue.filter(e => e.pi === p.idx).length;
+        for (let need = alive.length + queued; need < petCap; need++) ex.petQueue.push({ t: 0.5, pi: p.idx });
+        for (let i = ex.petQueue.length - 1; i >= 0; i--) {
+          const e = ex.petQueue[i];
+          if (e.pi !== p.idx) continue;
+          e.t -= dt;
+          if (e.t > 0 || ex.pets.filter(pet => pet.owner === p).length >= petCap) continue;
+          ex.petQueue.splice(i, 1);
+          const pet = new Mercenary(p.x + 26, p.y + 26,
+            { id: 'petduck', name: '鸭灵', icon: '🐥', hp: Math.round((skillVal('summon', 'hp') + S.summon * skillVal('summon', 'hpLv')) * pow), dmg: Math.round((skillVal('summon', 'dmg') + S.summon * skillVal('summon', 'dmgLv')) * pow),
+              rate: 1.6, melee: true, range: 70, sword: true, speed: 175 }, p);
+          pet.isPet = true;
+          unstick(pet);
+          this.mercs.push(pet);
+          ex.pets.push(pet);
+          this.floater(pet.x, pet.y - 20, '🐥 鸭灵苏醒！', '#ffd93d');
+        }
       }
-    }
-    // 📡 呼叫支援：周期火炮空袭——沿射击方向的大范围炮弹雨
-    if (S.arty > 0) {
-      ex.artyT = (ex.artyT === undefined ? 6 : ex.artyT) - dt;
-      if (ex.artyT <= 0) {
-        ex.artyT = Math.max(7, 14 - S.arty * 2);
-        for (const p of this.players) {
-          if (!p.active) continue;
+      // 📡 呼叫支援
+      if (S.arty > 0) {
+        T.artyT -= dt;
+        if (T.artyT <= 0) {
+          T.artyT = Math.max(7, skillVal('arty', 'cd') - S.arty * skillVal('arty', 'cdLv'));
           const cx = p.x + Math.cos(p.facing) * 260, cy = p.y + Math.sin(p.facing) * 260;
-          const shells = 5 + S.arty * 2;
+          const shells = skillVal('arty', 'shells') + S.arty * skillVal('arty', 'shellsLv');
           const placed = [];
           for (let i = 0; i < shells; i++) {
             // 落点校验：不进墙、彼此至少隔 70px（不重叠）
@@ -331,23 +249,89 @@ Object.assign(Game.prototype, {
             }
             if (!ok) continue;
             placed.push({ x: sx2, y: sy2 });
-            ex.meteors.push({ x: sx2, y: sy2, t: 0.5 + i * 0.14, arty: true, lv: S.arty });
+            ex.meteors.push({ x: sx2, y: sy2, t: 0.5 + i * 0.14, arty: true, lv: S.arty, pl: p, rMul: PP.mods.meteorR || 1 });
           }
           this.floater(p.x, p.y - 46, '📡 火炮支援已呼叫！', '#7ef7ff');
           Sfx.aggro();
         }
       }
-    }
-    // ⏱️ 时缓力场（被动光环）
-    if (S.chrono > 0) {
-      const R = 120 + S.chrono * 15;
-      for (const p of this.players) {
-        if (!p.active) continue;
+      // ⏱️ 时缓力场（被动光环）
+      if (S.chrono > 0) {
+        const R = skillVal('chrono', 'r') + S.chrono * skillVal('chrono', 'rLv');
         for (const m of this.monsters) {
           if (Math.hypot(m.x - p.x, m.y - p.y) < R + m.r) m.slowT = Math.max(m.slowT, 0.25);
         }
       }
     }
+
+    // —— 共享结算段：地雷触发 / 陨石下坠 / 锯盘飞行 / 旋风衰减 ——
+    for (const mine of ex.mines) {
+      mine.t -= dt;
+      for (const m of this.monsters) {
+        if (Math.hypot(m.x - mine.x, m.y - mine.y) < m.r + 20) { mine.boom = true; break; }
+      }
+      if (mine.boom || mine.t <= 0) {
+        if (mine.boom) {
+          Sfx.boom();
+          this.shake = Math.max(this.shake, 5);
+          const mineR = skillVal('mines', 'r');
+          this.fxExplosion(mine.x, mine.y, mineR);
+          for (const m of this.monsters.slice()) {
+            const d = Math.hypot(m.x - mine.x, m.y - mine.y);
+            if (d > mineR + m.r) continue;
+            m.knock(Math.atan2(m.y - mine.y, m.x - mine.x), 800);
+            if (m.hurt(skillVal('mines', 'dmg') + (mine.lv || 1) * skillVal('mines', 'dmgLv'), this)) this.killMonster(m, mine.pl || this.players[0]);
+          }
+        }
+      }
+    }
+    ex.mines = ex.mines.filter(mn => !mn.boom && mn.t > 0);
+
+    for (const mt of ex.meteors) {
+      mt.t -= dt;
+      // 下坠中的火焰彗尾
+      const fall = Math.max(0, mt.t / 0.8);
+      if (Math.random() < dt * 40) this.fxTrailFire(mt.x + fall * 90, mt.y - fall * 260, 24);
+      if (mt.t <= 0) {
+        Sfx.boom();
+        this.shake = Math.max(this.shake, 7);
+        const mR = skillVal('meteor', 'r') * (mt.rMul || 1);
+        this.fxExplosion(mt.x, mt.y, mR);
+        for (const m of this.monsters.slice()) {
+          const d = Math.hypot(m.x - mt.x, m.y - mt.y);
+          if (d > mR + m.r) continue;
+          m.burnT = Math.max(m.burnT, 1.5);
+          if (m.hurt(mt.arty ? skillVal('arty', 'dmg') + (mt.lv || 1) * skillVal('arty', 'dmgLv') : (mt.dmg || 30), this)) this.killMonster(m, mt.pl || this.players[0]);
+        }
+      }
+    }
+    ex.meteors = ex.meteors.filter(mt => mt.t > 0);
+
+    for (const b of ex.booms) {
+      b.spin += dt * 18;
+      const sp = 500 * dt;
+      if (!b.back) {
+        b.x += Math.cos(b.a) * sp; b.y += Math.sin(b.a) * sp;
+        b.d += sp;
+        if (b.d >= b.max || isSolidAt(b.x, b.y)) b.back = true;
+      } else {
+        const ang = Math.atan2(b.pl.y - b.y, b.pl.x - b.x);
+        b.x += Math.cos(ang) * sp * 1.3; b.y += Math.sin(ang) * sp * 1.3;
+        if (Math.hypot(b.pl.x - b.x, b.pl.y - b.y) < 26) b.done = true;
+      }
+      for (const m of this.monsters.slice()) {
+        if ((m.sawCd || 0) > this.time) continue;          // 0.3s 后可被同一锯盘再次切割
+        if (Math.hypot(m.x - b.x, m.y - b.y) < m.r + 20) {
+          m.sawCd = this.time + 0.3;
+          m.knock(b.back ? Math.atan2(m.y - b.y, m.x - b.x) : b.a, 260);
+          if (m.hurt(b.dmg || 34, this)) this.killMonster(m, b.pl);
+          this.spark(b.x, b.y, '#ffd93d');
+          this.fxHit(b.x, b.y, b.a);
+        }
+      }
+    }
+    ex.booms = ex.booms.filter(b => !b.done);
+
     for (const fx of ex.whirlFx) fx.t -= dt;
     ex.whirlFx = ex.whirlFx.filter(fx => fx.t > 0);
 
@@ -496,15 +480,17 @@ Object.assign(Game.prototype, {
       if (Math.random() < 0.5) this.fxP({ tex: FxTex.spark, x: fx.pl.x + Math.cos(ang) * fx.r * 0.9, y: fx.pl.y + Math.sin(ang) * fx.r * 0.9,
         vx: Math.cos(ang + 1.6) * 160, vy: Math.sin(ang + 1.6) * 160, drag: 3, s0: 9, s1: 2, a0: 1, a1: 0, life: 0.25 });
     }
-    if (H.skills.drone > 0) {
-      const droneCount = 1 + (H.mods.droneN || 0);
+    if (H.P.some(pp => pp.skills.drone > 0)) {
       for (const p of this.players) {
         if (!p.active) continue;
+        const PPd = H.P[p.idx];
+        if (!(PPd.skills.drone > 0)) continue;
+        const droneCount = 1 + (PPd.mods.droneN || 0);
         for (let di = 0; di < droneCount; di++) {
         const ph = this.time * 1.4 + di * Math.PI * 2 / droneCount;
         const [sx, sy0] = W2S(p.x - Math.cos(ph) * 56, p.y - Math.sin(ph) * 56 - 24);
         const sy = sy0 + Math.sin(this.time * 5 + di * 2) * 3;
-        const aim = (ex.droneAims && ex.droneAims[di]) || 0;
+        const aim = (ex.droneAims && ex.droneAims[p.idx] && ex.droneAims[p.idx][di]) || 0;
         // 精绘四旋翼无人机（大尺寸、不透明）：机臂+旋翼虚影+机身+炮管+航行灯
         ctx.save();
         ctx.translate(sx, sy);
@@ -544,20 +530,18 @@ Object.assign(Game.prototype, {
         }
       }
     }
-    if (H.skills.garlic > 0) {
-      const R = 88 + H.skills.garlic * 12;
-      for (const p of this.players) {
-        if (!p.active) continue;
+    for (const p of this.players) {
+      if (!p.active) continue;
+      const Sp = H.P[p.idx].skills;
+      if (Sp.garlic > 0) {
+        const R = 88 + Sp.garlic * 12;
         const [sx, sy] = W2S(p.x, p.y);
         ctx.strokeStyle = 'rgba(220,240,160,.18)';
         ctx.lineWidth = 8;
         ctx.beginPath(); ctx.arc(sx, sy, R, 0, Math.PI * 2); ctx.stroke();
       }
-    }
-    if (H.skills.chrono > 0) {
-      const R = 120 + H.skills.chrono * 15;
-      for (const p of this.players) {
-        if (!p.active) continue;
+      if (Sp.chrono > 0) {
+        const R = skillVal('chrono', 'r') + Sp.chrono * skillVal('chrono', 'rLv');
         const [sx, sy] = W2S(p.x, p.y);
         ctx.strokeStyle = 'rgba(160,200,255,.22)';
         ctx.lineWidth = 2;

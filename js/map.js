@@ -59,6 +59,38 @@ const MAPS = {
     ],
   },
 
+  duel: {
+    id: 'duel', name: '决斗场', icon: '⚔️',
+    desc: '对称竞技场。朋友，枪下无情。',
+    autoTorches: true,
+    theme: {
+      floorA: '#41332a', floorB: '#45372e', decor: '#4f4036',
+      wallBody: '#241a12', wallFace: '#382a1c', wallEdge: '#52402a',
+      obstacle: 'crate', bg: '#180f0a',
+    },
+    ascii: [
+'##################################',
+'##################################',
+'##..............................##',
+'##..............................##',
+'##......##......................##',
+'##......##............####......##',
+'##......##............####......##',
+'##......##......................##',
+'##.............####.............##',
+'##..1..........####..........7..##',
+'##.............####.............##',
+'##......................##......##',
+'##......####............##......##',
+'##......####............##......##',
+'##......................##......##',
+'##..............................##',
+'##..............................##',
+'##################################',
+'##################################',
+    ],
+  },
+
   mine: {
     id: 'mine', name: '幽暗矿洞', icon: '⛏️',
     desc: '废弃的矿井，火把在坑道里明明灭灭。',
@@ -449,8 +481,19 @@ function loadMap(mapId) {
 
   const themeKey = typeof def.theme === 'string' ? def.theme : def.id;
   const themeObj = typeof def.theme === 'string' ? (MAPS[def.theme] ? MAPS[def.theme].theme : {}) : def.theme;
+  // 草丛：潜行者的天然掩体（蹲入草丛且潜行 → 怪物贴脸才能发现）
+  const bushes = [];
+  for (let y = 2; y < h - 2 && bushes.length < 42; y++) for (let x = 2; x < w - 2; x++) {
+    if (solid[y][x] || (decorGrid[y] && decorGrid[y][x])) continue;
+    if ((x * 13 + y * 29 + w) % 53 !== 0) continue;
+    const bx = x * TILE + TILE / 2, by = y * TILE + TILE / 2;
+    if (chestSpots.some(c => Math.hypot(c.x - bx, c.y - by) < 70)) continue;
+    if (spawns.some(sp => sp && Math.hypot(sp.x - bx, sp.y - by) < 140)) continue;
+    bushes.push({ x: bx, y: by, r: 30 + ((x + y) % 3) * 4, seed: (x * 31 + y * 17) % 97 });
+  }
+
   MapData = { def, ascii, escapeRooms: def.rooms || null, theme: themeObj, themeKey, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
-              chestSpots, goldSpots, monsterNodes, spawns, exitTiles, exitRect, merchantSpot,
+              chestSpots, goldSpots, monsterNodes, spawns, exitTiles, exitRect, merchantSpot, bushes,
               pxW: w * TILE, pxH: h * TILE };
 
   // 庄园老图没画火把字符，按规则自动布置在贴墙的地板上

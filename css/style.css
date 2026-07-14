@@ -379,6 +379,20 @@ select, .loadout-row select {
 #hm-kills { font-family: var(--f-num); font-size: 19px; color: var(--ink2); line-height: 1.2; }
 #hud-supplies { font-size: 14px; font-family: var(--f-mono); color: var(--amber); line-height: 1.4; white-space: nowrap; }
 
+/* ---------- 顶部中央大经验条（升级分离：每人一条，1P 弹壳黄 / 2P 蓝） ---------- */
+#hud-xp {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 5px; width: 430px;
+}
+.xp-row { display: flex; align-items: center; gap: 8px; }
+.xp-lv { font-family: var(--f-mono); font-size: 11px; color: var(--p1); width: 66px; text-align: right; white-space: nowrap; }
+.xp-bar { flex: 1; height: 9px; background: rgba(8,9,4,.85); border: 1px solid var(--hair); }
+.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a20, var(--amber)); }
+.xp-num { font-family: var(--f-mono); font-size: 10px; color: var(--dim); width: 58px; white-space: nowrap; }
+.xp-row.p2 .xp-lv { color: var(--p2); }
+.xp-row.p2 .xp-bar i { background: linear-gradient(90deg, #2b5f8f, var(--p2)); }
+.xp-row.out { opacity: .4; }
+
 /* ---------- 世界层（右上，小地图正下方）：天气 / 神话警报 / 击杀播报 ---------- */
 #hud-world { position: absolute; right: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 320px; }
 #hw-weather { padding: 3px 9px; background: rgba(8,9,4,.85); border: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; color: var(--blue); }

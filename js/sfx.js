@@ -56,6 +56,7 @@ const Sfx = (() => {
     lurker()  { tone(600, 0.25, 'sawtooth', 0.14, -350); tone(320, 0.3, 'square', 0.08, -180); },
     laser()   { tone(880, 0.09, 'sawtooth', 0.1, -500); tone(1400, 0.06, 'sine', 0.08, -600); },
     crossbow(){ noise(0.05, 0.1, 3000); tone(300, 0.05, 'triangle', 0.08, -120); },
+    sword()   { noise(0.09, 0.14, 2200); tone(520, 0.08, 'triangle', 0.07, -380); tone(240, 0.12, 'sine', 0.05, -140); },
     windup()  { tone(180, 0.12, 'square', 0.09, 120); },
     wisp()    { tone(720, 0.18, 'sine', 0.1, -300); },
     banshee() { tone(950, 0.5, 'sawtooth', 0.12, -400); tone(1150, 0.4, 'sawtooth', 0.08, -500); },

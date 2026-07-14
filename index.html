@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/fonts.css?v=26">
-<link rel="stylesheet" href="css/style.css?v=26">
+<link rel="stylesheet" href="css/fonts.css?v=27">
+<link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
         <button class="menu-item" onclick="UI.showSettingsHub()"><span class="mi-num">06</span><span class="mi-name">设置中心</span><span class="mi-en">SYSTEM</span><span class="mi-arrow">›</span></button>
       </div>
       <div class="menu-status">
-        <span>v20 · 铭牌 HUD</span>
+        <span>v21 · 对决/分离升级</span>
         <span>存档已挂载 · 本地浏览器</span>
         <span class="go">双人同屏 · 键鼠即玩</span>
       </div>
@@ -146,6 +146,7 @@
           <div id="hud-supplies"></div>
         </div>
       </div>
+      <div id="hud-xp" style="display:none"></div>
       <div id="hud-world">
         <span id="hw-weather" style="display:none"></span>
         <div id="hw-alert" style="display:none">神话宝物已现世 — 全图可见</div>
@@ -192,6 +193,8 @@
         <button class="btn small" onclick="Game.current&&Game.current.arenaReset()">🎯 重置木桩</button>
         <button class="btn small" onclick="UI.startArena()">🔄 全部重置</button>
         <button class="btn small" onclick="UI.showHeroTune()">⚔️ 英雄调参</button>
+        <button class="btn small" onclick="UI.showMonsterTune()">👹 怪物调参</button>
+        <button class="btn small" onclick="UI.showSkillTune()">✨ 技能调参</button>
         <button class="btn small" onclick="UI.showTuning()">🎛️ 全局调参</button>
       </div>
       <div id="hud-toasts"></div>
@@ -214,7 +217,7 @@
     </div>
     <div id="levelup-overlay" class="modal-mask" style="display:none">
       <div class="levelup-box">
-        <h3>⬆️ 升级！选择一项强化</h3>
+        <h3 id="levelup-title">⬆️ 升级！选择一项强化</h3>
         <p class="levelup-tip">点击卡片，或按 1 / 2 / 3</p>
         <div id="levelup-cards" class="levelup-cards"></div>
       </div>
@@ -307,6 +310,8 @@
     <div class="menu-buttons" style="margin-top:6px">
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showKeybinds()">⌨️ 键位设置（含双人练习场）</button>
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showTuning()">🎛️ 策划调参面板</button>
+      <button class="btn big" onclick="UI.hideSettingsHub();UI.showMonsterTune()">👹 怪物调参面板</button>
+      <button class="btn big" onclick="UI.hideSettingsHub();UI.showSkillTune()">✨ 技能调参面板</button>
       <button class="btn big" id="btn-mouseaim" onclick="UI.toggleMouseAim()">🖱️ 鼠标操控（单人）：开</button>
       <button class="btn big" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
       <button class="btn big" id="btn-devmode" onclick="UI.toggleDevMode()">🧪 开发者模式：关</button>
@@ -367,6 +372,32 @@
   </div>
 </div>
 
+<!-- ======== 怪物调参面板 ======== -->
+<div id="monstertune-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeMonsterTune()">
+  <div class="modal-box help monsterdex-box">
+    <h3>👹 怪物调参面板</h3>
+    <p class="pause-tip">21 种怪物的血量/伤害/速度倍率与 Boss 技能参数，实时生效并持久保存。</p>
+    <div id="monstertune-body"></div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn small" onclick="UI.resetMonsterTune()">恢复默认</button>
+      <button class="btn small primary" onclick="UI.closeMonsterTune()">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 技能调参面板 ======== -->
+<div id="skilltune-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeSkillTune()">
+  <div class="modal-box help monsterdex-box">
+    <h3>✨ 技能调参面板</h3>
+    <p class="pause-tip">割草 19 个主动技能的基础值与每级增量，全部可调；技能图鉴与升级卡说明实时同步。</p>
+    <div id="skilltune-body"></div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn small" onclick="UI.resetSkillTune()">恢复默认</button>
+      <button class="btn small primary" onclick="UI.closeSkillTune()">完成</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 英雄图鉴 ======== -->
 <div id="herodex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeHeroDex()">
   <div class="modal-box help monsterdex-box">
@@ -401,7 +432,9 @@
       <p>🎯 <b>目标</b>：开宝箱搜刮宝物，走到撤离点站稳 2 秒，活着带出去的宝物才会收录进图鉴、换成金币。</p>
       <p>💀 <b>阵亡惩罚</b>：宝物散落原地（图鉴记为"目击"），携带的武器、护甲、腰包永久丢失。</p>
       <p>🔫 <b>武器</b>：可带主副两把。枪有弹药、耐久和有效射程；命中会击退怪物（石巨魁免疫）。</p>
-      <p>🤫 <b>潜行</b>：按住 Shift 缓步——无声、难被发现，还能看到怪物的警戒方向锥；<b>从背后近战未察觉的普通怪 = 一击处决</b>。</p>
+      <p>🤫 <b>潜行</b>：按住 Shift 缓步——无声、难被发现，还能看到怪物的警戒方向锥；<b>从背后近战未察觉的普通怪 = 一击处决（+15 金赏金）</b>。</p>
+      <p>🌿 <b>草丛隐匿</b>：潜行着蹲进草丛，怪物贴脸(70px)之外都看不见你——伏击、断追、绕后全靠它。</p>
+      <p>🪨 <b>投石引开</b>：按 G（2P 按 O）朝准星方向丢石子，落地哐当一声，附近怪物会跑去调查——调虎离山。</p>
       <p>🤸 <b>翻滚</b>：消耗 35 体力向移动方向闪身，全程无敌帧；体力自动恢复。头顶蓝条即体力。</p>
       <p>🔫 <b>弹夹</b>：打空自动换弹（头顶金环为装填进度），武器槽显示 弹夹/容量·备弹。</p>
       <p>🎲 <b>地图道具</b>：桃心/护盾泡泡/谜之药水/佣兵羽毛/混乱蘑菇/传送门/金色沙漏随机刷新，踩上即得。</p>
@@ -414,25 +447,25 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=26"></script>
-<script src="js/music.js?v=26"></script>
-<script src="js/skins-data.js?v=26"></script>
-<script src="js/monsters-data.js?v=26"></script>
-<script src="js/mugshots-data.js?v=26"></script>
-<script src="js/tiles-data.js?v=26"></script>
-<script src="js/data.js?v=26"></script>
-<script src="js/save.js?v=26"></script>
-<script src="js/map.js?v=26"></script>
-<script src="js/vision.js?v=26"></script>
-<script src="js/entities.js?v=26"></script>
-<script src="js/game.js?v=26"></script>
-<script src="js/fx.js?v=26"></script>
-<script src="js/dex.js?v=26"></script>
-<script src="js/horde.js?v=26"></script>
-<script src="js/weather.js?v=26"></script>
-<script src="js/powerups.js?v=26"></script>
-<script src="js/ui.js?v=26"></script>
-<script src="js/trainer.js?v=26"></script>
-<script src="js/main.js?v=26"></script>
+<script src="js/sfx.js?v=27"></script>
+<script src="js/music.js?v=27"></script>
+<script src="js/skins-data.js?v=27"></script>
+<script src="js/monsters-data.js?v=27"></script>
+<script src="js/mugshots-data.js?v=27"></script>
+<script src="js/tiles-data.js?v=27"></script>
+<script src="js/data.js?v=27"></script>
+<script src="js/save.js?v=27"></script>
+<script src="js/map.js?v=27"></script>
+<script src="js/vision.js?v=27"></script>
+<script src="js/entities.js?v=27"></script>
+<script src="js/game.js?v=27"></script>
+<script src="js/fx.js?v=27"></script>
+<script src="js/dex.js?v=27"></script>
+<script src="js/horde.js?v=27"></script>
+<script src="js/weather.js?v=27"></script>
+<script src="js/powerups.js?v=27"></script>
+<script src="js/ui.js?v=27"></script>
+<script src="js/trainer.js?v=27"></script>
+<script src="js/main.js?v=27"></script>
 </body>
 </html>

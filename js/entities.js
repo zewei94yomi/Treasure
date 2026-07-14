@@ -46,6 +46,7 @@ class Player {
     this.poisonT = 0;                      // 中毒（毒蛇）持续掉血
     this.rootT = 0;                        // 定身（缚魂术士）
     this.paraT = 0;                        // 麻痹（巨蝎）移速骤降
+    this.blindT = 0;                       // 致盲（Boss/咒眼）视野骤缩
     this.burnT2 = 0;                       // 灼烧（巨龙吐息）
     this.wasSpotted = false;               // 本局是否被怪物盯上过（奖杯用）
     this.tookDamage = false;
@@ -70,7 +71,7 @@ class Player {
     const def = inst && inst.dur > 0 ? WEAPONS[inst.id] : WEAPONS.fists;
     if (def.melee || !def.mag) return 0;
     const g2 = Game.current;
-    const mul = (g2 && g2.horde && g2.hordeState.mods.magMul) || 1;
+    const mul = (g2 && g2.horde && g2.hsP && g2.hsP(this).mods.magMul) || 1;
     return Math.ceil(def.mag * mul);
   }
   // 当前弹夹余弹（近战返回 -1）
@@ -84,7 +85,7 @@ class Player {
     const def = this.weaponDef();
     if (def.melee || this.reloadT > 0) return;
     const g2 = Game.current;
-    const mul = (g2 && g2.horde && g2.hordeState.mods.reloadMul) || 1;   // 快手换弹
+    const mul = (g2 && g2.horde && g2.hsP && g2.hsP(this).mods.reloadMul) || 1;   // 快手换弹
     this.reloadT = (def.reload || 1.2) * mul;
   }
   get carriedValue() { return this.bag.reduce((s, t) => s + t.value, 0); }
@@ -136,7 +137,7 @@ class Monster {
     this.type = MONSTER_TYPES[typeId] || MONSTER_TYPES.shade;
     this.isMini = isMini;
     this.r = isMini ? 10 : this.type.r;
-    this.hp = cfg.mHp * this.type.hpMul * (isMini ? 0.35 : 1);
+    this.hp = cfg.mHp * this.type.hpMul * (isMini ? 0.35 : 1) * ((typeof monsterVal === 'function' && monsterVal(typeId, 'hp')) || 1);
     this.maxHp = this.hp;
     this.state = this.type.ambush ? 'ambush' : 'patrol';
     this.target = null;
@@ -176,6 +177,9 @@ class Monster {
   canSee(p, range) {
     if (!p.active || p.invisT > 0) return false;
     const d = Math.hypot(p.x - this.x, p.y - this.y);
+    // 草丛隐匿：蹲在草丛里潜行，贴脸(70px)以外看不见
+    const g2 = Game.current;
+    if (g2 && g2.bushHides && g2.bushHides(p) && d > 70) return false;
     let r = range * p.detectMul();
     let da = Math.atan2(p.y - this.y, p.x - this.x) - this.faceDir;
     da = Math.atan2(Math.sin(da), Math.cos(da));
@@ -293,6 +297,7 @@ class Monster {
     if (this.state === 'ambush') {
       for (const p of game.players) {
         if (!p.active || p.invisT > 0) continue;
+        if (game.bushHides && game.bushHides(p)) continue;   // 草丛里连潜伏者都嗅不到
         if (Math.hypot(p.x - this.x, p.y - this.y) < 130 * p.detectMul()) {
           this.state = 'chase'; this.target = p;
           this.lastKnown = { x: p.x, y: p.y }; this.memoryT = cfg.memory + 3;
@@ -386,7 +391,7 @@ class Monster {
     }  // 结束 非割草模式感知分支
 
     // —— 行动 ——
-    const baseSpd = this.type.spdMul;
+    const baseSpd = this.type.spdMul * ((typeof monsterVal === 'function' && monsterVal(this.type.id, 'spd')) || 1);
     let spd = cfg.patrolSpeed * baseSpd, goal = null;
     if (this.state === 'chase' && this.target) {
       spd = cfg.chaseSpeed * baseSpd * (this.enraged ? HORDE_ENRAGE.speedMul : 1) * (typeof tune === 'function' ? tune('mSpeed') : 1);
@@ -539,6 +544,43 @@ class Monster {
       }
     }
 
+    // —— 远程投射系：咒眼眼波(致盲) / 毒鳞海蛇喷吐(中毒) / 骨戟卫兵掷戟 ——
+    if (this.type.spit && this.state === 'chase' && this.target && this.target.active) {
+      const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      this.spitCd = Math.max(0, (this.spitCd || 0) - dt);
+      if (this.spitCd <= 0 && d > 140 && d < 380 && losClear(this.x, this.y, this.target.x, this.target.y)) {
+        this.spitCd = monsterVal(this.type.id, 'spitCd') || 3.5;
+        this.windupT = 0.45;
+        this.pendingSpit = true;
+        Sfx.windup();
+        return;
+      }
+    }
+    // —— 幽影突进：中距离蓄力后瞬身扑向猎物 ——
+    if (this.type.dasher && this.state === 'chase' && this.target && this.target.active) {
+      const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+      this.dashCd = Math.max(0, (this.dashCd || 0) - dt);
+      if (this.dashCd <= 0 && d > 110 && d < 260 && losClear(this.x, this.y, this.target.x, this.target.y)) {
+        this.dashCd = monsterVal(this.type.id, 'dashCd') || 4;
+        this.windupT = 0.35;
+        this.pendingDash = true;
+        game.floater(this.x, this.y - this.r - 8, '💨', '#b48aff');
+        return;
+      }
+    }
+    // —— Boss 技能循环：独眼巨人致盲重踏 / 风暴巨龙弹幕 / 巫妖王召唤+暗影凝视 ——
+    if (this.type.boss && this.state === 'chase' && this.target && this.target.active) {
+      this.bossSkillT = (this.bossSkillT === undefined ? 5 : this.bossSkillT) - dt;
+      if (this.bossSkillT <= 0) {
+        this.bossSkillT = monsterVal(this.type.id, 'skillCd') || 8;
+        this.windupT = 0.6;
+        this.pendingBossSkill = true;
+        game.floater(this.x, this.y - this.r - 14, '⚠️ 蓄力技能！', '#ff8f5c');
+        Sfx.windup();
+        return;
+      }
+    }
+
     // —— 毒爆菇：贴近后自爆 ——
     if (this.type.shroom && this.state === 'chase' && this.target && this.target.active) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
@@ -639,11 +681,41 @@ class Monster {
       }
       return;
     }
+    if (this.pendingSpit) {
+      this.pendingSpit = false;
+      if (this.target && this.target.active) {
+        const a = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        const dmgS = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (monsterVal(this.type.id, 'dmg') || 1) * (this.type.spit === 'bone' ? 1.2 : 0.8));
+        const orb = new MonsterOrb(this.x, this.y, a, dmgS, this.type.spit, this.type.spit === 'bone' ? 330 : 240);
+        if (this.type.spit === 'blind') orb.srcBlind = monsterVal(this.type.id, 'blindDur') || 1.2;
+        game.monsterOrbs.push(orb);
+        Sfx.wisp();
+        game.floater(this.x, this.y - this.r - 6, this.type.spit === 'blind' ? '👁️' : this.type.spit === 'poison' ? '🟢' : '🦴', '#b48aff');
+      }
+      return;
+    }
+    if (this.pendingDash) {
+      this.pendingDash = false;
+      if (this.target && this.target.active) {
+        const a = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        const pow = monsterVal(this.type.id, 'dashPow') || 900;
+        this.kvx += Math.cos(a) * pow;   // 绕过 kbMul：突进是自发位移
+        this.kvy += Math.sin(a) * pow;
+        for (let i = 0; i < 6; i++) game.spark(this.x, this.y, '#b48aff');
+        Sfx.lurker();
+      }
+      return;
+    }
+    if (this.pendingBossSkill) {
+      this.pendingBossSkill = false;
+      game.bossSkill(this);
+      return;
+    }
     if (this.pendingRanged) {
       // 幽火吐弹
       if (this.target && this.target.active) {
         const a = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-        game.monsterOrbs.push(new MonsterOrb(this.x, this.y, a, Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1))));
+        game.monsterOrbs.push(new MonsterOrb(this.x, this.y, a, Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (monsterVal(this.type.id, 'dmg') || 1))));
         Sfx.wisp();
       }
       return;
@@ -658,7 +730,7 @@ class Monster {
     }
     if (!victim) return;
     if (vd < PLAYER_R + this.r + 16) {
-      const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1));
+      const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1) * (monsterVal(this.type.id, 'dmg') || 1));
       if (victim.isMerc) {
         victim.hurt(hitDmg, game);
         // 怪物技能对佣兵施加状态：中毒/减速/晕眩
@@ -780,11 +852,12 @@ class Monster {
 
 // 幽火的吐息弹
 class MonsterOrb {
-  constructor(x, y, angle, dmg) {
+  constructor(x, y, angle, dmg, kind, speed) {
     this.x = x; this.y = y;
-    this.vx = Math.cos(angle) * 190;
-    this.vy = Math.sin(angle) * 190;
+    this.vx = Math.cos(angle) * (speed || 190);
+    this.vy = Math.sin(angle) * (speed || 190);
     this.dmg = dmg;
+    this.kind = kind || 'wisp';   // wisp/blind/poison/bone —— 命中附加不同状态
     this.life = 2.6;
     this.anim = 0;
   }
@@ -797,7 +870,11 @@ class MonsterOrb {
       if (!p.active) continue;
       if (Math.hypot(p.x - this.x, p.y - this.y) < PLAYER_R + 7) {
         game.damagePlayer(p, this.dmg, null);
-        game.spark(this.x, this.y, '#7ef7ff');
+        if (p.active) {
+          if (this.kind === 'blind') { game.blindPlayer(p, this.srcBlind || 1.2); }
+          else if (this.kind === 'poison') { p.poisonT = Math.max(p.poisonT, 3.5); game.floater(p.x, p.y - 40, '🟢 中毒！', '#7ac74f'); }
+        }
+        game.spark(this.x, this.y, this.kind === 'poison' ? '#7ac74f' : this.kind === 'blind' ? '#b48aff' : this.kind === 'bone' ? '#e8e4d8' : '#7ef7ff');
         return false;
       }
     }
@@ -828,7 +905,7 @@ class Bullet {
     this.hCone = hb.cone || HOMING.cone;
     this.hDist = hb.dist || HOMING.dist;
     // 鼠标操控：你自己瞄，弹道追踪大幅削弱（技能弹不受影响）
-    if (owner && owner.mouseAimed && !def.duck) { this.turn *= 0.25; this.hCone *= 0.4; this.hDist *= 0.55; }
+    if (owner && owner.mouseAimed && !def.duck) { this.turn *= 0.10; this.hCone *= 0.25; this.hDist *= 0.40; }
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
     this.bone = def.id === 'spear';      // 骨刺：白骨贴图弹体
@@ -871,6 +948,19 @@ class Bullet {
         if (this.explosive) game.explode(this.x, this.y, this);
         else game.spark(this.x, this.y, '#ccc');
         return false;
+      }
+      // ⚔️ 对决：子弹命中对方玩家（翻滚无敌帧照样生效）
+      if (game.versus && this.owner && this.owner.weaponDef) {
+        for (const p of game.players) {
+          if (p === this.owner || !p.active) continue;
+          if (Math.hypot(p.x - this.x, p.y - this.y) < PLAYER_R + 4) {
+            if (this.explosive) { game.explode(this.x, this.y, this); return false; }
+            game.fxHit(this.x, this.y, this.angle);
+            game.damagePlayer(p, this.dmg, this.owner);
+            Sfx.impact();
+            return false;
+          }
+        }
       }
       for (const m of game.monsters) {
         if (this.hitSet.has(m)) continue;
@@ -917,7 +1007,7 @@ class Bullet {
           }
           // —— 攻击流派弹芯（割草升级；弹片自身不再触发，防止无限连锁） ——
           if (game.horde && this.owner && this.owner.weaponDef && !this.sub && m.hp > 0) {
-            const M = game.hordeState.mods;
+            const M = game.hsP(this.owner).mods;
             if (M.iceShot) {
               m.slowT = Math.max(m.slowT, 1.2);
               if (Math.random() < 0.22 * M.iceShot) { m.stunT = Math.max(m.stunT, 0.8); game.floater(m.x, m.y - 22, '❄', '#bfe9ff'); }
@@ -941,7 +1031,7 @@ class Bullet {
               }
             }
           }
-          if (game.horde && this.owner && this.owner.weaponDef && !this.sub && game.hordeState.mods.splitShot) {
+          if (game.horde && this.owner && this.owner.weaponDef && !this.sub && game.hsP(this.owner).mods.splitShot) {
             for (let si = 0; si < 2; si++) {
               const sb = new Bullet(this.x, this.y, this.angle + (si ? 0.75 : -0.75),
                 { id: 'splinter', dmg: Math.max(1, Math.round(this.dmg * 0.35)), speed: 520, range: 190, knock: 40 }, this.owner);
@@ -991,7 +1081,7 @@ class Mercenary {
     this.x = x; this.y = y;
     this.def = def;
     this.owner = owner;
-    const hpMul = (Game.current && Game.current.horde && Game.current.hordeState && Game.current.hordeState.mods.mercHp) || 1;
+    const hpMul = (Game.current && Game.current.horde && Game.current.hordeState && Game.current.hsP(owner).mods.mercHp) || 1;
     const hpTuned = (typeof heroVal === 'function' && def.id && heroVal(def.id, 'hp')) || def.hp;   // 英雄调参：生命上限
     this.hp = Math.round(hpTuned * hpMul); this.maxHp = this.hp;
     this.isMerc = true;
@@ -1020,9 +1110,9 @@ class Mercenary {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.hurtCd = Math.max(0, this.hurtCd - dt);
     const o = this.owner;
-    const HM = (game.horde && game.hordeState && game.hordeState.mods.hero) || {};   // 英雄专属升级卡计数
+    const HM = (game.horde && game.hordeState && game.hsP(this.owner).mods.hero) || {};   // 英雄专属升级卡计数（按主人）
     const hv = (k, d) => { const v = heroVal(this.def.id, k); return v === undefined ? d : v; };   // 英雄详细调参
-    const pow = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);
+    const pow = 1 + ((game.horde && game.hsP(this.owner).mods.mercPow) || 0);
     // —— 通用状态：晕眩/减速/中毒/灼烧（怪物技能可施加，左侧面板显示） ——
     this.stunT = Math.max(0, (this.stunT || 0) - dt);
     this.slowT = Math.max(0, (this.slowT || 0) - dt);
@@ -1214,7 +1304,7 @@ class Mercenary {
         if (td2 < 24) {   // 叼到：直接结算给雇主
           if (H2 && H2.gems.includes(tgt2)) {
             tgt2.taken = true;
-            game.hordeAddXp(Math.round(tgt2.v * (H2.mods.gemMul || 1) * tune('xpRate') * (1 + game.time / 300)));
+            game.hordeAddXp(Math.round(tgt2.v * (game.hsP(this.owner).mods.gemMul || 1) * tune('xpRate') * (1 + game.time / 300)), this.owner);
             H2.gems = H2.gems.filter(g2 => g2 !== tgt2);
           } else {
             SAVE.gold += tgt2.value; game.runCash += tgt2.value;
@@ -1302,7 +1392,7 @@ class Mercenary {
     const leashD = o && o.alive ? Math.hypot(o.x - this.x, o.y - this.y) : 0;
     const rngM = tune('mercRange');   // 佣兵攻击范围倍率（面板）
     const rngEff = hv('range', this.def.range || 58);                                   // 英雄调参：射程
-    const desireEff = hv('desire', 380) * (tune('mercDesire') / 380);   // 攻击欲望 = 每英雄绝对值 × 全局面板缩放（全局 380 = ×1 基准）
+    const desireEff = hv('desire', 380) * (tune('mercDesire') / 600);   // 攻击欲望 = 每英雄绝对值 × 全局面板缩放（全局 600 = ×1 基准）
     let target = null, td = (rngEff * rngM) + 200;
     if (leashD <= 300) {
       for (const m of game.monsters) {
@@ -1322,11 +1412,11 @@ class Mercenary {
           this.attackCd = 1 / (hv('rate', this.def.rate) * pow);
           Sfx.melee();
           this.swingT = 0.25;                       // 挥剑动画计时（drawMerc 用）
-          if (this.def.sword) {                      // 鸭灵圣剑：小范围横扫（不止单体）
+          if (this.def.sword) {                      // 鸭灵圣剑：横扫（命中半径=触发距离，修隔空挥剑）
             for (const mm of game.monsters.slice()) {
-              if (Math.hypot(mm.x - this.x, mm.y - this.y) > this.def.range + mm.r) continue;
+              if (Math.hypot(mm.x - this.x, mm.y - this.y) > rngEff * rngM + mm.r + 6) continue;
               mm.knock(Math.atan2(mm.y - this.y, mm.x - this.x), 420);
-              if (mm.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(mm, o);
+              if (mm.hurt(Math.round(hv('dmg', this.def.dmg) * pow), game)) game.killMonster(mm, o);
             }
           } else {
             target.knock(this.facing, 500);

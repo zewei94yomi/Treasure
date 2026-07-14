@@ -265,13 +265,18 @@ const UI = (() => {
         <div class="card-icon">🏃</div>
         <div class="card-title">大逃亡</div>
         <div class="card-desc">超长随机地图一路向东：打怪升级、开箱捡枪，死亡之潮在身后碾来——边撤离边抵抗，冲进撤离点才算活！${SAVE.escapeBest ? `<br>最佳：里程 ${SAVE.escapeBest.prog}% · ${SAVE.escapeBest.kills}杀 · Lv.${SAVE.escapeBest.level}` : ''}</div>
+      </div>
+      <div class="card ${setupState.gameplay === 'versus' ? 'sel' : ''}" onclick="UI.setGameplay('versus')" style="${setupState.mode === 1 ? 'opacity:.55' : ''}">
+        <div class="card-icon">⚔️</div>
+        <div class="card-title">双人对决</div>
+        <div class="card-desc">对称决斗场，互伤开启：3-2-1 读秒开打，击倒对方得一分，率先三胜者赢。武器为临时复制——不耗弹药、阵亡不丢。${setupState.mode === 1 ? '<br><b style="color:#e06a4a">需双人编制（点击自动切换）</b>' : ''}</div>
       </div>`;
-    const hordeSel = setupState.gameplay === 'horde' || setupState.gameplay === 'escape';
+    const hordeSel = setupState.gameplay === 'horde' || setupState.gameplay === 'escape' || setupState.gameplay === 'versus';
     $('setup-diffs-label').style.display = hordeSel ? 'none' : '';
     $('setup-diffs').style.display = hordeSel ? 'none' : '';
     // 大逃亡：地图为程序生成，隐藏地图选择
     const mapsRow = $('setup-maps');
-    if (mapsRow) mapsRow.style.display = setupState.gameplay === 'escape' ? 'none' : '';
+    if (mapsRow) mapsRow.style.display = (setupState.gameplay === 'escape' || setupState.gameplay === 'versus') ? 'none' : '';
 
     // 双武器 + 护甲 + 腰包 + 皮肤
     let html = '';
@@ -284,7 +289,7 @@ const UI = (() => {
     }
     let pouchesLeft = SAVE.pouches;
     for (let i = 0; i < setupState.mode; i++) if (setupState.loadouts[i].pouch) pouchesLeft--;
-    const noGear = setupState.gameplay !== 'classic';   // 割草/大逃亡：不带装备入场
+    const noGear = setupState.gameplay !== 'classic' && setupState.gameplay !== 'versus';   // 割草/大逃亡：不带装备入场；对决带武器（临时复制）
     for (let i = 0; i < setupState.mode; i++) {
       const lo = setupState.loadouts[i];
       const wOpts = slotKey => ['<option value="">🐤 空手</option>'].concat(
@@ -358,7 +363,11 @@ const UI = (() => {
   }
 
   function setMode(m) { setupState.mode = m; renderSetup(); }
-  function setGameplay(g) { setupState.gameplay = g; renderSetup(); }
+  function setGameplay(g) {
+    setupState.gameplay = g;
+    if (g === 'versus' && setupState.mode === 1) setupState.mode = 2;   // 对决需要两个人
+    renderSetup();
+  }
   function setDiff(d) { setupState.diff = d; renderSetup(); }
   function setMap(m) { setupState.map = m; renderSetup(); }
   function setGear(i, slot, v) {
@@ -380,10 +389,12 @@ const UI = (() => {
   function setMerc2(i, v) { setupState.loadouts[i].merc2 = v || null; renderSetup(); }
 
   function startRun() {
-    const mapId = setupState.gameplay === 'escape' ? 'escape'
+    if (setupState.gameplay === 'versus' && setupState.mode === 1) { setupState.mode = 2; renderSetup(); return; }
+    const mapId = setupState.gameplay === 'versus' ? 'duel'
+                : setupState.gameplay === 'escape' ? 'escape'
                 : setupState.map === 'random' ? MAP_ORDER[Math.floor(Math.random() * MAP_ORDER.length)] : setupState.map;
-    // 结算雇佣兵费用（优先消耗免费试用）
-    for (let i = 0; i < setupState.mode; i++) {
+    // 结算雇佣兵费用（优先消耗免费试用；对决不带佣兵不收费）
+    for (let i = 0; i < setupState.mode && setupState.gameplay !== 'versus'; i++) {
       for (const key of ['merc', 'merc2']) {
         const mid = setupState.loadouts[i][key];
         if (!mid) continue;
@@ -413,14 +424,22 @@ const UI = (() => {
     persistSave();
     showScreen('screen-game');
     new Game(setupState.mode, setupState.diff, setupState.loadouts.slice(0, setupState.mode), mapId, setupState.skins,
-             { horde: setupState.gameplay === 'horde', escape: setupState.gameplay === 'escape' });
+             { horde: setupState.gameplay === 'horde', escape: setupState.gameplay === 'escape', versus: setupState.gameplay === 'versus' });
   }
 
   // ---------- 无双割草：升级三选一 ----------
   function renderLevelup(game, choices) {
-    const H = game.hordeState;
+    const owner = game.levelupFor || game.players[0];
+    const PP = game.hsP(owner);
+    const tEl = $('levelup-title');
+    if (tEl) {
+      const c = owner.idx === 1 ? 'var(--p2)' : 'var(--p1)';
+      tEl.innerHTML = `⬆️ <span style="color:${c}">${owner.idx + 1}P</span> 升级！选择一项强化`;
+    }
+    const box = document.querySelector('#levelup-overlay .levelup-box');
+    if (box) box.style.borderTop = `3px solid ${owner.idx === 1 ? '#5aa7e8' : '#f2c94c'}`;
     $('levelup-cards').innerHTML = choices.map((u, i) => {
-      const cur = (u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id])) || 0;
+      const cur = (u.skill ? PP.skills[u.skill] : (PP.picked && PP.picked[u.id])) || 0;
       // 技能类：附上"下一级具体效果"（与技能图鉴同一套公式）
       let fx = '';
       try {
@@ -685,7 +704,7 @@ const UI = (() => {
       g.toast('🎁 药剂礼包到手！', '#b48aff');
     }
     else if (item.kind === 'upgrade') {
-      g.hordeState.freeChoices++;
+      g.hsP(g.trader || g.players[0]).freeChoices++;
       g.toast('⬆️ 强化券已激活——离开商店立即三选一！', '#ffd93d');
     }
     else if (item.kind === 'healall') {
@@ -804,6 +823,50 @@ const UI = (() => {
     renderHeroTune();
     Sfx.buy();
   }
+
+  // ---------- 通用调参表（怪物/技能面板共用一套滑杆交互） ----------
+  function renderTuneTable(bodyId, defs, savedKey, setFn) {
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+    const saved = SAVE[savedKey] || {};
+    let html = '';
+    for (const [gid, g] of Object.entries(defs)) {
+      html += `<h4 class="section-label">${g.name}</h4><div class="tuning-grid">`;
+      for (const [key, p] of Object.entries(g.params)) {
+        const v = (saved[gid] && saved[gid][key] !== undefined) ? saved[gid][key] : p.def;
+        const changed = v !== p.def;
+        html += `
+        <div class="tuning-row ${changed ? 'changed' : ''}">
+          <span class="tuning-name">${p.n}</span>
+          <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}"
+                 oninput="UI.${setFn}('${gid}','${key}',this.value)">
+          <span class="tuning-val" id="tv-${savedKey}-${gid}-${key}">${changed ? `<span class="dim">${fmt(p.def)}</span>→` : ''}<span class="cur">${fmt(v)}</span></span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    $(bodyId).innerHTML = html;
+  }
+  function setTuneVal(savedKey, defs, gid, key, v) {
+    if (!SAVE[savedKey]) SAVE[savedKey] = {};
+    if (!SAVE[savedKey][gid]) SAVE[savedKey][gid] = {};
+    SAVE[savedKey][gid][key] = parseFloat(v);
+    persistSave();
+    const p = defs[gid].params[key];
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+    const el = $(`tv-${savedKey}-${gid}-${key}`);
+    const changed = parseFloat(v) !== p.def;
+    if (el) el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+  }
+  // 怪物调参
+  function showMonsterTune() { $('monstertune-overlay').style.display = 'flex'; renderTuneTable('monstertune-body', MONSTER_TUNE, 'monsterTuning', 'setMonsterTune'); }
+  function closeMonsterTune() { $('monstertune-overlay').style.display = 'none'; }
+  function setMonsterTune(g, k, v) { setTuneVal('monsterTuning', MONSTER_TUNE, g, k, v); }
+  function resetMonsterTune() { SAVE.monsterTuning = {}; persistSave(); renderTuneTable('monstertune-body', MONSTER_TUNE, 'monsterTuning', 'setMonsterTune'); Sfx.buy(); }
+  // 技能调参
+  function showSkillTune() { $('skilltune-overlay').style.display = 'flex'; renderTuneTable('skilltune-body', SKILL_TUNE, 'skillTuning', 'setSkillTune'); }
+  function closeSkillTune() { $('skilltune-overlay').style.display = 'none'; }
+  function setSkillTune(g, k, v) { setTuneVal('skillTuning', SKILL_TUNE, g, k, v); }
+  function resetSkillTune() { SAVE.skillTuning = {}; persistSave(); renderTuneTable('skilltune-body', SKILL_TUNE, 'skillTuning', 'setSkillTune'); Sfx.buy(); }
 
   // ---------- 英雄图鉴 ----------
   function heroAvatarUri(def) {
@@ -1105,6 +1168,23 @@ const UI = (() => {
   // ---------- 结算 ----------
   function showResult(res) {
     showScreen('screen-result');
+    if (res.versus) {
+      const wc = res.winnerIdx === 1 ? '#5aa7e8' : '#f2c94c';
+      $('result-title').innerHTML = `⚔️ <span style="color:${wc}">${res.winnerIdx + 1}P</span> 决斗获胜！`;
+      $('result-title').className = 'ok';
+      const mm = Math.floor(res.time / 60), ss = Math.floor(res.time % 60);
+      $('result-stats').innerHTML =
+        `【${res.mapName}】双人对决 · 比分 <b class="gold-text">${res.score[0]} : ${res.score[1]}</b> · ${res.rounds} 回合 · 用时 ${mm}:${String(ss).padStart(2, '0')}`;
+      $('result-body').innerHTML = `
+        <div class="result-player">
+          <div class="result-player-head" style="color:${wc}">🏆 ${res.winnerIdx + 1}P 率先拿下 3 回合</div>
+          <div style="color:#f2c94c">1P 得分 ${res.score[0]}</div>
+          <div style="color:#5aa7e8">2P 得分 ${res.score[1]}</div>
+          <div style="color:var(--sub);font-size:12.5px;margin-top:6px">对决为友谊赛：不掉耐久、不耗弹药、不计图鉴——输的人请喝汽水。</div>
+        </div>`;
+      Sfx.extract();
+      return;
+    }
     if (res.horde) {
       $('result-title').textContent = res.escape
         ? (res.victory ? '🌅 夜尽天明！你逃出来了！' : '☠️ 倒在了黎明之前……')
@@ -1191,6 +1271,8 @@ const UI = (() => {
            showTuning, closeTuning, setTune, resetTuning,
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
            showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
+           showMonsterTune, closeMonsterTune, setMonsterTune, resetMonsterTune,
+           showSkillTune, closeSkillTune, setSkillTune, resetSkillTune,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive, pickLootCard };

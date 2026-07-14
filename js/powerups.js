@@ -15,6 +15,7 @@ Object.assign(Game.prototype, {
     this.powerups = [];
     this.confusionT = 0;
     this.powerupT = this.horde ? 14 : 42;   // 补充节奏
+    if (this.versus) return;   // 对决：纯拼枪法，不刷道具
     const n = this.horde ? 3 : 5;
     for (let i = 0; i < n; i++) this.spawnPowerup();
   },
@@ -25,6 +26,7 @@ Object.assign(Game.prototype, {
     const type = POWERUPS[POWERUP_KEYS[Math.floor(Math.random() * POWERUP_KEYS.length)]];
     // 落点：随机怪物节点/宝箱点附近偏移，避开玩家 200px 内
     const spots = MapData.monsterNodes.concat(MapData.chestSpots);
+    if (!spots.length) return;
     for (let tries = 0; tries < 12; tries++) {
       const s = spots[Math.floor(Math.random() * spots.length)];
       const x = s.x + (Math.random() - 0.5) * 60, y = s.y + (Math.random() - 0.5) * 60;

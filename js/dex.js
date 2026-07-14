@@ -147,26 +147,28 @@ const Dex = (() => {
 
   // ============ 技能图鉴 ============
   // 每个技能：按等级的效果文案（公式与 horde.js/game.js 实现一一对应）+ 招牌动画
+  // 说明文字实时读 SKILL_TUNE（技能调参面板改数值，这里与升级卡同步变化）
+  const sv = (s, k) => skillVal(s, k);
   const SKILL_INFO = {
-    orbit:     { fx: 'orbit',     info: lv => `${lv} 只平底锅环绕，撞击 24 伤害/次并强力击飞` },
-    missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.5, 1.6 - lv * 0.2).toFixed(1)}s 发射 ${1 + Math.floor(lv / 2)} 枚追踪鸭雷，命中 ${18 + lv * 7} 伤害` },
-    nova:      { fx: 'nova',      info: lv => `每 ${Math.max(2.5, 6 - lv * 0.7).toFixed(1)}s 冻结新星：${13 + lv * 6} 伤害 + 冻结身边怪` },
-    trail:     { fx: 'trail',     info: lv => `跑动残留火径，踩中每跳 ${5 + lv * 3} 伤害` },
-    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${2 + lv} 跳，每跳 ${17 + lv * 6} 伤害（${tune('zapHop')}s/跳，面板可调）` },
-    whirlwind: { fx: 'whirlwind', info: lv => `每 ${Math.max(1.2, 2.6 - lv * 0.25).toFixed(1)}s 圣剑横扫：半径 ${90 + lv * 8}，${18 + lv * 8} 伤害 + 击飞` },
-    barrier:   { fx: 'barrier',   info: lv => `每 ${Math.max(5, 12 - lv)}s 获得 ${20 + lv * 10} 点吸收护盾` },
-    mines:     { fx: 'mines',     info: lv => `边跑边埋雷（场上至多 ${6 + lv} 颗），踩中 ${26 + lv * 10} 伤害 + 击飞` },
-    meteor:    { fx: 'meteor',    info: lv => `每轮 ${1 + Math.floor(lv / 2)} 颗陨石，${30 + lv * 12} 伤害 + 灼烧（半径 84）` },
-    boomerang: { fx: 'boomerang', info: lv => `巨锯 ${34 + lv * 14} 伤害/次·同一目标可反复切割，飞出 ${300 + lv * 30} 折返${lv >= 3 ? '（双盘对甩）' : ''}` },
-    chrono:    { fx: 'chrono',    info: lv => `半径 ${120 + lv * 15} 时缓力场，入场怪物持续减速` },
-    garlic:    { fx: 'garlic',    info: lv => `贴身结界（半径 ${88 + lv * 12}），每 0.5s 灼烧 ${5 + lv * 3}` },
-    spears:    { fx: 'spears',    info: lv => `每轮向八方射 ${8 + lv} 根骨刺，各 ${14 + lv * 6} 伤害` },
-    drone:     { fx: 'drone',     info: lv => `无人机每 ${Math.max(0.24, 0.92 - lv * 0.12).toFixed(2)}s 点射 ${24 + lv * 10} 伤害（穿透 2，僚机变体可加机）` },
-    thorns:    { fx: 'thorns',    info: lv => `被近身击中反弹 ${8 + lv * 6} 伤害，受击伤害 -${(lv * 1.5).toFixed(1)}` },
-    fireball:  { fx: 'fireball',  info: lv => `火球 ${18 + lv * 7} 伤害，爆炸半径 ${58 + lv * 7} + 灼烧 2s` },
-    summon:    { fx: 'summon',    info: lv => `${lv} 只鸭灵（${100 + lv * 50} 血 / ${12 + lv * 6} 伤害），阵亡 5s 复活` },
-    revenge:   { fx: 'revenge',   info: lv => `受击炸出火焰云怒环：${16 + lv * 10} 伤害 + 灼烧 + 击飞（半径 150）` },
-    arty:      { fx: 'arty',      info: lv => `每 ${Math.max(7, 14 - lv * 2)}s 呼叫火炮：${5 + lv * 2} 发炮弹覆盖射击方向大范围` },
+    orbit:     { fx: 'orbit',     info: lv => `${lv} 只平底锅环绕，撞击 ${sv('orbit','dmg')} 伤害/次并强力击飞` },
+    missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.5, sv('missile','cd') - lv * sv('missile','cdLv')).toFixed(1)}s 发射 ${1 + Math.floor(lv / 2)} 枚追踪鸭雷，命中 ${sv('missile','dmg') + lv * sv('missile','dmgLv')} 伤害` },
+    nova:      { fx: 'nova',      info: lv => `每 ${Math.max(2.6, sv('nova','cd') - lv * sv('nova','cdLv')).toFixed(1)}s 冻结新星：${sv('nova','dmg') + lv * sv('nova','dmgLv')} 伤害 + 冻结 ${(sv('nova','stun') + lv * sv('nova','stunLv')).toFixed(1)}s（半径 ${sv('nova','r') + lv * sv('nova','rLv')}）` },
+    trail:     { fx: 'trail',     info: lv => `跑动残留火径 ${sv('trail','dur')}s，踩中每跳 ${sv('trail','dmg') + lv * sv('trail','dmgLv')} 伤害` },
+    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${sv('lightning','hops') + lv} 跳，每跳 ${sv('lightning','dmg') + lv * sv('lightning','dmgLv')} 伤害（${tune('zapHop')}s/跳，面板可调）` },
+    whirlwind: { fx: 'whirlwind', info: lv => `每 ${Math.max(1.2, sv('whirlwind','cd') - lv * sv('whirlwind','cdLv')).toFixed(1)}s 圣剑横扫：半径 ${sv('whirlwind','r') + lv * sv('whirlwind','rLv')}，${sv('whirlwind','dmg') + lv * sv('whirlwind','dmgLv')} 伤害 + 击飞` },
+    barrier:   { fx: 'barrier',   info: lv => `每 ${Math.max(5, sv('barrier','cd') - lv * sv('barrier','cdLv'))}s 获得 ${sv('barrier','shield') + lv * sv('barrier','shieldLv')} 点吸收护盾` },
+    mines:     { fx: 'mines',     info: lv => `边跑边埋雷（场上至多 ${6 + lv} 颗），踩中 ${sv('mines','dmg') + lv * sv('mines','dmgLv')} 伤害 + 击飞（半径 ${sv('mines','r')}）` },
+    meteor:    { fx: 'meteor',    info: lv => `每轮 ${1 + Math.floor(lv / 2)} 颗陨石，${sv('meteor','dmg') + lv * sv('meteor','dmgLv')} 伤害 + 灼烧（半径 ${sv('meteor','r')}）` },
+    boomerang: { fx: 'boomerang', info: lv => `巨锯 ${sv('boomerang','dmg') + lv * sv('boomerang','dmgLv')} 伤害/次·同一目标可反复切割，飞出 ${sv('boomerang','dist') + lv * sv('boomerang','distLv')} 折返${lv >= 3 ? '（双盘对甩）' : ''}` },
+    chrono:    { fx: 'chrono',    info: lv => `半径 ${sv('chrono','r') + lv * sv('chrono','rLv')} 时缓力场，入场怪物持续减速` },
+    garlic:    { fx: 'garlic',    info: lv => `贴身结界（半径 ${sv('garlic','r') + lv * sv('garlic','rLv')}），每 0.5s 灼烧 ${sv('garlic','dmg') + lv * sv('garlic','dmgLv')}` },
+    spears:    { fx: 'spears',    info: lv => `每轮向八方射 ${sv('spears','n') + lv} 根骨刺，各 ${sv('spears','dmg') + lv * sv('spears','dmgLv')} 伤害` },
+    drone:     { fx: 'drone',     info: lv => `无人机每 ${Math.max(0.24, sv('drone','cd') - lv * sv('drone','cdLv')).toFixed(2)}s 点射 ${sv('drone','dmg') + lv * sv('drone','dmgLv')} 伤害（穿透 2，僚机变体可加机）` },
+    thorns:    { fx: 'thorns',    info: lv => `被近身击中反弹 ${sv('thorns','dmg') + lv * sv('thorns','dmgLv')} 伤害，受击伤害 -${(lv * sv('thorns','reduce')).toFixed(1)}` },
+    fireball:  { fx: 'fireball',  info: lv => `火球 ${sv('fireball','dmg') + lv * sv('fireball','dmgLv')} 伤害，爆炸半径 ${sv('fireball','boom') + lv * sv('fireball','boomLv')} + 灼烧 2s` },
+    summon:    { fx: 'summon',    info: lv => `${lv} 只鸭灵（${sv('summon','hp') + lv * sv('summon','hpLv')} 血 / ${sv('summon','dmg') + lv * sv('summon','dmgLv')} 伤害），阵亡 5s 复活` },
+    revenge:   { fx: 'revenge',   info: lv => `受击炸出火焰云怒环：${sv('revenge','dmg') + lv * sv('revenge','dmgLv')} 伤害 + 灼烧 + 击飞（半径 ${sv('revenge','r')}）` },
+    arty:      { fx: 'arty',      info: lv => `每 ${Math.max(7, sv('arty','cd') - lv * sv('arty','cdLv'))}s 呼叫火炮：${sv('arty','shells') + lv * sv('arty','shellsLv')} 发炮弹覆盖射击方向大范围` },
   };
   // 变体强化归到母技能卡下备注
   const SKILL_VARIANTS = {};

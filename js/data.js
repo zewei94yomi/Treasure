@@ -207,21 +207,21 @@ function weightDetectMul(f) { return 0.92 + f * 0.2; }
 
 // ============ 怪物种类 ============
 const MONSTER_TYPES = {
-  shade:    { id:'shade',    name:'幽影',     hpMul:1,    spdMul:1,    dmgMul:1,   visMul:1,    r:16, kbMul:1 },
+  shade:    { id:'shade',    name:'幽影',     hpMul:1,    spdMul:1,    dmgMul:1,   visMul:1,    r:16, kbMul:1,   dasher:true },
   skitter:  { id:'skitter',  name:'疾爪蝠',   hpMul:0.55, spdMul:1.5,  dmgMul:0.7, visMul:0.85, r:12, kbMul:1.6, zigzag:true },
   brute:    { id:'brute',    name:'石巨魁',   hpMul:2.4,  spdMul:0.6,  dmgMul:1.9, visMul:0.9,  r:22, kbMul:0,   memMul:2.5, windup:0.5, recover:0.7 },
   lurker:   { id:'lurker',   name:'潜伏者',   hpMul:0.9,  spdMul:1.25, dmgMul:1.3, visMul:0.55, r:15, kbMul:1,   ambush:true },
   wisp:     { id:'wisp',     name:'幽火',     hpMul:0.5,  spdMul:1.0,  dmgMul:0.8, visMul:1.1,  r:12, kbMul:1.2, ranged:true },
   slime:    { id:'slime',    name:'裂形泥怪', hpMul:1.2,  spdMul:0.8,  dmgMul:0.9, visMul:0.8,  r:17, kbMul:1.2, splits:true },
   banshee:  { id:'banshee',  name:'尖啸者',   hpMul:0.45, spdMul:1.15, dmgMul:0.5, visMul:1.3,  r:13, kbMul:1.5, screamer:true },
-  skeleton: { id:'skeleton', name:'骨戟卫兵', hpMul:1.5,  spdMul:0.85, dmgMul:1.25, visMul:0.95, r:17, kbMul:0.5, shieldFront:true, windup:0.4, recover:0.55 },
-  watcher:  { id:'watcher',  name:'咒眼',     hpMul:0.6,  spdMul:0.7,  dmgMul:0.4, visMul:1.5,  r:14, kbMul:1.3, watcher:true },
+  skeleton: { id:'skeleton', name:'骨戟卫兵', hpMul:1.5,  spdMul:0.85, dmgMul:1.25, visMul:0.95, r:17, kbMul:0.5, shieldFront:true, spit:'bone', windup:0.4, recover:0.55 },
+  watcher:  { id:'watcher',  name:'咒眼',     hpMul:0.6,  spdMul:0.7,  dmgMul:0.4, visMul:1.5,  r:14, kbMul:1.3, watcher:true, spit:'blind' },
   mimic:    { id:'mimic',    name:'宝箱怪',   hpMul:1.6,  spdMul:1.25, dmgMul:1.2, visMul:1.1,  r:16, kbMul:0.6 },
   charger:  { id:'charger',  name:'冲撞蛮牛', hpMul:1.3,  spdMul:0.9,  dmgMul:1.4, visMul:1.0,  r:18, kbMul:0.4, charger:true, windup:0.55, recover:0.6 },
   shroom:   { id:'shroom',   name:'毒爆菇',   hpMul:0.8,  spdMul:0.5,  dmgMul:0,   visMul:0.9,  r:14, kbMul:1.3, shroom:true },
   // —— 第七轮新怪（Dungeon Crawl CC0 贴图，机制各异） ——
   warlock:   { id:'warlock',   name:'缚魂术士', hpMul:0.9,  spdMul:0.75, dmgMul:0.6, visMul:1.2,  r:15, kbMul:1,   sprite:'warlock', face:'left',   caster:true,  windup:0.7, recover:0.6 },
-  venomsnake:{ id:'venomsnake',name:'毒鳞海蛇', hpMul:0.7,  spdMul:1.3,  dmgMul:0.6, visMul:0.9,  r:13, kbMul:1.4, sprite:'venomsnake', face:'left',poison:4,     windup:0.28, recover:0.4 },
+  venomsnake:{ id:'venomsnake',name:'毒鳞海蛇', hpMul:0.7,  spdMul:1.3,  dmgMul:0.6, visMul:0.9,  r:13, kbMul:1.4, sprite:'venomsnake', face:'left',poison:4,     spit:'poison', windup:0.28, recover:0.4 },
   stoneling: { id:'stoneling', name:'石肤巨像', hpMul:2.8,  spdMul:0.5,  dmgMul:1.6, visMul:0.8,  r:21, kbMul:0,   sprite:'stonegiantling', windup:0.6, recover:0.8, memMul:2 },
   direwolf:  { id:'direwolf',  name:'暗影恶狼', hpMul:0.6,  spdMul:1.7,  dmgMul:0.8, visMul:1.1,  r:14, kbMul:1.5, sprite:'direwolf', face:'left',  windup:0.25, recover:0.35 },
   leapspider:{ id:'leapspider',name:'跃击蛛',   hpMul:0.8,  spdMul:1.1,  dmgMul:1.0, visMul:1.0,  r:14, kbMul:1.2, sprite:'leapspider',charger:true, windup:0.4, recover:0.5, leap:true },
@@ -296,14 +296,15 @@ const KEY_ACTIONS = [
   ['up', '上移'], ['down', '下移'], ['left', '左移'], ['right', '右移'],
   ['shoot', '射击/攻击'], ['roll', '翻滚'], ['sneak', '潜行'], ['reload', '换弹'],
   ['swap', '切换武器'], ['use', '使用药品'], ['cycle', '切换药品'], ['interact', '开箱/救人/互动'],
+  ['pebble', '投石(引开怪物)'],
 ];
 const DEFAULT_KEYS = [
   { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
     shoot:'Space', roll:'ShiftLeft', sneak:'CapsLock', reload:'KeyR',
-    swap:'KeyQ', use:'KeyE', cycle:'Tab', interact:'KeyF' },
+    swap:'KeyQ', use:'KeyE', cycle:'Tab', interact:'KeyF', pebble:'KeyG' },
   { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
     shoot:'Period', roll:'ShiftRight', sneak:'Slash', reload:'KeyI',
-    swap:'KeyL', use:'Comma', cycle:'KeyK', interact:'KeyJ' },
+    swap:'KeyL', use:'Comma', cycle:'KeyK', interact:'KeyJ', pebble:'KeyO' },
 ];
 // 键码 → 友好显示
 function keyLabel(code) {
@@ -489,6 +490,8 @@ const MERCS = {
            color:'#5a7a9c', mag:5, reload:2.2, desc:'超高伤狙击：一枪带走精英。雇佣他，才能唤来爱犬「汪财」。' },
   priest:{ id:'priest', name:'圣光牧师·晨祷', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, buffCd:7, range:0, speed:152, price:2000,
            color:'#e8d8a0', sprite:'m_priest2', desc:'持杖治疗，并随机施放增益：经验/护甲/回血/移速/狂暴（各有 CD）。' },
+  spirit:{ id:'spirit', name:'鸭灵剑士·小碎', icon:'🐥', hp:220, dmg:22, rate:1.6, melee:true, range:74, sword:true, speed:178, price:1000,
+           color:'#ffd93d', desc:'从旋风斩里修炼成型的持剑小鸭，横扫近身之敌。别看个头小，剑气很足。' },
   dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:560, range:0, speed:210, price:1200, requiresMerc:'sniper',
            color:'#c9a06a', sprite:'fx_dog', desc:'自动叼回经验宝石与金币。只认鹰眼当主人。' },
   archer:{ id:'archer', name:'百变箭手·翎', icon:'🏹', hp:210, dmg:24, rate:1.5, range:640, bulletSpeed:780, speed:150, price:2800,
@@ -583,7 +586,7 @@ const HORDE_UPGRADES = [
   { id:'nova',      name:'寒冰新星', icon:'❄️', max:5, skill:'nova',      desc:'周期冻结并炸伤身边的怪物' },
   { id:'trail',     name:'火焰足迹', icon:'🔥', max:5, skill:'trail',     desc:'跑动时身后留下灼烧路径' },
   { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'闪电逐跳传导：一个接一个劈过去' },
-  { id:'whirlwind', name:'旋风斩',   icon:'🌪️', max:5, skill:'whirlwind', desc:'周期性旋身横扫，击飞身边所有怪物' },
+  { id:'whirlwind', name:'旋风斩',   icon:'🗡️', max:5, skill:'whirlwind', desc:'周期性旋身横扫，击飞身边所有怪物' },
   { id:'barrier',   name:'圣盾守护', icon:'🛡️', max:5, skill:'barrier',   desc:'周期性获得吸收伤害的临时护盾' },
   { id:'mines',     name:'鸭式地雷', icon:'🧨', max:5, skill:'mines',     desc:'边跑边埋雷，怪物踩上轰然起飞' },
   { id:'meteor',    name:'天降正义', icon:'☄️', max:5, skill:'meteor',    desc:'陨石从天而降砸进怪群（附带灼烧）' },
@@ -633,6 +636,7 @@ const HORDE_UPGRADES = [
     gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split','iceshot','fireshot','zapshot'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 5 },
   { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
   { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
+  { id:'recruit_spirit', name:'招募·鸭灵剑士', icon:'🐥', max:1, special:'recruit', mercId:'spirit', desc:'鸭灵剑士入队：圣剑横扫，越战越勇' },
   // —— 英雄专属升级卡（该英雄在场才出现；替代旧的统一晋阶） ——
   { id:'up_mage_water',  name:'法师·双子元素', icon:'💧', max:1, heroUp:'mage', desc:'可同时召唤 2 只水元素', hmod:'mageWater' },
   { id:'up_mage_laser',  name:'法师·激光折射', icon:'⚡', max:2, heroUp:'mage', desc:'施放激光时额外向随机方向再射 1 道', hmod:'mageLaser' },
@@ -790,6 +794,14 @@ const HERO_TUNE = {
     speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,  def: 140 },
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
+  spirit: { name: '🐥 鸭灵剑士', params: {
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 220 },
+    dmg:    { n: '横扫伤害',   min: 6,   max: 90,  step: 2,   def: 22 },
+    rate:   { n: '攻速(次/秒)', min: 0.5, max: 4,  step: 0.1, def: 1.6 },
+    range:  { n: '横扫半径',   min: 50,  max: 160, step: 4,   def: 74 },
+    speed:  { n: '移动速度',   min: 100, max: 300, step: 5,   def: 178 },
+    desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 380 },
+  } },
   dog: { name: '🐕 汪财', params: {
     hp:    { n: '生命上限', min: 60,  max: 500, step: 10, def: 130 },
     fetch: { n: '拾取范围', min: 200, max: 1400, step: 40, def: 600 },
@@ -801,6 +813,166 @@ function heroVal(hid, key) {
   if (!h || !h.params[key]) return undefined;
   const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.heroTuning && SAVE.heroTuning[hid]) || {};
   return saved[key] !== undefined ? saved[key] : h.params[key].def;
+}
+
+// ============ 怪物详细调参（21 种怪 + Boss 技能参数，SAVE.monsterTuning 持久化） ============
+const _MT_BASE = () => ({
+  hp:  { n: '生命倍率', min: 0.2, max: 3, step: 0.05, def: 1 },
+  dmg: { n: '伤害倍率', min: 0.2, max: 3, step: 0.05, def: 1 },
+  spd: { n: '速度倍率', min: 0.4, max: 2.2, step: 0.05, def: 1 },
+});
+const MONSTER_TUNE = {};
+for (const [mid, mt] of Object.entries(MONSTER_TYPES)) {
+  MONSTER_TUNE[mid] = { name: (mt.boss ? '👑 ' : '') + mt.name, params: _MT_BASE() };
+}
+// 特殊技能参数
+Object.assign(MONSTER_TUNE.shade.params, {
+  dashCd:  { n: '突进冷却(秒)', min: 1.5, max: 12, step: 0.5, def: 4 },
+  dashPow: { n: '突进力度',     min: 300, max: 2000, step: 50, def: 900 },
+});
+Object.assign(MONSTER_TUNE.watcher.params, {
+  spitCd:   { n: '眼波冷却(秒)', min: 1, max: 10, step: 0.2, def: 3.2 },
+  blindDur: { n: '致盲时长(秒)', min: 0.4, max: 5, step: 0.2, def: 1.2 },
+});
+Object.assign(MONSTER_TUNE.venomsnake.params, {
+  spitCd: { n: '毒吐冷却(秒)', min: 1, max: 10, step: 0.2, def: 3.6 },
+});
+Object.assign(MONSTER_TUNE.skeleton.params, {
+  spitCd: { n: '掷戟冷却(秒)', min: 1, max: 12, step: 0.2, def: 4.2 },
+});
+Object.assign(MONSTER_TUNE.boss_cyclops.params, {
+  skillCd:  { n: '技能冷却(秒)', min: 3, max: 20, step: 0.5, def: 8 },
+  blindDur: { n: '致盲时长(秒)', min: 1, max: 6, step: 0.5, def: 2.5 },
+  quakeR:   { n: '重踏半径',     min: 120, max: 480, step: 20, def: 260 },
+});
+Object.assign(MONSTER_TUNE.boss_stormdragon.params, {
+  skillCd: { n: '技能冷却(秒)', min: 3, max: 20, step: 0.5, def: 8 },
+  orbN:    { n: '弹幕数量',     min: 6, max: 28, step: 1, def: 14 },
+});
+Object.assign(MONSTER_TUNE.boss_lich.params, {
+  skillCd:  { n: '技能冷却(秒)', min: 3, max: 20, step: 0.5, def: 9 },
+  blindDur: { n: '致盲时长(秒)', min: 1, max: 6, step: 0.5, def: 2.5 },
+  summonN:  { n: '召唤骷髅数',   min: 1, max: 6, step: 1, def: 3 },
+});
+// ============ 技能详细调参（割草 19 技能的基础值与每级增量，SAVE.skillTuning 持久化） ============
+const SKILL_TUNE = {
+  orbit:     { name: '🍳 环绕飞锅', params: {
+    dmg:   { n: '撞击伤害',   min: 5,   max: 120, step: 1,   def: 24 } } },
+  missile:   { name: '🦆 追踪鸭雷', params: {
+    cd:    { n: '基础冷却(秒)', min: 0.5, max: 5,  step: 0.1, def: 1.6 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 0.5, step: 0.05, def: 0.2 },
+    dmg:   { n: '基础伤害',     min: 5,   max: 80, step: 1,   def: 18 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 30, step: 1,   def: 7 } } },
+  nova:      { name: '❄️ 寒冰新星', params: {
+    cd:    { n: '基础冷却(秒)', min: 2,   max: 12, step: 0.5, def: 6.5 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 2,  step: 0.1, def: 0.7 },
+    dmg:   { n: '基础伤害',     min: 4,   max: 60, step: 1,   def: 13 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 25, step: 1,   def: 6 },
+    r:     { n: '基础半径',     min: 80,  max: 400, step: 10, def: 170 },
+    rLv:   { n: '每级加半径',   min: 0,   max: 60, step: 2,   def: 22 },
+    stun:  { n: '基础冻结(秒)', min: 0.2, max: 4,  step: 0.1, def: 1 },
+    stunLv:{ n: '每级加冻结',   min: 0,   max: 1,  step: 0.05, def: 0.2 } } },
+  trail:     { name: '🔥 火焰足迹', params: {
+    dmg:   { n: '每跳基础伤害', min: 2,   max: 40, step: 1,   def: 5 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 15, step: 1,   def: 3 },
+    dur:   { n: '火径留存(秒)', min: 0.8, max: 6,  step: 0.2, def: 2.2 } } },
+  lightning: { name: '⚡ 雷霆链爪', params: {
+    cd:    { n: '基础冷却(秒)', min: 0.8, max: 6,  step: 0.1, def: 2.6 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.3 },
+    dmg:   { n: '每跳基础伤害', min: 5,   max: 70, step: 1,   def: 17 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 25, step: 1,   def: 6 },
+    hops:  { n: '基础跳数(+等级)', min: 1, max: 8, step: 1,   def: 2 } } },
+  whirlwind: { name: '🗡️ 旋风斩', params: {
+    cd:    { n: '基础冷却(秒)', min: 1,   max: 6,  step: 0.1, def: 2.6 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.25 },
+    dmg:   { n: '基础伤害',     min: 6,   max: 80, step: 1,   def: 18 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 30, step: 1,   def: 8 },
+    r:     { n: '基础半径',     min: 50,  max: 240, step: 5,  def: 90 },
+    rLv:   { n: '每级加半径',   min: 0,   max: 30, step: 1,   def: 8 } } },
+  barrier:   { name: '🛡️ 圣盾守护', params: {
+    cd:     { n: '基础冷却(秒)', min: 4,  max: 20, step: 0.5, def: 12 },
+    cdLv:   { n: '每级减冷却',   min: 0,  max: 3,  step: 0.5, def: 1 },
+    shield: { n: '基础护盾',     min: 5,  max: 80, step: 5,   def: 20 },
+    shieldLv:{ n: '每级加护盾',  min: 0,  max: 40, step: 5,   def: 10 } } },
+  mines:     { name: '🧨 鸭式地雷', params: {
+    cd:    { n: '布雷间隔(秒)', min: 0.8, max: 6,  step: 0.2, def: 3.2 },
+    cdLv:  { n: '每级减间隔',   min: 0,   max: 1,  step: 0.1, def: 0.3 },
+    dmg:   { n: '基础伤害',     min: 8,   max: 100, step: 2,  def: 26 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 40, step: 2,   def: 10 },
+    r:     { n: '爆炸半径',     min: 40,  max: 180, step: 5,  def: 74 } } },
+  meteor:    { name: '☄️ 天降正义', params: {
+    cd:    { n: '基础冷却(秒)', min: 2,   max: 12, step: 0.5, def: 5.5 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 2,  step: 0.1, def: 0.5 },
+    dmg:   { n: '基础伤害',     min: 10,  max: 120, step: 5,  def: 30 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 50, step: 2,   def: 12 },
+    r:     { n: '爆炸半径',     min: 40,  max: 220, step: 5,  def: 84 } } },
+  boomerang: { name: '🪚 巨型锯盘', params: {
+    cd:    { n: '基础冷却(秒)', min: 1,   max: 6,  step: 0.1, def: 2.8 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.28 },
+    dmg:   { n: '每次切割伤害', min: 10,  max: 120, step: 2,  def: 34 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 50, step: 2,   def: 14 },
+    dist:  { n: '基础射程',     min: 150, max: 700, step: 10, def: 300 },
+    distLv:{ n: '每级加射程',   min: 0,   max: 80, step: 5,   def: 30 } } },
+  chrono:    { name: '⏱️ 时缓力场', params: {
+    r:     { n: '基础半径',     min: 60,  max: 320, step: 10, def: 120 },
+    rLv:   { n: '每级加半径',   min: 0,   max: 50, step: 5,   def: 15 } } },
+  garlic:    { name: '🧄 蒜香领域', params: {
+    r:     { n: '基础半径',     min: 50,  max: 240, step: 5,  def: 88 },
+    rLv:   { n: '每级加半径',   min: 0,   max: 40, step: 2,   def: 12 },
+    dmg:   { n: '每跳基础伤害', min: 2,   max: 40, step: 1,   def: 5 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 15, step: 1,   def: 3 } } },
+  spears:    { name: '🦴 骨刺环发', params: {
+    cd:    { n: '基础冷却(秒)', min: 1,   max: 8,  step: 0.2, def: 3.5 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.3 },
+    n:     { n: '基础根数(+等级)', min: 4, max: 20, step: 1,  def: 8 },
+    dmg:   { n: '基础伤害',     min: 5,   max: 60, step: 1,   def: 14 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 25, step: 1,   def: 6 },
+    range: { n: '基础射程',     min: 120, max: 600, step: 10, def: 260 } } },
+  drone:     { name: '🛸 无人机鸭', params: {
+    cd:    { n: '点射间隔(秒)', min: 0.15, max: 2, step: 0.01, def: 0.92 },
+    cdLv:  { n: '每级减间隔',   min: 0,   max: 0.3, step: 0.01, def: 0.12 },
+    dmg:   { n: '基础伤害',     min: 8,   max: 90, step: 2,   def: 24 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 40, step: 2,   def: 10 } } },
+  thorns:    { name: '🌵 荆棘羽甲', params: {
+    dmg:   { n: '反弹基础伤害', min: 2,   max: 50, step: 1,   def: 8 },
+    dmgLv: { n: '每级加反弹',   min: 0,   max: 25, step: 1,   def: 6 },
+    reduce:{ n: '每级减伤点数', min: 0,   max: 8,  step: 0.5, def: 1.5 } } },
+  fireball:  { name: '🔥 火球术', params: {
+    cd:    { n: '基础冷却(秒)', min: 1,   max: 6,  step: 0.1, def: 2.9 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.3 },
+    dmg:   { n: '基础伤害',     min: 6,   max: 80, step: 2,   def: 18 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 30, step: 1,   def: 7 },
+    boom:  { n: '爆炸基础半径', min: 30,  max: 160, step: 5,  def: 58 },
+    boomLv:{ n: '每级加半径',   min: 0,   max: 30, step: 1,   def: 7 } } },
+  summon:    { name: '🐥 召唤鸭灵', params: {
+    hp:    { n: '鸭灵基础生命', min: 40,  max: 400, step: 10, def: 100 },
+    hpLv:  { n: '每级加生命',   min: 0,   max: 150, step: 10, def: 50 },
+    dmg:   { n: '鸭灵基础伤害', min: 5,   max: 60, step: 1,   def: 14 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 25, step: 1,   def: 7 } } },
+  revenge:   { name: '💢 复仇之焰', params: {
+    dmg:   { n: '基础伤害',     min: 5,   max: 80, step: 1,   def: 16 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 35, step: 1,   def: 10 },
+    r:     { n: '怒环半径',     min: 80,  max: 320, step: 10, def: 150 } } },
+  arty:      { name: '📡 呼叫支援', params: {
+    cd:    { n: '基础冷却(秒)', min: 5,   max: 25, step: 0.5, def: 14 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 5,  step: 0.5, def: 2 },
+    shells:{ n: '基础炮弹数',   min: 3,   max: 15, step: 1,   def: 5 },
+    shellsLv:{ n: '每级加炮弹', min: 0,   max: 6,  step: 1,   def: 2 },
+    dmg:   { n: '基础伤害',     min: 10,  max: 90, step: 2,   def: 26 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 30, step: 1,   def: 9 } } },
+};
+function skillVal(sid, key) {
+  const sd = SKILL_TUNE[sid];
+  if (!sd || !sd.params[key]) return undefined;
+  const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.skillTuning && SAVE.skillTuning[sid]) || {};
+  return saved[key] !== undefined ? saved[key] : sd.params[key].def;
+}
+
+function monsterVal(mid, key) {
+  const m = MONSTER_TUNE[mid];
+  if (!m || !m.params[key]) return undefined;
+  const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.monsterTuning && SAVE.monsterTuning[mid]) || {};
+  return saved[key] !== undefined ? saved[key] : m.params[key].def;
 }
 
 // ============ 第十一轮经济再平衡：抑制通胀 ============
@@ -841,7 +1013,7 @@ const TUNE_DEFS = [
   { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wSpeed',   name:'武器弹速倍率',    min:0.5,  max:3,    step:0.1,  def:2.2 },
   { id:'wKnock',   name:'武器击退倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
-  { id:'mercDesire',name:'佣兵进攻欲望(全局缩放·380=基准)', min:150, max:800, step:10, def:380 },
+  { id:'mercDesire',name:'佣兵进攻欲望(全局缩放·600=基准)', min:150, max:900, step:10, def:600 },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {
