@@ -1191,8 +1191,20 @@ class Mercenary {
           if (this.artyT <= 0 && target) {
             this.artyT = 9;
             const A = game.allyFx();
+            const placed = [];
             for (let i = 0; i < 5; i++) {
-              A.strikes.push({ x: target.x + (Math.random() - 0.5) * 240, y: target.y + (Math.random() - 0.5) * 200, t: 0.5 + i * 0.16 });
+              // 落点避墙 + 彼此隔开 60px
+              let sx3 = target.x, sy3 = target.y, ok3 = false;
+              for (let tr = 0; tr < 12; tr++) {
+                sx3 = target.x + (Math.random() - 0.5) * 260;
+                sy3 = target.y + (Math.random() - 0.5) * 220;
+                if (isSolidAt(sx3, sy3)) continue;
+                if (placed.some(q => Math.hypot(q.x - sx3, q.y - sy3) < 60)) continue;
+                ok3 = true; break;
+              }
+              if (!ok3) continue;
+              placed.push({ x: sx3, y: sy3 });
+              A.strikes.push({ x: sx3, y: sy3, t: 0.5 + i * 0.16 });
             }
             game.floater(this.x, this.y - 30, '📡 火炮支援！', '#7ef7ff');
             Sfx.aggro();
@@ -1204,11 +1216,28 @@ class Mercenary {
       if (d > 70) { goal = o; this.facing = Math.atan2(o.y - this.y, o.x - this.x); }
     }
     if (goal) {
-      const a = Math.atan2(goal.y - this.y, goal.x - this.x);
+      let gx = goal.x, gy = goal.y;
+      if (goal === o) {   // 跟随雇主：按队伍序号错开站位，不再挤同一个点
+        const idx = game.mercs.indexOf(this);
+        const slot = idx * 2.4 + 1.3;
+        gx += Math.cos(slot) * 52; gy += Math.sin(slot) * 52;
+      }
+      const a = Math.atan2(gy - this.y, gx - this.x);
       const r = resolveCircle(this.x + Math.cos(a) * spd * dt, this.y + Math.sin(a) * spd * dt, 13);
       this.x = r.x; this.y = r.y;
       this.moving = true;
     } else this.moving = false;
+    // 相互推挤：避免佣兵重叠共享路线
+    for (const mc of game.mercs) {
+      if (mc === this || mc.hp <= 0) continue;
+      const d = Math.hypot(mc.x - this.x, mc.y - this.y);
+      if (d > 0.01 && d < 26) {
+        const push2 = (26 - d) * 2.2 * dt;
+        const a2 = Math.atan2(this.y - mc.y, this.x - mc.x);
+        const r2 = resolveCircle(this.x + Math.cos(a2) * push2 * 10, this.y + Math.sin(a2) * push2 * 10, 13);
+        this.x = r2.x; this.y = r2.y;
+      }
+    }
     unstick(this);
   }
 }

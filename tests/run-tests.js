@@ -245,7 +245,7 @@ check('升级池扩至 52 项（+呼叫支援）', run(`HORDE_UPGRADES.length ==
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=18') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=18') && !html.includes('?v=17'));
+    html.includes('js/fx.js?v=19') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=19') && !html.includes('?v=18'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -386,6 +386,23 @@ check('骨刺不追踪 + 升级回血 + 弹壳抛出', (() => {
   const dexSrc = fs.readFileSync(base + 'dex.js', 'utf8');
   check('技能图鉴动画同步（锯盘/逐跳/圣剑/骨刺/呼叫支援）',
     ['巨型锯盘', '逐跳', 'fx_sword', 'fx_bone', 'arty(ctx'].every(k => dexSrc.includes(k)));
+}
+
+// ==================== 第十三轮：招募流可达性/修复 ====================
+check('商人局内卖佣兵（割草招募流入口）', run(`
+  (() => { for (let i = 0; i < 20; i++) { const s = merchantStock(true); if (s.some(it => it.kind === 'merc')) return true; } return false; })()`));
+check('呼叫支援带武器投资门槛', run(`
+  typeof HORDE_UPGRADE_BY_ID.arty.gate === 'function' &&
+  !HORDE_UPGRADE_BY_ID.arty.gate({ picked: {} }) && HORDE_UPGRADE_BY_ID.arty.gate({ picked: { dmg: 1, rate: 1 } })`));
+{
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('佣兵分离 + 跟随错位 + 火炮落点校验', entSrc.includes('相互推挤') && entSrc.includes('按队伍序号错开') && entSrc.includes('落点避墙'));
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('三层闪电 + 每跳音效 + 鸭灵持剑绘制 + 拾枪互换', gameSrc.includes('三层闪电') && gameSrc.includes('Sfx.zap()') && gameSrc.includes('mc.def.sword') && gameSrc.includes('weaponDrops'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('商人招募购买 + 升级卡数值预览', uiSrc.includes("item.kind === 'merc'") && uiSrc.includes('Dex.skillInfo'));
+  const sfxSrc = fs.readFileSync(base + 'sfx.js', 'utf8');
+  check('AK 音效 CS 化 + 闪电 zap 音效', sfxSrc.includes('6000') && sfxSrc.includes('zap()'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

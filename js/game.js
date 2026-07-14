@@ -338,6 +338,24 @@ class Game {
     this.sparks = this.sparks.filter(s => s.t > 0);
     this.updateFx(dt);
     this.updateAllyFx(dt);
+    // —— 掉落武器：走近自动与当前手持互换（1.4s 冷却防止来回横跳） ——
+    if (this.weaponDrops && this.weaponDrops.length) {
+      for (const wd of this.weaponDrops) {
+        wd.cd = Math.max(0, wd.cd - dt);
+        if (wd.cd > 0) continue;
+        for (const p of this.players) {
+          if (!p.active || Math.hypot(p.x - wd.x, p.y - wd.y) > 30) continue;
+          const old = p.weapons[p.activeSlot];
+          p.weapons[p.activeSlot] = wd.inst;
+          p.mags[p.activeSlot] = (WEAPONS[wd.inst.id].mag || 0);
+          wd.inst = old;
+          wd.cd = 1.4;
+          this.toast(`已换上 ${WEAPONS[p.weapons[p.activeSlot].id].icon}【${WEAPONS[p.weapons[p.activeSlot].id].name}】（旧枪落地可换回）`, '#ffd93d');
+          Sfx.pickup('rare');
+          break;
+        }
+      }
+    }
 
     this.updateWeather(dt);
     this.updatePowerups(dt);
@@ -558,6 +576,7 @@ class Game {
           job.hit.add(node);
           H.bolts.push({ pts: [{ x: job.from.x, y: job.from.y }, { x: node.x, y: node.y }], t: 0.16 });
           this.spark(node.x, node.y, '#ffe95c');
+          Sfx.zap();
           job.from = { x: node.x, y: node.y };
           if (node.hurt(17 + H.skills.lightning * 6, this)) this.killMonster(node, job.p);
           let next = null, nd = 240;
@@ -1660,7 +1679,14 @@ class Game {
       const def = cands[Math.floor(Math.random() * cands.length)] || WEAPONS.pistol;
       const inst = { uid: -Math.floor(Math.random() * 1e9), id: def.id, dur: def.dur, temp: true };
       let slot = p.weapons[0] ? (p.weapons[1] ? -1 : 1) : 0;
-      if (slot === -1) slot = (WEAPONS[p.weapons[0].id].price || 0) <= (WEAPONS[p.weapons[1].id].price || 0) ? 0 : 1;
+      if (slot === -1) {
+        // 双槽已满：替换当前手持的那把（想留哪把就先切到另一把），旧枪掉在原地可捡回
+        slot = p.activeSlot;
+        const old = p.weapons[slot];
+        if (!this.weaponDrops) this.weaponDrops = [];
+        this.weaponDrops.push({ x: chest.x + 24, y: chest.y + 18, inst: old, cd: 1.4 });
+        this.toast(`${WEAPONS[old.id].icon}【${WEAPONS[old.id].name}】掉在原地，可走近换回`, '#9fd8ff');
+      }
       p.weapons[slot] = inst;
       p.activeSlot = slot;
       p.mags[slot] = def.mag || 0;
@@ -2327,6 +2353,17 @@ class Game {
       ctx.fillRect(sx-2, sy-2, 4, 4);
     }
     ctx.globalAlpha = 1;
+    // —— 掉落在地的武器 ——
+    if (this.weaponDrops) {
+      for (const wd of this.weaponDrops) {
+        const [sx, sy] = W2S(wd.x, wd.y);
+        if (!onScreen(sx, sy)) continue;
+        ctx.fillStyle = 'rgba(255,217,61,.12)';
+        ctx.beginPath(); ctx.arc(sx, sy + 4, 14 + Math.sin(this.time * 4) * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(WEAPONS[wd.inst.id].icon, sx, sy + Math.sin(this.time * 3) * 2 + 4);
+      }
+    }
     this.drawFx(ctx, cam, w);   // 高级粒子层（爆炸/枪口焰/烟尘）
     // —— 盟友技能特效层 ——
     if (this._allyFx) {
@@ -2432,18 +2469,40 @@ class Game {
         ctx.beginPath(); ctx.arc(sx, sy, nr.r * 0.86, 0, Math.PI * 2); ctx.stroke();
       }
       for (const bolt of H.bolts) {
-        ctx.strokeStyle = `rgba(255,240,120,${Math.min(1, bolt.t * 6)})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
+        // 三层闪电：外辉光 → 黄电弧 → 白炽核心，末端炸开小分叉
+        const a1 = Math.min(1, bolt.t * 6);
+        const jag = [];
         for (let i = 0; i < bolt.pts.length; i++) {
           const [sx, sy] = W2S(bolt.pts[i].x, bolt.pts[i].y);
-          if (i === 0) ctx.moveTo(sx, sy);
-          else {
+          if (i > 0) {
             const [px, py] = W2S(bolt.pts[i-1].x, bolt.pts[i-1].y);
-            ctx.lineTo((sx + px) / 2 + (Math.random() - 0.5) * 16, (sy + py) / 2 + (Math.random() - 0.5) * 16);
-            ctx.lineTo(sx, sy);
+            jag.push([(sx + px) / 2 + (Math.random() - 0.5) * 20, (sy + py) / 2 + (Math.random() - 0.5) * 20]);
           }
+          jag.push([sx, sy]);
         }
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (const [w2, col] of [[9, `rgba(140,190,255,${a1 * 0.35})`], [4, `rgba(255,240,120,${a1 * 0.9})`], [1.6, `rgba(255,255,255,${a1})`]]) {
+          ctx.strokeStyle = col; ctx.lineWidth = w2; ctx.lineJoin = 'round';
+          ctx.beginPath();
+          jag.forEach(([jx, jy], k) => k === 0 ? ctx.moveTo(jx, jy) : ctx.lineTo(jx, jy));
+          ctx.stroke();
+        }
+        // 末端分叉
+        const [ex2, ey2] = jag[jag.length - 1];
+        ctx.strokeStyle = `rgba(255,240,120,${a1 * 0.8})`; ctx.lineWidth = 1.4;
+        for (let f = 0; f < 3; f++) {
+          const fa = Math.random() * Math.PI * 2;
+          ctx.beginPath(); ctx.moveTo(ex2, ey2);
+          ctx.lineTo(ex2 + Math.cos(fa) * 10, ey2 + Math.sin(fa) * 10);
+          ctx.lineTo(ex2 + Math.cos(fa + 0.5) * 17, ey2 + Math.sin(fa + 0.5) * 17);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = a1;
+        ctx.drawImage(FxTex.glow, ex2 - 14, ey2 - 14, 28, 28);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        ctx.beginPath();
         ctx.stroke();
       }
     }
@@ -3080,7 +3139,18 @@ class Game {
     // 武器
     ctx.save();
     ctx.rotate(mc.facing);
-    if (mc.def.melee) { ctx.fillStyle = '#555'; ctx.fillRect(8, -2, 10, 4); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(21, 0, 6, 0, Math.PI*2); ctx.fill(); }
+    if (mc.def.sword && typeof MonsterImages !== 'undefined' && MonsterImages.fx_sword && MonsterImages.fx_sword.naturalWidth) {
+      // 鸭灵：圣剑（攻击时挥舞）
+      mc.swingT = Math.max(0, (mc.swingT || 0) - 0.016);
+      ctx.save();
+      ctx.translate(10, 0);
+      ctx.rotate(mc.swingT > 0 ? (0.25 - mc.swingT) * 10 - 0.9 : Math.sin(mc.anim * 3) * 0.15 + 0.45);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(MonsterImages.fx_sword, -4, -22, 26, 26);
+      ctx.imageSmoothingEnabled = true;
+      ctx.restore();
+    }
+    else if (mc.def.melee) { ctx.fillStyle = '#555'; ctx.fillRect(8, -2, 10, 4); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(21, 0, 6, 0, Math.PI*2); ctx.fill(); }
     else { ctx.fillStyle = '#3a3a48'; ctx.strokeStyle = '#241f38'; ctx.lineWidth = 1.5; ctx.fillRect(7, -3, 15, 5); ctx.strokeRect(7, -3, 15, 5); }
     ctx.restore();
     ctx.restore();

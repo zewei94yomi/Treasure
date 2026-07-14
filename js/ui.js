@@ -293,12 +293,21 @@ const UI = (() => {
     const H = game.hordeState;
     $('levelup-cards').innerHTML = choices.map((u, i) => {
       const cur = (u.skill ? H.skills[u.skill] : (H.picked && H.picked[u.id])) || 0;
+      // 技能类：附上"下一级具体效果"（与技能图鉴同一套公式）
+      let fx = '';
+      try {
+        if (u.skill && typeof Dex !== 'undefined' && Dex.skillInfo) {
+          const line = Dex.skillInfo(u.skill, cur + 1);
+          if (line) fx = `<span class="lv-fx">📈 ${line}</span>`;
+        }
+      } catch (e) {}
       return `
       <div class="levelup-card" onclick="UI.chooseLevelup(${i})">
         <span class="lv-icon">${u.icon}</span>
         <span class="lv-name">${u.name}</span>
         <span class="lv-level">Lv.${cur} → Lv.${cur + 1}${cur + 1 >= u.max ? '（满级）' : ''}</span>
         <span class="lv-desc">${u.desc}</span>
+        ${fx}
         <span class="lv-key">按 ${i + 1}</span>
       </div>`;
     }).join('');
@@ -528,6 +537,13 @@ const UI = (() => {
     else if (item.kind === 'healall') {
       for (const pl of g.players) if (pl.alive) pl.hp = pl.maxHp;
       g.toast('❤️ 全队生命回满！', '#7dff9a');
+    }
+    else if (item.kind === 'merc') {
+      const mc = new Mercenary(g.trader.x + 34, g.trader.y + 26, MERCS[item.id], g.trader);
+      unstick(mc);
+      g.mercs.push(mc);
+      g.toast(`${MERCS[item.id].icon} ${MERCS[item.id].name} 已入队并肩作战！`, '#7dff9a');
+      Sfx.revive();
     }
     else if (item.kind === 'mercace') {
       const mc = new Mercenary(g.trader.x + 30, g.trader.y + 30, MERCS.ace, g.trader);

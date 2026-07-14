@@ -483,5 +483,9 @@ const Dex = (() => {
     }
   }
 
-  return { showWeaponDex, closeWeaponDex, showSkillDex, closeSkillDex, setSkillLv };
+  function skillInfo(skill, lv) {
+    const info = SKILL_INFO[skill];
+    return info ? info.info(lv) : '';
+  }
+  return { showWeaponDex, closeWeaponDex, showSkillDex, closeSkillDex, setSkillLv, skillInfo };
 })();

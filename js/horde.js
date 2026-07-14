@@ -13,6 +13,7 @@ Object.assign(Game.prototype, {
       if (owned(u) >= u.max) return false;
       if (u.requires && !(H.skills[u.requires] > 0)) return false;   // 变体：先有母技能
       if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0)) return false;   // 招募流：有佣兵在场才出
+      if (u.gate && !u.gate(H)) return false;                              // 门槛型升级（呼叫支援等）
       return true;
     });
     if (!pool.length) { H.freeChoices = 0; return; }
@@ -248,7 +249,7 @@ Object.assign(Game.prototype, {
               this.bullets.push(new Bullet(dx, dy, a,
                 { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, 1));
               // 无人机·空袭：概率呼叫天降正义
-              if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
+              if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike && !isSolidAt(tgt.x, tgt.y)) {
                 ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
                 this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
               }
@@ -314,9 +315,20 @@ Object.assign(Game.prototype, {
           if (!p.active) continue;
           const cx = p.x + Math.cos(p.facing) * 260, cy = p.y + Math.sin(p.facing) * 260;
           const shells = 5 + S.arty * 2;
+          const placed = [];
           for (let i = 0; i < shells; i++) {
-            ex.meteors.push({ x: cx + (Math.random() - 0.5) * 340, y: cy + (Math.random() - 0.5) * 260,
-                              t: 0.5 + i * 0.14, arty: true, lv: S.arty });
+            // 落点校验：不进墙、彼此至少隔 70px（不重叠）
+            let sx2 = cx, sy2 = cy, ok = false;
+            for (let tries = 0; tries < 14; tries++) {
+              sx2 = cx + (Math.random() - 0.5) * 360;
+              sy2 = cy + (Math.random() - 0.5) * 280;
+              if (isSolidAt(sx2, sy2)) continue;
+              if (placed.some(q => Math.hypot(q.x - sx2, q.y - sy2) < 70)) continue;
+              ok = true; break;
+            }
+            if (!ok) continue;
+            placed.push({ x: sx2, y: sy2 });
+            ex.meteors.push({ x: sx2, y: sy2, t: 0.5 + i * 0.14, arty: true, lv: S.arty });
           }
           this.floater(p.x, p.y - 46, '📡 火炮支援已呼叫！', '#7ef7ff');
           Sfx.aggro();

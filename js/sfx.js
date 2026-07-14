@@ -31,12 +31,13 @@ const Sfx = (() => {
   }
   return {
     shoot()   { noise(0.09, 0.22, 2400); tone(160, 0.08, 'square', 0.1, -80); },
-    ak()      { noise(0.06, 0.26, 1800); tone(120, 0.07, 'square', 0.14, -60); tone(55, 0.05, 'sine', 0.1); },
+    ak()      { noise(0.03, 0.32, 6000); noise(0.09, 0.2, 1000); tone(150, 0.05, 'square', 0.15, -100); tone(58, 0.09, 'sine', 0.16, -18); },
     mg()      { noise(0.045, 0.24, 2600); tone(95, 0.05, 'square', 0.12, -30); },
     smg()     { noise(0.05, 0.18, 3200); tone(200, 0.05, 'square', 0.08, -90); },
     sniper()  { noise(0.22, 0.34, 1000); tone(70, 0.28, 'sawtooth', 0.2, -35); tone(400, 0.06, 'sine', 0.08, -300); },
     rpg()     { noise(0.3, 0.3, 900); tone(60, 0.35, 'sawtooth', 0.18, 40); },
     impact()  { noise(0.04, 0.16, 700); tone(75, 0.05, 'sine', 0.14, -25); },
+    zap()     { tone(1600, 0.05, 'sawtooth', 0.09, -900); tone(700, 0.07, 'square', 0.07, -400); noise(0.03, 0.1, 5000); },
     shotgun() { noise(0.18, 0.3, 1400); tone(90, 0.15, 'square', 0.14, -40); },
     melee()   { noise(0.06, 0.12, 900); tone(220, 0.06, 'triangle', 0.12, -100); },
     hit()     { tone(140, 0.08, 'sawtooth', 0.12, -60); },

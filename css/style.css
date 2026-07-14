@@ -579,3 +579,6 @@ body {
 .ally-hpbar { width: 84px; height: 4px; background: rgba(0,0,0,.55); border-radius: 2px; margin: 2px 0; }
 .ally-hpbar i { display: block; height: 100%; background: linear-gradient(90deg, #7dff9a, #4ad07a); border-radius: 2px; }
 .ally-meta { font-size: 10px; color: #9aa2b4; }
+
+/* 第十三轮：升级卡数值预览行 */
+.lv-fx { display: block; font-size: 11px; color: #7ef7c8; margin-top: 4px; line-height: 1.4; }

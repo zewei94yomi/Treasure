@@ -453,6 +453,14 @@ function merchantStock(isHorde) {
   // ④ 弹药一组
   const ak = Object.keys(AMMO_TYPES)[Math.floor(Math.random() * 4)];
   push('ammo', ak, Math.ceil(AMMO_TYPES[ak].price * 1.1), `${AMMO_TYPES[ak].name} ×${AMMO_TYPES[ak].pack}`, AMMO_TYPES[ak].icon);
+  // ⑤ 割草/大逃亡：现场招募佣兵（招募流的局内入口！随机两位上架）
+  if (isHorde) {
+    const heroes = ['guard', 'vet', 'ace', 'sniper', 'priest', 'archer', 'mage', 'mech'].sort(() => Math.random() - 0.5).slice(0, 2);
+    for (const hid of heroes) {
+      const h = MERCS[hid];
+      push('merc', h.id, Math.ceil(h.price * 0.9), `招募 ${h.name}`, h.icon, '当场入队·9折');
+    }
+  }
   if (isHorde) {
     // 割草专属：免费升级券 / 全队回满 / 佣兵王驰援
     push('upgrade', 'upgrade', 600, '强化券（立即三选一）', '⬆️');
@@ -584,14 +592,15 @@ const HORDE_UPGRADES = [
   { id:'crit',      name:'会心之喙', icon:'💢', max:4, desc:'暴击率 +12%（双倍伤害）', mod:m => m.crit = (m.crit || 0) + 0.12 },
   // —— 第七轮新技能 ——
   { id:'fireball',  name:'火球术',   icon:'🔥', max:5, skill:'fireball',  desc:'周期掷出爆裂火球，命中炸裂灼烧' },
-  { id:'summon',    name:'召唤鸭灵', icon:'🐥', max:3, skill:'summon',    desc:'召唤一只常驻的鸭灵战士（阵亡 5 秒必定复活）' },
+  { id:'summon',    name:'召唤鸭灵', icon:'🐥', max:3, skill:'summon',    desc:'新增一只持剑鸭灵（升级=多一只，已有的不消失；阵亡 5 秒复活）' },
   { id:'vamp',      name:'汲血之羽', icon:'🧛', max:3, desc:'造成伤害的 3% 转化为生命',  mod:m => m.vamp = (m.vamp || 0) + 0.03 },
   { id:'magsize',   name:'扩容弹夹', icon:'📦', max:3, desc:'弹夹容量 +30%',            mod:m => m.magMul = (m.magMul || 1) + 0.3 },
   { id:'reloadspd', name:'快手换弹', icon:'⚡', max:3, desc:'换弹速度 +25%',            mod:m => m.reloadMul = (m.reloadMul || 1) * 0.75 },
   { id:'agility',   name:'灵敏反射', icon:'🩰', max:4, desc:'移速 +4%，闪避 +5%（完全躲开攻击）', mod:m => { m.speed *= 1.04; m.dodge = (m.dodge || 0) + 0.05; } },
   { id:'greed',     name:'贪婪之喙', icon:'🤑', max:3, desc:'怪物掉落金币 +40%',        mod:m => m.goldMul = (m.goldMul || 1) + 0.4 },
   { id:'revenge',   name:'复仇之焰', icon:'💢', max:3, skill:'revenge',   desc:'被怪物直击时爆出火焰怒环反噬（DoT 不触发）' },
-  { id:'arty',      name:'呼叫支援', icon:'📡', max:3, skill:'arty',      desc:'周期呼叫火炮空袭：大范围炮弹覆盖射击方向' },
+  { id:'arty',      name:'呼叫支援', icon:'📡', max:3, skill:'arty',      desc:'周期呼叫火炮空袭覆盖射击方向（需先投资 2 次武器强化）',
+    gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 2 },
   // —— 变体强化（持有母技能后才会出现） ——
   { id:'meteor_big',  name:'陨石·巨岩', icon:'🪨', max:2, requires:'meteor', desc:'陨石半径 +35%', mod:m => m.meteorR = (m.meteorR || 1) + 0.35 },
   { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
@@ -599,7 +608,7 @@ const HORDE_UPGRADES = [
   { id:'drone_strike',name:'无人机·空袭', icon:'🛰️', max:2, requires:'drone', desc:'无人机不时呼叫天降正义轰炸', mod:m => m.droneStrike = (m.droneStrike || 0) + 1 },
   { id:'drone_wing',  name:'无人机·僚机', icon:'🛩️', max:2, requires:'drone', desc:'再起飞一架无人机协同点射', mod:m => m.droneN = (m.droneN || 0) + 1 },
   { id:'summon_flock',name:'鸭灵·成群',   icon:'🐣', max:2, requires:'summon', desc:'同时在场的鸭灵 +1 只', mod:m => m.petN = (m.petN || 0) + 1 },
-  { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵的生命与伤害 +40%', mod:m => m.petPow = (m.petPow || 0) + 1 },
+  { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵生命与伤害 +40%（对之后复活/新召的生效）', mod:m => m.petPow = (m.petPow || 0) + 1 },
   // —— 第十一轮：攻击流派 ——
   { id:'scatter',  name:'散射枪管', icon:'💠', max:3, desc:'每次射击额外 +2 发散射弹（60% 伤害）', mod:m => m.scatter = (m.scatter || 0) + 2 },
   { id:'bspeed',   name:'超音速弹', icon:'💨', max:3, desc:'弹速 +30%、射程 +10%',              mod:m => { m.bSpeed = (m.bSpeed || 1) * 1.3; m.range *= 1.1; } },
