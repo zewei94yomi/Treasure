@@ -5,6 +5,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSave();
   buildKeymaps();
   preloadSkins();
+  preloadFloorTiles();
   preloadMonsterSprites();
   UI.showMenu();
 

@@ -21,7 +21,7 @@ function defaultSave() {
     consumables: { bandage: 1, soda: 1, adrenaline: 0, stealth: 0, rage: 0, eagle: 0 },
     armors: [],                // 护甲实例 { uid, id, dur }（dur = 剩余甲片池）
     pouches: 0,                // 腰包数量
-    mercTrials: { guard: 2, vet: 2, ace: 2 },   // 雇佣兵免费试玩次数
+    mercTrials: { guard: 2, vet: 2, ace: 2, sniper: 1, priest: 1, dog: 1 },   // 雇佣兵免费试玩次数
     trophies: {},              // 奖杯 id -> 解锁时间戳
     settings: { music: true, skins: ['duck_yellow', 'duck_blue'], lastMap: 'manor', lastDiff: 'normal', lastMode: 1 },
     hordeBest: null,           // 无双割草最佳战绩 { time, kills, level }
@@ -46,7 +46,7 @@ function loadSave() {
         SAVE.stats = Object.assign(dStats, s.stats || {});
         if (!Array.isArray(SAVE.armors)) SAVE.armors = [];
         if (typeof SAVE.pouches !== 'number') SAVE.pouches = 0;
-        SAVE.mercTrials = Object.assign({ guard: 2, vet: 2, ace: 2 }, s.mercTrials || {});
+        SAVE.mercTrials = Object.assign({ guard: 2, vet: 2, ace: 2, sniper: 1, priest: 1, dog: 1 }, s.mercTrials || {});
         if (!SAVE.trophies || typeof SAVE.trophies !== 'object') SAVE.trophies = {};
         if (!SAVE.monsterSeen || typeof SAVE.monsterSeen !== 'object') SAVE.monsterSeen = {};
         if (!SAVE.stats.mKills || typeof SAVE.stats.mKills !== 'object') SAVE.stats.mKills = {};

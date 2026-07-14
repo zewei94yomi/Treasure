@@ -184,12 +184,23 @@ const UI = (() => {
         return `<option value="${a.id}" ${!ok ? 'disabled' : ''} ${lo.acc === a.id ? 'selected' : ''}>${ok ? a.icon : '🔒'} ${a.name}${ok ? '' : `（集齐「${SERIES[a.requires].name}」）`}</option>`;
       })).join('');
       // 雇佣兵
-      const mercOpts = ['<option value="">不雇佣</option>'].concat(Object.values(MERCS).map(mc => {
+      const sniperHired = setupState.loadouts.slice(0, setupState.mode).some(l => l.merc === 'sniper');
+      const mercOpts = ['<option value="">不雇佣</option>'].concat(Object.values(MERCS).filter(mc => mc.id !== 'dog').map(mc => {
         const trials = SAVE.mercTrials[mc.id] || 0;
         const label = trials > 0 ? `免费试用×${trials}` : `💰${mc.price}/局`;
         const afford = trials > 0 || SAVE.gold >= mc.price;
         return `<option value="${mc.id}" ${!afford ? 'disabled' : ''} ${lo.merc === mc.id ? 'selected' : ''}>${mc.icon} ${mc.name}（${label}）</option>`;
       })).join('');
+      // 嗅探犬：随狙击手解锁的第二槽位
+      const dogDef = MERCS.dog;
+      const dogTrials = SAVE.mercTrials.dog || 0;
+      const dogLabel = dogTrials > 0 ? `免费试用×${dogTrials}` : `💰${dogDef.price}/局`;
+      const dogSelect = lo.merc === 'sniper'
+        ? `<select onchange="UI.setMerc2(${i}, this.value)" title="鹰眼专属">
+             <option value="">不带汪财</option>
+             <option value="dog" ${lo.merc2 === 'dog' ? 'selected' : ''}>🐕 ${dogDef.name}（${dogLabel}）</option>
+           </select>`
+        : `<span class="loadout-hint">🐕 汪财：先雇🎯鹰眼解锁</span>`;
       const pouchOk = lo.pouch || pouchesLeft > 0;
       html += `
         <div class="loadout-player">
@@ -206,6 +217,7 @@ const UI = (() => {
               👝腰包${SAVE.pouches ? `(持有${SAVE.pouches})` : '(未持有)'}
             </label>
             <select onchange="UI.setMerc(${i}, this.value)" title="雇佣兵">${mercOpts}</select>
+            ${dogSelect}
           </div>
           <div class="loadout-row sub">
             <span class="loadout-label"></span>
@@ -235,18 +247,26 @@ const UI = (() => {
   function setPouch(i, v) { setupState.loadouts[i].pouch = !!v; renderSetup(); }
   function setSkin(i, v) { setupState.skins[i] = v; renderSetup(); }
   function setAcc(i, v) { setupState.loadouts[i].acc = v || null; renderSetup(); }
-  function setMerc(i, v) { setupState.loadouts[i].merc = v || null; renderSetup(); }
+  function setMerc(i, v) {
+    setupState.loadouts[i].merc = v || null;
+    if (v !== 'sniper') setupState.loadouts[i].merc2 = null;   // 换掉鹰眼则狗自动离队
+    renderSetup();
+  }
+  function setMerc2(i, v) { setupState.loadouts[i].merc2 = v || null; renderSetup(); }
 
   function startRun() {
     const mapId = setupState.gameplay === 'escape' ? 'escape'
                 : setupState.map === 'random' ? MAP_ORDER[Math.floor(Math.random() * MAP_ORDER.length)] : setupState.map;
     // 结算雇佣兵费用（优先消耗免费试用）
     for (let i = 0; i < setupState.mode; i++) {
-      const mid = setupState.loadouts[i].merc;
-      if (!mid) continue;
-      if (SAVE.mercTrials[mid] > 0) SAVE.mercTrials[mid]--;
-      else if (SAVE.gold >= MERCS[mid].price) SAVE.gold -= MERCS[mid].price;
-      else setupState.loadouts[i].merc = null;   // 付不起就不带
+      for (const key of ['merc', 'merc2']) {
+        const mid = setupState.loadouts[i][key];
+        if (!mid) continue;
+        if (key === 'merc2' && setupState.loadouts[i].merc !== 'sniper') { setupState.loadouts[i].merc2 = null; continue; }
+        if (SAVE.mercTrials[mid] > 0) SAVE.mercTrials[mid]--;
+        else if (SAVE.gold >= MERCS[mid].price) SAVE.gold -= MERCS[mid].price;
+        else setupState.loadouts[i][key] = null;   // 付不起就不带
+      }
     }
     SAVE.settings.lastMode = setupState.mode;
     SAVE.settings.lastDiff = setupState.diff;
@@ -521,14 +541,24 @@ const UI = (() => {
   }
   function closeTuning() { $('tuning-overlay').style.display = 'none'; }
   function renderTuning() {
-    $('tuning-body').innerHTML = '<div class="tuning-grid">' + TUNE_DEFS.map(t => {
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+    const changedList = TUNE_DEFS.filter(t => tune(t.id) !== t.def);
+    // 顶部汇总：所有被改动过的项
+    let head = '';
+    if (changedList.length) {
+      head = `<div class="tuning-changed-bar">✏️ 已修改 ${changedList.length} 项：` +
+        changedList.map(t => `<b>${t.name}</b> <span class="dim">${fmt(t.def)}</span>→<span class="cur">${fmt(tune(t.id))}</span>`).join('　') +
+        '</div>';
+    }
+    $('tuning-body').innerHTML = head + '<div class="tuning-grid">' + TUNE_DEFS.map(t => {
       const v = tune(t.id);
+      const changed = v !== t.def;
       return `
-      <div class="tuning-row">
+      <div class="tuning-row ${changed ? 'changed' : ''}" id="tune-row-${t.id}">
         <span class="tuning-name">${t.name}</span>
         <input type="range" min="${t.min}" max="${t.max}" step="${t.step}" value="${v}"
                oninput="UI.setTune('${t.id}', this.value)">
-        <span class="tuning-val" id="tune-val-${t.id}">${Number(v).toFixed(2).replace(/\.?0+$/, '') || '0'}</span>
+        <span class="tuning-val" id="tune-val-${t.id}">${changed ? `<span class="dim">${fmt(t.def)}</span>→` : ''}<span class="cur">${fmt(v)}</span></span>
       </div>`;
     }).join('') + '</div>';
   }
@@ -536,8 +566,13 @@ const UI = (() => {
     if (!SAVE.tuning) SAVE.tuning = {};
     SAVE.tuning[id] = parseFloat(v);
     persistSave();
+    const def = TUNE_DEFS.find(t => t.id === id);
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
     const el = $('tune-val-' + id);
-    if (el) el.textContent = parseFloat(v).toFixed(2).replace(/\.?0+$/, '') || '0';
+    const changed = def && parseFloat(v) !== def.def;
+    if (el) el.innerHTML = changed ? `<span class="dim">${fmt(def.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+    const row = $('tune-row-' + id);
+    if (row) row.classList.toggle('changed', !!changed);
   }
   function resetTuning() {
     delete SAVE.tuning;
@@ -810,7 +845,7 @@ const UI = (() => {
     if (res.horde) {
       $('result-title').textContent = res.escape
         ? (res.victory ? '🌅 夜尽天明！你逃出来了！' : '☠️ 倒在了黎明之前……')
-        : (res.victory ? '🌾 割草大捷！撑过了十分钟！' : '💀 被怪潮吞没……');
+        : (res.victory ? `🌾 割草大捷！撑过了 ${res.duration || 15} 分钟！` : '💀 被怪潮吞没……');
       $('result-title').className = res.victory ? 'ok' : 'fail';
       const mm = Math.floor(res.time / 60), ss = Math.floor(res.time % 60);
       $('result-stats').innerHTML =
@@ -877,7 +912,7 @@ const UI = (() => {
   }
 
   return { showScreen, showMenu, showSetup, showShop, showCodex, showResult, showDetail, closeDetail,
-           setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setGameplay, startRun, retry, toggleMusic,
+           setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setMerc2, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub,

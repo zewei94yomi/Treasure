@@ -52,8 +52,8 @@ for (const mapId of ['manor', 'mine', 'wreck', 'cathedral', 'swamp', 'icecave'])
 // —— 数据完整性 ——
 check('宝物 72 件且字段完整', run(`TREASURES.length === 72 && TREASURES.every(t => t.name && t.icon && t.flavor && SERIES[t.series] && RARITIES[t.rarity])`));
 check('每张地图都有专属系列', run(`['manor','mine','wreck','cathedral','swamp','icecave'].every(m => TREASURES.some(t => t.mapId === m))`));
-check('武器 16 种字段完整（重量/射程/击退）', run(`
-  Object.keys(WEAPONS).length === 16 && Object.values(WEAPONS).every(w =>
+check('武器 17 种字段完整（重量/射程/击退，含RPG）', run(`
+  Object.keys(WEAPONS).length === 17 && WEAPONS.rpg.explosive === 110 && Object.values(WEAPONS).every(w =>
     w.weight !== undefined && w.knock > 0 && (w.melee ? w.range > 0 : (w.range > 0 && AMMO_TYPES[w.ammo])))`));
 check('药品 6 种 & 顺序表一致', run(`CONSUM_ORDER.length === 6 && CONSUM_ORDER.every(k => CONSUMABLES[k])`));
 check('护甲 3 种 + 腰包', run(`Object.keys(ARMORS).length === 3 && GEAR.pouch.extraSlots === 3`));
@@ -114,9 +114,9 @@ check('军械库持久化：addWeapon/addArmor 立即落盘', run(`
 check('宝箱怪概率降至 35%', run('CHEST_TIERS.mystery.mimicChance') === 0.35);
 check('隐身药剂 10 秒', run('CONSUMABLES.stealth.invis') === 10);
 check('奖杯 15 个定义完整', run(`TROPHIES.length === 15 && TROPHIES.every(t => t.name && t.desc && t.icon)`));
-check('雇佣兵 3 档且新存档各 2 次试用', run(`
-  Object.keys(MERCS).length === 3 &&
-  (() => { localStorage.setItem(SAVE_KEY, ''); loadSave(); return SAVE.mercTrials.guard === 2 && SAVE.mercTrials.ace === 2; })()`));
+check('雇佣兵 6 档（+鹰眼/牧师/嗅探犬）且试用次数齐', run(`
+  Object.keys(MERCS).length === 6 && MERCS.dog.requiresMerc === 'sniper' && MERCS.priest.heal > 0 &&
+  (() => { localStorage.setItem(SAVE_KEY, ''); loadSave(); return SAVE.mercTrials.guard === 2 && SAVE.mercTrials.sniper === 1 && SAVE.mercTrials.dog === 1; })()`));
 check('系列奖励全部挂了实物解锁', run(`Object.values(SERIES).every(s => s.unlock && ['skin','acc','weapon'].includes(s.unlock.type))`));
 check('奖励皮肤/装饰 id 都存在', run(`
   Object.values(SERIES).every(s =>
@@ -204,8 +204,8 @@ check('新怪 6 种带贴图与机制字段', run(`
   MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
 check('3 个 Boss 定义与轮换表', run(`
   HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
-check('贴图数据 14 张（9怪+火球+圣剑+3火焰云）且为 dataURI', run(`
-  Object.keys(MONSTER_SPRITES).length === 14 && MONSTER_SPRITES.fx_fireball && MONSTER_SPRITES.fx_sword && MONSTER_SPRITES.fx_flame0 && MONSTER_SPRITES.fx_flame2 && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('贴图数据 16 张（9怪+火球+圣剑+3火焰云+骨刺+狗）且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 16 && MONSTER_SPRITES.fx_fireball && MONSTER_SPRITES.fx_sword && MONSTER_SPRITES.fx_flame0 && MONSTER_SPRITES.fx_bone && MONSTER_SPRITES.fx_dog && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
 check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
 check('攻击%升级已削弱为加算', run(`
   (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
@@ -228,7 +228,7 @@ check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
 check('鸭灵变体（成群/战意）带 requires', run(`
   HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
   (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petN === 1 && m.petPow === 1; })()`));
-check('升级池扩至 43 项（含无人机·僚机）', run(`HORDE_UPGRADES.length === 43 && HORDE_UPGRADE_BY_ID.drone_wing.requires === 'drone'`));
+check('升级池扩至 51 项（攻击流6+招募流2）', run(`HORDE_UPGRADES.length === 51 && HORDE_UPGRADE_BY_ID.zapshot && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
 {
   const fx = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：烘焙纹理 + 五类预设齐全',
@@ -244,7 +244,7 @@ check('升级池扩至 43 项（含无人机·僚机）', run(`HORDE_UPGRADES.le
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=15') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=15') && !html.includes('?v=14'));
+    html.includes('js/fx.js?v=16') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=16') && !html.includes('?v=15'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -303,15 +303,45 @@ check('小地图封顶 300×150', run(`
   check('时长走 tune + 经验随时间上涨',
     gameSrc.includes('hordeDuration()') && gameSrc.includes('1 + this.time / 300'));
   check('小地图显示全部怪物与Boss', gameSrc.includes('全部怪物红点 + Boss 金色大点'));
-  check('复仇之焰新特效 + 地面纹理层', gameSrc.includes('fxRevenge') && gameSrc.includes('地面纹理层'));
+  check('复仇之焰新特效 + 地面纹理层', gameSrc.includes('fxRevenge') && gameSrc.includes('贴图铺地'));
   const fxSrc = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：贴图粒子 + 火焰云爆炸 + fxRevenge',
     ['f.img', 'fx_flame0', 'fxRevenge'].every(k => fxSrc.includes(k)));
   const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
   check('无人机编队（僚机）+ 骨刺/飞盘增强',
-    hordeSrc.includes('droneCount') && hordeSrc.includes('14 + S.spears * 6') && hordeSrc.includes('24 + S.boomerang * 9'));
+    hordeSrc.includes('droneCount') && hordeSrc.includes('14 + S.spears * 6') && hordeSrc.includes('34 + S.boomerang * 14'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('菜单收纳：图鉴馆 + 设置中心', html.includes('dexhub-overlay') && html.includes('settingshub-overlay') && html.includes('UI.showDexHub()'));
+}
+
+// ==================== 第十一轮：弹芯/招募流/经济/曲线 ====================
+check('经济再平衡：价格与宝物价值已上调', run(`
+  WEAPONS.pistol.price === 420 && TREASURE_VALUE_MUL.mythic === 3.5 &&
+  TREASURES.every(t => t.value > 0 && t.value % 5 === 0)`));
+check('狂怒弹头仅武器伤害（技能公式已解耦）', (() => {
+  const h = fs.readFileSync(base + 'horde.js', 'utf8'), g2 = fs.readFileSync(base + 'game.js', 'utf8');
+  return !h.includes('* H.mods.dmg), this)') && !g2.includes('* H.mods.dmg), this)');
+})());
+check('XP 曲线超线性 + 后期低级怪退场', run(`
+  (8 + 30 * 4 + 30 * 30 * 0.15) > (8 + 10 * 4 + 10 * 10 * 0.15) * 2 &&
+  !hordeSpawnPool(500).includes('shade') && hordeSpawnPool(30).includes('shade')`));
+check('弩/割草弹芯字段', run(`HORDE_UPGRADE_BY_ID.fireshot && HORDE_UPGRADE_BY_ID.iceshot && HORDE_UPGRADE_BY_ID.split && HORDE_UPGRADE_BY_ID.scatter`));
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('闪电逐跳传导引擎', gameSrc.includes('chainJobs') && gameSrc.includes('job.hopT = 0.09'));
+  check('毒雾文字说明 + 玩家中毒状态标识', gameSrc.includes('剧毒毒雾') && gameSrc.includes('🤢 中毒'));
+  check('大逃亡紧张感：预警落地/速清奖励/潮汐暴涨/终点冲刺',
+    ['escPend', '速清奖励', '死亡之潮即将暴涨', '最后冲刺'].every(k => gameSrc.includes(k)));
+  check('通关时间显示统一（shownT）', gameSrc.includes('const shownT = H.victory ? hordeDuration()'));
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('牧师治疗/嗅探犬拾取/战友号令', ['def.heal', 'def.fetch', 'mercPow'].every(k => entSrc.includes(k)));
+  check('燃烧蔓延 + 弹芯命中特效', entSrc.includes('fireSpread') && entSrc.includes('zapShot') && entSrc.includes('splitShot'));
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  check('巨型锯盘（反复切割+3级双盘）+ 招募流门槛', hordeSrc.includes('sawCd') && hordeSrc.includes('mercOnly'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('调参面板高亮已改项 + 嗅探犬槽位', uiSrc.includes('tuning-changed-bar') && uiSrc.includes('setMerc2'));
+  const tilesSrc = fs.readFileSync(base + 'tiles-data.js', 'utf8');
+  check('地板贴图 6 主题（crawl CC0）', ['manor', 'mine', 'wreck', 'cathedral', 'swamp', 'icecave'].every(k => tilesSrc.includes(k + ':')) && gameSrc.includes('贴图铺地'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

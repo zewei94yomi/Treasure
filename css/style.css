@@ -536,3 +536,24 @@ body {
 .dexhub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .dexhub-card { cursor: pointer; text-align: center; padding: 16px 10px; }
 .dexhub-card:hover { transform: translateY(-2px); border-color: var(--gold); }
+
+/* 第十一轮：面板石砖纹理（Dungeon Crawl CC0 素材） + 菜单按钮字色统一 */
+.panel, .modal-box {
+  background-image:
+    linear-gradient(rgba(26,20,44,.93), rgba(26,20,44,.93)),
+    url('data:image/png;base64,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');
+  background-size: auto, 64px 64px;
+}
+.menu-buttons .btn { color: #efe9ff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.btn.primary { color: #3a2900; text-shadow: 0 1px 0 rgba(255,255,255,.35); font-weight: 800; }
+.btn:disabled, .btn.disabled { color: #8a86a0; }
+
+/* 第十一轮：调参面板高亮 + 嗅探犬门槛提示 */
+.tuning-row.changed { outline: 1px solid rgba(255,217,61,.55); border-radius: 8px; background: rgba(255,217,61,.06); padding: 2px 6px; }
+.tuning-val .dim { color: #77738c; font-size: 11px; }
+.tuning-val .cur { color: #ffd93d; font-weight: 700; }
+.tuning-changed-bar { font-size: 12px; color: #c7cddc; background: rgba(255,217,61,.08); border: 1px solid rgba(255,217,61,.3);
+  border-radius: 10px; padding: 6px 10px; margin-bottom: 8px; line-height: 1.8; }
+.tuning-changed-bar .dim { color: #77738c; }
+.tuning-changed-bar .cur { color: #ffd93d; font-weight: 700; }
+.loadout-hint { font-size: 11px; color: #8a90a8; align-self: center; }

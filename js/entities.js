@@ -179,12 +179,21 @@ class Monster {
     this.flashT = Math.max(0, this.flashT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
     this.screamCd = Math.max(0, this.screamCd - dt);
-    // 灼烧：持续掉血
+    // 灼烧：持续掉血；燃烧弹芯点的火会向贴近的怪缓慢蔓延
     if (this.burnT > 0) {
       this.burnT -= dt;
       this.hp -= 5 * dt;
       this.hpShowT = 1;
       if (Math.random() < dt * 8) game.spark(this.x, this.y - 6, '#ff8f3d');
+      if (this.fireSpread && Math.random() < dt * 1.1) {
+        for (const mm of game.monsters) {
+          if (mm !== this && mm.burnT <= 0 && Math.hypot(mm.x - this.x, mm.y - this.y) < 56) {
+            mm.burnT = 1.8; mm.fireSpread = true;
+            game.spark(mm.x, mm.y - 6, '#ff8f3d');
+            break;
+          }
+        }
+      }
       if (this.hp <= 0) { game.killMonster(this, null); return; }
     }
 
@@ -757,6 +766,8 @@ class Bullet {
     this.hDist = hb.dist || HOMING.dist;
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
+    this.bone = def.id === 'spear';      // 骨刺：白骨贴图弹体
+    this.rocket = def.id === 'rpg';      // RPG：火箭弹体 + 尾烟
     this.hitSet = new Set();
   }
   update(dt, game) {
@@ -781,6 +792,8 @@ class Bullet {
     this.vx = Math.cos(this.angle) * this.speed;
     this.vy = Math.sin(this.angle) * this.speed;
     if (this.fire && Math.random() < dt * 42) game.fxTrailFire(this.x, this.y, 20);
+    if (this.rocket && Math.random() < dt * 50) game.fxP({ tex: FxTex.smoke, x: this.x, y: this.y,
+      vx: -this.vx * 0.06, vy: -this.vy * 0.06 - 10, s0: 12, s1: 30, a0: 0.5, a1: 0, life: 0.5, add: false });
 
     const stepLen = this.speed * dt;
     this.traveled += stepLen;
@@ -813,6 +826,41 @@ class Bullet {
             if (Math.abs(da) > 2.1) { dmg = Math.max(1, Math.round(dmg * 0.35)); game.floater(m.x, m.y - 22, '格挡!', '#c9ced8'); }
           }
           if (m.hurt(dmg, game)) game.killMonster(m, this.owner);
+          // —— 攻击流派弹芯（割草升级；弹片自身不再触发，防止无限连锁） ——
+          if (game.horde && this.owner && this.owner.weaponDef && !this.sub && m.hp > 0) {
+            const M = game.hordeState.mods;
+            if (M.iceShot) {
+              m.slowT = Math.max(m.slowT, 1.2);
+              if (Math.random() < 0.22 * M.iceShot) { m.stunT = Math.max(m.stunT, 0.8); game.floater(m.x, m.y - 22, '❄', '#bfe9ff'); }
+            }
+            if (M.fireShot) { m.burnT = Math.max(m.burnT, 2.2); m.fireSpread = true; }
+            if (M.zapShot && Math.random() < 0.25 * M.zapShot) {
+              let node = m;
+              const hs = new Set([m]);
+              for (let c = 0; c < 3; c++) {
+                let nx = null, nd = 150;
+                for (const mm of game.monsters) {
+                  if (hs.has(mm)) continue;
+                  const dd = Math.hypot(mm.x - node.x, mm.y - node.y);
+                  if (dd < nd) { nx = mm; nd = dd; }
+                }
+                if (!nx) break;
+                hs.add(nx);
+                if (game.hordeState.bolts) game.hordeState.bolts.push({ pts: [{ x: node.x, y: node.y }, { x: nx.x, y: nx.y }], t: 0.14 });
+                if (nx.hurt(Math.max(1, Math.round(this.dmg * 0.4)), game)) game.killMonster(nx, this.owner);
+                node = nx;
+              }
+            }
+          }
+          if (game.horde && this.owner && this.owner.weaponDef && !this.sub && game.hordeState.mods.splitShot) {
+            for (let si = 0; si < 2; si++) {
+              const sb = new Bullet(this.x, this.y, this.angle + (si ? 0.75 : -0.75),
+                { id: 'splinter', dmg: Math.max(1, Math.round(this.dmg * 0.35)), speed: 520, range: 190, knock: 40 }, this.owner);
+              sb.sub = true;
+              sb.hitSet.add(m);
+              game.bullets.push(sb);
+            }
+          }
           this.pierce--;
           if (this.pierce <= 0) return false;
         }
@@ -854,7 +902,8 @@ class Mercenary {
     this.x = x; this.y = y;
     this.def = def;
     this.owner = owner;
-    this.hp = def.hp; this.maxHp = def.hp;
+    const hpMul = (Game.current && Game.current.horde && Game.current.hordeState && Game.current.hordeState.mods.mercHp) || 1;
+    this.hp = Math.round(def.hp * hpMul); this.maxHp = this.hp;
     this.isMerc = true;
     this.facing = 0;
     this.attackCd = 0;
@@ -877,6 +926,77 @@ class Mercenary {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.hurtCd = Math.max(0, this.hurtCd - dt);
     const o = this.owner;
+    const pow = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);   // 战友号令：伤害与攻速增益
+    // —— 牧师鸭：不打怪，周期治疗血量比例最低的队友（玩家+佣兵） ——
+    if (this.def.heal) {
+      this.healT = (this.healT || 0) - dt;
+      if (this.healT <= 0) {
+        this.healT = this.def.healCd / pow;
+        let tgt2 = null, worst = 0.99;
+        for (const p of game.players) {
+          if (!p.active || Math.hypot(p.x - this.x, p.y - this.y) > 340) continue;
+          const f = p.hp / p.maxHp;
+          if (f < worst) { worst = f; tgt2 = p; }
+        }
+        for (const mc of game.mercs) {
+          if (mc === this || mc.hp <= 0 || Math.hypot(mc.x - this.x, mc.y - this.y) > 340) continue;
+          const f = mc.hp / mc.maxHp;
+          if (f < worst) { worst = f; tgt2 = mc; }
+        }
+        if (tgt2) {
+          const amt = Math.round(this.def.heal * pow);
+          tgt2.hp = Math.min(tgt2.maxHp, tgt2.hp + amt);
+          game.floater(tgt2.x, tgt2.y - 30, `+${amt}💚`, '#7dff9a');
+          game.fxP({ tex: FxTex.glow, x: tgt2.x, y: tgt2.y, s0: 30, s1: 56, a0: 0.5, a1: 0, life: 0.35 });
+          Sfx.heal();
+        }
+      }
+      // 跟随雇主
+      if (o && o.alive) {
+        const d = Math.hypot(o.x - this.x, o.y - this.y);
+        if (d > 80) {
+          const a = Math.atan2(o.y - this.y, o.x - this.x);
+          this.facing = a;
+          const r = resolveCircle(this.x + Math.cos(a) * this.def.speed * dt, this.y + Math.sin(a) * this.def.speed * dt, 13);
+          this.x = r.x; this.y = r.y;
+          this.moving = true;
+        } else this.moving = false;
+      }
+      unstick(this);
+      return;
+    }
+    // —— 金币嗅探犬：满场叼经验宝石和金币（不参战） ——
+    if (this.def.fetch) {
+      const H2 = game.horde ? game.hordeState : null;
+      let tgt2 = null, td2 = this.def.fetch;
+      if (H2) for (const gm of H2.gems) { const d = Math.hypot(gm.x - this.x, gm.y - this.y); if (d < td2) { tgt2 = gm; td2 = d; } }
+      for (const gd of game.goldDrops) { const d = Math.hypot(gd.x - this.x, gd.y - this.y); if (d < td2) { tgt2 = gd; td2 = d; } }
+      let goal2 = null;
+      if (tgt2) {
+        goal2 = tgt2;
+        if (td2 < 24) {   // 叼到：直接结算给雇主
+          if (H2 && H2.gems.includes(tgt2)) {
+            tgt2.taken = true;
+            game.hordeAddXp(Math.round(tgt2.v * (H2.mods.gemMul || 1) * tune('xpRate') * (1 + game.time / 300)));
+            H2.gems = H2.gems.filter(g2 => g2 !== tgt2);
+          } else {
+            SAVE.gold += tgt2.value; game.runCash += tgt2.value;
+            game.floater(this.x, this.y - 22, `🐕+${tgt2.value}💰`, '#ffd93d');
+            game.goldDrops = game.goldDrops.filter(g2 => g2 !== tgt2);
+            Sfx.coin();
+          }
+        }
+      } else if (o && o.alive && Math.hypot(o.x - this.x, o.y - this.y) > 90) goal2 = o;
+      if (goal2) {
+        const a = Math.atan2(goal2.y - this.y, goal2.x - this.x);
+        this.facing = a;
+        const r = resolveCircle(this.x + Math.cos(a) * this.def.speed * dt, this.y + Math.sin(a) * this.def.speed * dt, 11);
+        this.x = r.x; this.y = r.y;
+        this.moving = true;
+      } else this.moving = false;
+      unstick(this);
+      return;
+    }
     // 找射程内最近的可见怪（潜伏中的不打，免得帮倒忙）
     let target = null, td = (this.def.range || 58) + 200;
     for (const m of game.monsters) {
@@ -890,20 +1010,20 @@ class Mercenary {
       if (this.def.melee) {
         if (td > this.def.range + target.r - 6) goal = target;
         else if (this.attackCd <= 0) {
-          this.attackCd = 1 / this.def.rate;
+          this.attackCd = 1 / (this.def.rate * pow);
           Sfx.melee();
           target.knock(this.facing, 500);
-          if (target.hurt(this.def.dmg, game)) game.killMonster(target, o);
+          if (target.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(target, o);
         }
       } else {
         if (td > this.def.range) goal = target;
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
         if (this.attackCd <= 0 && td <= this.def.range) {
-          this.attackCd = 1 / this.def.rate;
-          Sfx.shoot();
+          this.attackCd = 1 / (this.def.rate * pow);
+          (this.def.id === 'sniper' ? Sfx.crossbow : Sfx.shoot)();
           game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
             this.facing + (Math.random() - 0.5) * 0.06,
-            { id:'mercgun', dmg:this.def.dmg, speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+            { id:'mercgun', dmg:Math.round(this.def.dmg * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
         }
       }
     } else if (o && o.alive) {

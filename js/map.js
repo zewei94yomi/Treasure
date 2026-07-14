@@ -447,7 +447,9 @@ function loadMap(mapId) {
     merchantSpot = { x: far.x + TILE, y: far.y };
   }
 
-  MapData = { def, ascii, escapeRooms: def.rooms || null, theme: def.theme, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
+  const themeKey = typeof def.theme === 'string' ? def.theme : def.id;
+  const themeObj = typeof def.theme === 'string' ? (MAPS[def.theme] ? MAPS[def.theme].theme : {}) : def.theme;
+  MapData = { def, ascii, escapeRooms: def.rooms || null, theme: themeObj, themeKey, mods: def.mods || {}, w, h, solid, obstacles, decorTiles, decorGrid, torches,
               chestSpots, goldSpots, monsterNodes, spawns, exitTiles, exitRect, merchantSpot,
               pxW: w * TILE, pxH: h * TILE };
 

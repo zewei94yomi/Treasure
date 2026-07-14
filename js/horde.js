@@ -12,6 +12,7 @@ Object.assign(Game.prototype, {
     const pool = HORDE_UPGRADES.filter(u => {
       if (owned(u) >= u.max) return false;
       if (u.requires && !(H.skills[u.requires] > 0)) return false;   // 变体：先有母技能
+      if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0)) return false;   // 招募流：有佣兵在场才出
       return true;
     });
     if (!pool.length) { H.freeChoices = 0; return; }
@@ -67,7 +68,7 @@ Object.assign(Game.prototype, {
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
             m.knock(Math.atan2(m.y - p.y, m.x - p.x), 700);
-            if (m.hurt(Math.round((18 + S.whirlwind * 8) * H.mods.dmg), this)) this.killMonster(m, p);
+            if (m.hurt(18 + S.whirlwind * 8, this)) this.killMonster(m, p);
           }
           Sfx.melee();
         }
@@ -111,7 +112,7 @@ Object.assign(Game.prototype, {
               const d = Math.hypot(m.x - mine.x, m.y - mine.y);
               if (d > 74 + m.r) continue;
               m.knock(Math.atan2(m.y - mine.y, m.x - mine.x), 800);
-              if (m.hurt(Math.round((26 + S.mines * 10) * H.mods.dmg), this)) this.killMonster(m, this.players[0]);
+              if (m.hurt(26 + S.mines * 10, this)) this.killMonster(m, this.players[0]);
             }
           }
         }
@@ -146,42 +147,45 @@ Object.assign(Game.prototype, {
             const d = Math.hypot(m.x - mt.x, m.y - mt.y);
             if (d > mR + m.r) continue;
             m.burnT = Math.max(m.burnT, 1.5);
-            if (m.hurt(Math.round((30 + S.meteor * 12) * H.mods.dmg), this)) this.killMonster(m, this.players[0]);
+            if (m.hurt(30 + S.meteor * 12, this)) this.killMonster(m, this.players[0]);
           }
         }
       }
       ex.meteors = ex.meteors.filter(mt => mt.t > 0);
     }
-    // 🥏 回旋飞盘
+    // 🪚 回旋飞盘 → 巨型锯盘：一路碾过去再碾回来，同一目标可被反复切割（与追踪鸭雷彻底区分：
+    // 鸭雷=单点追踪导弹，锯盘=一条血路的清线器）
     if (S.boomerang > 0) {
       ex.boomT -= dt;
       if (ex.boomT <= 0) {
-        ex.boomT = Math.max(1.4, 3.0 - S.boomerang * 0.3);
+        ex.boomT = Math.max(1.2, 2.8 - S.boomerang * 0.28);
         for (const p of this.players) {
           if (!p.active) continue;
-          ex.booms.push({ x: p.x, y: p.y, a: p.facing, d: 0, max: 260 + S.boomerang * 25, back: false, pl: p, hit: new Set(), spin: 0 });
+          ex.booms.push({ x: p.x, y: p.y, a: p.facing, d: 0, max: 300 + S.boomerang * 30, back: false, pl: p, spin: 0 });
+          if (S.boomerang >= 3) ex.booms.push({ x: p.x, y: p.y, a: p.facing + Math.PI, d: 0, max: 300 + S.boomerang * 30, back: false, pl: p, spin: 0 });  // 3 级起背后再甩一片
         }
         Sfx.crossbow();
       }
       for (const b of ex.booms) {
-        b.spin += dt * 14;
-        const sp = 440 * dt;
+        b.spin += dt * 18;
+        const sp = 500 * dt;
         if (!b.back) {
           b.x += Math.cos(b.a) * sp; b.y += Math.sin(b.a) * sp;
           b.d += sp;
-          if (b.d >= b.max || isSolidAt(b.x, b.y)) { b.back = true; b.hit.clear(); }
+          if (b.d >= b.max || isSolidAt(b.x, b.y)) b.back = true;
         } else {
           const ang = Math.atan2(b.pl.y - b.y, b.pl.x - b.x);
-          b.x += Math.cos(ang) * sp * 1.25; b.y += Math.sin(ang) * sp * 1.25;
-          if (Math.hypot(b.pl.x - b.x, b.pl.y - b.y) < 24) b.done = true;
+          b.x += Math.cos(ang) * sp * 1.3; b.y += Math.sin(ang) * sp * 1.3;
+          if (Math.hypot(b.pl.x - b.x, b.pl.y - b.y) < 26) b.done = true;
         }
         for (const m of this.monsters.slice()) {
-          if (b.hit.has(m)) continue;
-          if (Math.hypot(m.x - b.x, m.y - b.y) < m.r + 14) {
-            b.hit.add(m);
-            m.knock(b.a, 300);
-            if (m.hurt(Math.round((24 + S.boomerang * 9) * H.mods.dmg), this)) this.killMonster(m, b.pl);
+          if ((m.sawCd || 0) > this.time) continue;          // 0.3s 后可被同一锯盘再次切割
+          if (Math.hypot(m.x - b.x, m.y - b.y) < m.r + 20) {
+            m.sawCd = this.time + 0.3;
+            m.knock(b.back ? Math.atan2(m.y - b.y, m.x - b.x) : b.a, 260);
+            if (m.hurt(34 + S.boomerang * 14, this)) this.killMonster(m, b.pl);
             this.spark(b.x, b.y, '#ffd93d');
+            this.fxHit(b.x, b.y, b.a);
           }
         }
       }
@@ -197,7 +201,7 @@ Object.assign(Game.prototype, {
           const R = 88 + S.garlic * 12;
           for (const m of this.monsters.slice()) {
             if (Math.hypot(m.x - p.x, m.y - p.y) > R + m.r) continue;
-            if (m.hurt(Math.round((5 + S.garlic * 3) * H.mods.dmg), this)) this.killMonster(m, p);
+            if (m.hurt(5 + S.garlic * 3, this)) this.killMonster(m, p);
           }
         }
       }
@@ -213,7 +217,7 @@ Object.assign(Game.prototype, {
           for (let i = 0; i < n; i++) {
             const a = i * Math.PI * 2 / n + this.time;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110 }, p, H.mods.dmg));
+              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110 }, p, 1));
           }
         }
         Sfx.crossbow();
@@ -242,7 +246,7 @@ Object.assign(Game.prototype, {
               ex.droneAims[di] = a;
               this.fxMuzzle(dx + Math.cos(a) * 16, dy + Math.sin(a) * 16, a);
               this.bullets.push(new Bullet(dx, dy, a,
-                { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, H.mods.dmg));
+                { id: 'dronegun', dmg: 24 + S.drone * 10, speed: 760, range: 560, knock: 80, pierce: 2 }, p, 1));
               // 无人机·空袭：概率呼叫天降正义
               if (H.mods.droneStrike && Math.random() < 0.12 * H.mods.droneStrike) {
                 ex.meteors.push({ x: tgt.x, y: tgt.y, t: 0.7 });
@@ -269,7 +273,7 @@ Object.assign(Game.prototype, {
             const a = Math.atan2(tgt.y - p.y, tgt.x - p.x);
             this.bullets.push(new Bullet(p.x, p.y, a,
               { id: 'fireball', dmg: 18 + S.fireball * 7, speed: 360, range: 560,
-                knock: 120, explosive: 58 + S.fireball * 7, burn: 2 }, p, H.mods.dmg));
+                knock: 120, explosive: 58 + S.fireball * 7, burn: 2 }, p, 1));
             Sfx.wisp();
           }
         }
@@ -399,9 +403,29 @@ Object.assign(Game.prototype, {
       const [sx, sy] = W2S(b.x, b.y);
       ctx.save();
       ctx.translate(sx, sy);
+      // 拖影
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(FxTex.glow, -22, -22, 44, 44);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
       ctx.rotate(b.spin);
-      ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('🥏', 0, 7);
+      // 巨型锯盘：钢盘 + 锯齿 + 中轴
+      const R = 17;
+      ctx.fillStyle = '#aeb6c8'; ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a0 = i * Math.PI / 5, a1 = a0 + Math.PI / 10;
+        ctx.lineTo(Math.cos(a0) * (R + 5), Math.sin(a0) * (R + 5));
+        ctx.lineTo(Math.cos(a1) * R, Math.sin(a1) * R);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      const sg = ctx.createRadialGradient(-4, -4, 2, 0, 0, R);
+      sg.addColorStop(0, '#dde3ee'); sg.addColorStop(1, '#7d8598');
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(0, 0, R - 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a4152';
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
     for (const fx of ex.whirlFx) {

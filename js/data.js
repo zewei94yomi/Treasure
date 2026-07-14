@@ -158,6 +158,7 @@ const WEAPONS = {
   flamer:   { id:'flamer',   name:'火舌喷灯',       icon:'🔥', dmg:5,  rate:10,  speed:260, range:190, knock:20,  ammo:'cell',  spread:0.30,  pellets:2, mag:45, reload:1.8, dur:150, weight:2.5, price:2400, repairCost:2.0, burn:2.5, desc:'一条火舌舔过去，怪物边跑边烧。' },
   freezer:  { id:'freezer',  name:'急冻线圈枪',     icon:'❄️', dmg:8,  rate:1.4, speed:520, range:420, knock:60,  ammo:'cell',  spread:0.02,  mag:8, reload:1.4, dur:70,  weight:2, price:2000, repairCost:2.2, freeze:1.3, desc:'命中直接冻成冰坨，动弹不得 1.3 秒。' },
   sniper:   { id:'sniper',   name:'鹅王·穿云',      icon:'🛰️', dmg:90, rate:0.5, speed:1100, range:1400, knock:340, ammo:'heavy', spread:0.002, pierce:4, durPerShot:2, mag:3, reload:2.1, dur:35, weight:4, price:4500, repairCost:4.0, desc:'超越视野的一枪。听到枪声时子弹已经到了。' },
+  rpg:      { id:'rpg',      name:'呱牛 RPG',       icon:'🚀', dmg:85, rate:0.7, speed:520, range:700, knock:340, ammo:'shell', spread:0.01,  durPerShot:2, mag:1, reload:2.4, dur:40, weight:3.5, price:3800, repairCost:3.5, explosive:110, desc:'肩上一响，黄金万两。落点 110 半径灰飞烟灭。' },
   pickaxe:  { id:'pickaxe',  name:'矿脉鹤嘴镐',     icon:'⛏️', melee:true, dmg:26, rate:1.4, range:62, knock:240, dur:120, weight:1.5, price:800, repairCost:0.6, requires:'mine_relics', desc:'集齐「地心结晶」解锁。刨矿刨怪，一镐两用。' },
 };
 const AMMO_TYPES = {
@@ -473,6 +474,12 @@ const MERCS = {
            color:'#7a9c5a', desc:'手枪点射，弹无虚发。' },
   ace:   { id:'ace',   name:'佣兵王·灰羽', icon:'🦅', hp:270, dmg:34, rate:1.1, range:560, bulletSpeed:780, speed:158, price:3200,
            color:'#8a7ab8', desc:'战场传说，收费也传说。' },
+  sniper:{ id:'sniper', name:'退役传奇·鹰眼', icon:'🎯', hp:190, dmg:78, rate:0.5, range:920, bulletSpeed:1150, speed:150, price:2600,
+           color:'#5a7a9c', desc:'一枪一个。雇佣他，才能唤来他的爱犬「汪财」。' },
+  priest:{ id:'priest', name:'牧师鸭·圣光', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, range:0, speed:152, price:2000,
+           color:'#e8d8a0', desc:'不动手，只救人：周期治疗血量最低的队友（含雇佣兵）。' },
+  dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:280, range:0, speed:195, price:1200, requiresMerc:'sniper',
+           color:'#c9a06a', sprite:'fx_dog', desc:'自动叼回经验宝石与金币。只认鹰眼当主人。' },
 };
 
 // ============ 奖杯 ============
@@ -532,12 +539,14 @@ function hordeSpawnPool(t) {
   if (t < 60)  return ['shade', 'shade', 'skitter', 'direwolf'];
   if (t < 180) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'direwolf', 'venomsnake'];
   if (t < 300) return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'venomsnake', 'scorpion', 'warlock', 'leapspider'];
-  return ['shade', 'skitter', 'slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'lurker', 'banshee', 'mimic', 'venomsnake', 'direwolf', 'warlock', 'scorpion', 'stoneling', 'leapspider'];
+  // 后期：低级杂兵逐步退场，精英当家
+  if (t < 480) return ['slime', 'wisp', 'charger', 'skeleton', 'brute', 'shroom', 'lurker', 'banshee', 'mimic', 'venomsnake', 'direwolf', 'warlock', 'scorpion', 'stoneling', 'leapspider'];
+  return ['charger', 'skeleton', 'brute', 'brute', 'shroom', 'lurker', 'banshee', 'mimic', 'warlock', 'scorpion', 'stoneling', 'stoneling', 'leapspider', 'direwolf'];
 }
 
 // 升级三选一的池子：mods 数值强化 + skill 奇招技能（可重复选升级）
 const HORDE_UPGRADES = [
-  { id:'dmg',    name:'狂怒弹头',   icon:'💢', max:5, desc:'全部伤害 +18%（加算）', mod:m => m.dmg += 0.18 },
+  { id:'dmg',    name:'狂怒弹头',   icon:'💢', max:5, desc:'武器伤害 +18%（加算，不含技能）', mod:m => m.dmg += 0.18 },
   { id:'rate',   name:'嘎特林之魂', icon:'🌀', max:5, desc:'攻击速度 +22%',        mod:m => m.rate *= 1.22 },
   { id:'multi',  name:'分裂弹道',   icon:'🎯', max:3, desc:'每次射击 +1 发弹道',   mod:m => m.multi += 1 },
   { id:'pierce', name:'贯穿之力',   icon:'📌', max:3, desc:'子弹穿透 +1 个目标',   mod:m => m.pierce += 1 },
@@ -552,12 +561,12 @@ const HORDE_UPGRADES = [
   { id:'missile',   name:'追踪鸭雷', icon:'🦆', max:5, skill:'missile',   desc:'高频发射自动追踪的爆走鸭' },
   { id:'nova',      name:'寒冰新星', icon:'❄️', max:5, skill:'nova',      desc:'周期冻结并炸伤身边的怪物' },
   { id:'trail',     name:'火焰足迹', icon:'🔥', max:5, skill:'trail',     desc:'跑动时身后留下灼烧路径' },
-  { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'高频劈出在怪群中弹跳的连锁闪电' },
+  { id:'lightning', name:'雷霆链爪', icon:'⚡', max:5, skill:'lightning', desc:'闪电逐跳传导：一个接一个劈过去' },
   { id:'whirlwind', name:'旋风斩',   icon:'🌪️', max:5, skill:'whirlwind', desc:'周期性旋身横扫，击飞身边所有怪物' },
   { id:'barrier',   name:'圣盾守护', icon:'🛡️', max:5, skill:'barrier',   desc:'周期性获得吸收伤害的临时护盾' },
   { id:'mines',     name:'鸭式地雷', icon:'🧨', max:5, skill:'mines',     desc:'边跑边埋雷，怪物踩上轰然起飞' },
   { id:'meteor',    name:'天降正义', icon:'☄️', max:5, skill:'meteor',    desc:'陨石从天而降砸进怪群（附带灼烧）' },
-  { id:'boomerang', name:'回旋飞盘', icon:'🥏', max:5, skill:'boomerang', desc:'掷出贯穿一切的飞盘，去而复返' },
+  { id:'boomerang', name:'巨型锯盘', icon:'🪚', max:5, skill:'boomerang', desc:'甩出巨锯一路碾过去再碾回来，可反复切割（3 级双盘）' },
   { id:'chrono',    name:'时缓力场', icon:'⏱️', max:5, skill:'chrono',    desc:'身边环绕减速力场，怪物近身如陷泥沼' },
   { id:'garlic',    name:'蒜香领域', icon:'🧄', max:5, skill:'garlic',    desc:'贴身的气味结界持续灼烧近身怪物' },
   { id:'spears',    name:'骨刺环发', icon:'🦴', max:5, skill:'spears',    desc:'周期向四面八方射出一圈骨刺' },
@@ -582,6 +591,16 @@ const HORDE_UPGRADES = [
   { id:'drone_wing',  name:'无人机·僚机', icon:'🛩️', max:2, requires:'drone', desc:'再起飞一架无人机协同点射', mod:m => m.droneN = (m.droneN || 0) + 1 },
   { id:'summon_flock',name:'鸭灵·成群',   icon:'🐣', max:2, requires:'summon', desc:'同时在场的鸭灵 +1 只', mod:m => m.petN = (m.petN || 0) + 1 },
   { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵的生命与伤害 +40%', mod:m => m.petPow = (m.petPow || 0) + 1 },
+  // —— 第十一轮：攻击流派 ——
+  { id:'scatter',  name:'散射枪管', icon:'💠', max:3, desc:'每次射击额外 +2 发散射弹（60% 伤害）', mod:m => m.scatter = (m.scatter || 0) + 2 },
+  { id:'bspeed',   name:'超音速弹', icon:'💨', max:3, desc:'弹速 +30%、射程 +10%',              mod:m => { m.bSpeed = (m.bSpeed || 1) * 1.3; m.range *= 1.1; } },
+  { id:'split',    name:'裂变弹头', icon:'🧩', max:2, desc:'命中时分裂 2 枚小弹片（35% 伤害）',  mod:m => m.splitShot = (m.splitShot || 0) + 1 },
+  { id:'iceshot',  name:'寒冰弹芯', icon:'🧊', max:2, desc:'子弹附带减速，每级 22% 概率冻结 0.8s', mod:m => m.iceShot = (m.iceShot || 0) + 1 },
+  { id:'fireshot', name:'燃烧弹芯', icon:'🔥', max:2, desc:'子弹点燃目标，火焰会向贴近的怪缓慢蔓延', mod:m => m.fireShot = (m.fireShot || 0) + 1 },
+  { id:'zapshot',  name:'雷击弹芯', icon:'⚡', max:2, desc:'命中时每级 25% 概率放出小型连锁闪电',  mod:m => m.zapShot = (m.zapShot || 0) + 1 },
+  // —— 第十一轮：招募流（场上有雇佣兵才会刷出） ——
+  { id:'merc_dmg', name:'战友号令', icon:'📯', max:3, mercOnly:true, desc:'雇佣兵伤害与攻速 +25%', mod:m => m.mercPow = (m.mercPow || 0) + 0.25 },
+  { id:'merc_hp',  name:'铁血军团', icon:'🎖️', max:3, mercOnly:true, desc:'雇佣兵最大生命 +30% 并回满', special:'merchp' },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -622,6 +641,15 @@ const POWERUP_KEYS = Object.keys(POWERUPS);
 const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, rollCd:0.35, regenDelay:0.35 };
 
 const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));
+
+// ============ 第十一轮经济再平衡：抑制通胀 ============
+// 商品适度涨价（×1.4），摸金收益按稀有度大幅上调（普通×1.5 → 神话×3.5）
+for (const w of Object.values(WEAPONS)) if (w.price) w.price = Math.round(w.price * 1.4 / 10) * 10;
+for (const a of Object.values(ARMORS)) if (a.price) a.price = Math.round(a.price * 1.4 / 10) * 10;
+if (GEAR && GEAR.pouch && GEAR.pouch.price) GEAR.pouch.price = Math.round(GEAR.pouch.price * 1.4 / 10) * 10;
+for (const c of Object.values(CONSUMABLES)) if (c.price) c.price = Math.round(c.price * 1.3 / 5) * 5;
+const TREASURE_VALUE_MUL = { common: 1.5, rare: 1.8, epic: 2.2, legendary: 2.8, mythic: 3.5 };
+for (const t of TREASURES) t.value = Math.round(t.value * TREASURE_VALUE_MUL[t.rarity] / 5) * 5;
 
 
 // ============ 策划调参面板（SAVE.tuning 持久化，实时生效） ============
