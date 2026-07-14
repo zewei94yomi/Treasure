@@ -4,28 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=24">
+<link rel="stylesheet" href="css/fonts.css?v=25">
+<link rel="stylesheet" href="css/style.css?v=25">
 </head>
 <body>
 
-<!-- ======== 主菜单 ======== -->
+<!-- ======== 主菜单：左指令列表 + 右行动简报档案（方向A · 鸭可夫野战档案） ======== -->
 <div id="screen-menu" class="screen active">
-  <div class="menu-fog"></div>
-  <div class="menu-ghost g1">👻</div>
-  <div class="menu-ghost g2">🦇</div>
   <div id="save-warning" style="display:none" class="save-warning">⚠️ 检测到浏览器阻止了存档写入——请改用 <code>python3 -m http.server</code> 方式游玩，否则进度无法保存！</div>
-  <div class="menu-box">
-    <h1 class="game-title">惊魂寻宝鸭</h1>
-    <div class="game-subtitle">搜宝箱 · 躲怪物 · 活着撤离 🦆</div>
-    <div id="menu-info" class="menu-info"></div>
-    <div class="menu-buttons">
-      <button class="btn big primary" onclick="UI.showSetup()">🗺️ 开始寻宝</button>
-      <button class="btn big" onclick="UI.showDexHub()">📚 图鉴馆 <span id="menu-codex-badge" class="new-badge float"></span></button>
-      <button class="btn big" onclick="UI.showShop()">🛒 鸭可夫商店</button>
-      <button class="btn big" onclick="UI.showTrophies()">🏆 奖杯陈列室</button>
-      <button class="btn big" onclick="UI.showHelp()">❓ 操作说明</button>
-      <button class="btn big" onclick="UI.showSettingsHub()">⚙️ 设置中心</button>
+  <div class="menu-layout">
+    <div class="menu-left">
+      <div class="menu-emblem">
+        <div class="emblem">🦆</div>
+        <div class="emblem-text">第7鸭子侦搜连 · 军需处直供<br>7TH DUCK RECON COY.</div>
+      </div>
+      <div class="menu-kicker">本地双人 · 搜打撤 ROGUELITE</div>
+      <h1 class="game-title">惊魂寻宝鸭</h1>
+      <div class="game-subtitle"><span class="op-code">OPERATION : DUCKOV</span><span class="op-strip"></span></div>
+      <div class="menu-buttons">
+        <button class="menu-item primary" onclick="UI.showSetup()"><span class="mi-num">01</span><span class="mi-name">出击</span><span class="mi-en">SORTIE</span><span class="mi-arrow">▸ 出发准备</span></button>
+        <button class="menu-item" onclick="UI.showShop()"><span class="mi-num">02</span><span class="mi-name">鸭可夫商店</span><span class="mi-en">ARMORY</span><span class="mi-arrow">›</span></button>
+        <button class="menu-item" onclick="UI.showDexHub()"><span class="mi-num">03</span><span class="mi-name">图鉴馆</span><span class="mi-en" id="menu-codex-en">CODEX</span><span id="menu-codex-badge" class="new-badge float"></span><span class="mi-arrow">›</span></button>
+        <button class="menu-item" onclick="UI.showTrophies()"><span class="mi-num">04</span><span class="mi-name">奖杯陈列室</span><span class="mi-en" id="menu-trophy-en">TROPHY</span><span class="mi-arrow">›</span></button>
+        <button class="menu-item" onclick="UI.showHelp()"><span class="mi-num">05</span><span class="mi-name">行动手册</span><span class="mi-en">MANUAL</span><span class="mi-arrow">›</span></button>
+        <button class="menu-item" onclick="UI.showSettingsHub()"><span class="mi-num">06</span><span class="mi-name">设置中心</span><span class="mi-en">SYSTEM</span><span class="mi-arrow">›</span></button>
+      </div>
+      <div class="menu-status">
+        <span>v19 · 野战档案 UI</span>
+        <span>存档已挂载 · 本地浏览器</span>
+        <span class="go">双人同屏 · 键鼠即玩</span>
+      </div>
     </div>
+    <aside class="briefing">
+      <div class="brief-inner" id="menu-info"></div>
+    </aside>
   </div>
 </div>
 
@@ -33,15 +45,15 @@
 <div id="screen-setup" class="screen">
   <div class="panel wide">
     <h2>出发准备</h2>
-    <h3 class="section-label">选择模式</h3>
+    <h3 class="section-label">01 / 编制 SQUAD</h3>
     <div id="setup-modes" class="card-row"></div>
-    <h3 class="section-label">选择地图</h3>
+    <h3 class="section-label">02 / 地图 THEATRE</h3>
     <div id="setup-maps" class="card-row"></div>
-    <h3 class="section-label">选择玩法</h3>
+    <h3 class="section-label">03 / 玩法 MODE</h3>
     <div id="setup-gameplay" class="card-row"></div>
-    <h3 class="section-label" id="setup-diffs-label">选择难度</h3>
+    <h3 class="section-label" id="setup-diffs-label">04 / 难度 THREAT</h3>
     <div id="setup-diffs" class="card-row"></div>
-    <h3 class="section-label">装备与皮肤</h3>
+    <h3 class="section-label">05 / 装备核对 LOADOUT</h3>
     <div id="setup-loadout" class="loadout-box"></div>
     <div class="panel-actions">
       <button class="btn" onclick="UI.showMenu()">← 返回</button>
@@ -212,11 +224,11 @@
     <div id="keybind-body"></div>
     <div class="trainer-row">
       <div class="trainer-box">
-        <div class="trainer-title" style="color:#ffd93d">🟡 1P 练习场</div>
+        <div class="trainer-title" style="color:#f2c94c">🟡 1P 练习场</div>
         <canvas id="trainer-p1" width="360" height="220"></canvas>
       </div>
       <div class="trainer-box">
-        <div class="trainer-title" style="color:#9fd8ff">🔵 2P 练习场</div>
+        <div class="trainer-title" style="color:#5aa7e8">🔵 2P 练习场</div>
         <canvas id="trainer-p2" width="360" height="220"></canvas>
       </div>
     </div>
@@ -374,24 +386,24 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=24"></script>
-<script src="js/music.js?v=24"></script>
-<script src="js/skins-data.js?v=24"></script>
-<script src="js/monsters-data.js?v=24"></script>
-<script src="js/tiles-data.js?v=24"></script>
-<script src="js/data.js?v=24"></script>
-<script src="js/save.js?v=24"></script>
-<script src="js/map.js?v=24"></script>
-<script src="js/vision.js?v=24"></script>
-<script src="js/entities.js?v=24"></script>
-<script src="js/game.js?v=24"></script>
-<script src="js/fx.js?v=24"></script>
-<script src="js/dex.js?v=24"></script>
-<script src="js/horde.js?v=24"></script>
-<script src="js/weather.js?v=24"></script>
-<script src="js/powerups.js?v=24"></script>
-<script src="js/ui.js?v=24"></script>
-<script src="js/trainer.js?v=24"></script>
-<script src="js/main.js?v=24"></script>
+<script src="js/sfx.js?v=25"></script>
+<script src="js/music.js?v=25"></script>
+<script src="js/skins-data.js?v=25"></script>
+<script src="js/monsters-data.js?v=25"></script>
+<script src="js/tiles-data.js?v=25"></script>
+<script src="js/data.js?v=25"></script>
+<script src="js/save.js?v=25"></script>
+<script src="js/map.js?v=25"></script>
+<script src="js/vision.js?v=25"></script>
+<script src="js/entities.js?v=25"></script>
+<script src="js/game.js?v=25"></script>
+<script src="js/fx.js?v=25"></script>
+<script src="js/dex.js?v=25"></script>
+<script src="js/horde.js?v=25"></script>
+<script src="js/weather.js?v=25"></script>
+<script src="js/powerups.js?v=25"></script>
+<script src="js/ui.js?v=25"></script>
+<script src="js/trainer.js?v=25"></script>
+<script src="js/main.js?v=25"></script>
 </body>
 </html>

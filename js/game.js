@@ -3698,7 +3698,7 @@ class Game {
       const hpPct = Math.max(0, p.hp / p.maxHp * 100);
       if (p.active && hpPct < 30) anyLow = true;
       el.querySelector('.hp-fill').style.width = hpPct + '%';
-      el.querySelector('.hp-fill').style.background = hpPct > 50 ? '#7dff9a' : hpPct > 25 ? '#ffd93d' : '#ff5c5c';
+      el.querySelector('.hp-fill').style.background = hpPct > 50 ? 'linear-gradient(#9cbb61,#7d9c48)' : hpPct > 25 ? 'linear-gradient(#e0c063,#d9a441)' : 'linear-gradient(#d96a4a,#c2452a)';
       // 护甲条
       const armorFill = el.querySelector('.armor-fill');
       if (p.armor) {

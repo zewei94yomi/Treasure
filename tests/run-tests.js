@@ -244,8 +244,11 @@ check('升级池扩至 74 项（+15 张英雄专属升级卡）', run(`HORDE_UPG
     hordeSrc.includes('24 + S.drone * 10') && hordeSrc.includes('ex.petQueue.push(5)') &&
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=24') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=24') && !html.includes('?v=23'));
+  check('index.html：fx.js 脚本 + 怪物图鉴入口 + 缓存版本自洽', (() => {
+    const vers = [...html.matchAll(/\?v=(\d+)/g)].map(m => m[1]);
+    return html.includes('js/fx.js?v=') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=')
+      && vers.length >= 20 && new Set(vers).size === 1;
+  })());
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -360,7 +363,7 @@ check('鼠标操控默认开启（settings.mouseAim）', run(`defaultSave().sett
   check('技能图鉴特效同步（锯盘/逐跳闪电/火环/骨刺/火迹贴图）',
     ['巨型锯盘：钢盘锯齿', '逐跳传导：三个节点', '火焰云怒环', '白骨碎片贴图', '火焰云贴图足迹'].every(k => dexSrc.includes(k)));
   const cssSrc = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
-  check('按钮字色统一', cssSrc.includes('全部按钮统一字色'));
+  check('按钮字色统一（v19 起由设计令牌 --ink2 统一）', cssSrc.includes('--ink2') && cssSrc.includes('.btn {'));
 }
 
 // ==================== 第十二轮：鼠标操控/盟友面板/三英雄/武器爽感 ====================
@@ -468,6 +471,32 @@ check('佣兵进攻欲望入面板', run(`TUNE_DEFS.some(t => t.id === 'mercDesi
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('英雄调参面板 + 英雄图鉴页 + 面板血量状态',
     ['showHeroTune', 'setHeroTune', 'showHeroDex'].every(k => uiSrc.includes(k)) && gameSrc.includes('❤${Math.ceil(mc.hp)}'));
+}
+
+// ==================== 第十九轮：方向A 野战档案 UI ====================
+{
+  const html = fs.readFileSync(base + '../index.html', 'utf8');
+  const cssSrc = fs.readFileSync(base + '../css/style.css', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('野战档案设计令牌（弹壳黄/骨白/警示红/军绿边框）',
+    cssSrc.includes('--amber: #e0a63c') && cssSrc.includes('--ink: #e9e3c8')
+    && cssSrc.includes('--red: #c2452a') && cssSrc.includes('--line: #454d2f'));
+  check('设计字体接入（庆科黄油体标题/BlackOps番号/ShareTechMono数据）',
+    cssSrc.includes("'ZCOOL QingKe HuangYou'") && cssSrc.includes("'Black Ops One'")
+    && cssSrc.includes("'Share Tech Mono'") && html.includes('css/fonts.css?v='));
+  check('字体自托管（fonts.css 指向本地 woff2）', (() => {
+    const f = fs.readFileSync(base + '../css/fonts.css', 'utf8');
+    return f.includes('../assets/fonts/') && !f.includes('http') && fs.existsSync(base + '../assets/fonts');
+  })());
+  check('主菜单重构：指令列表 + 行动简报档案',
+    html.includes('class="menu-item primary"') && html.includes('OPERATION : DUCKOV')
+    && html.includes('brief-inner') && uiSrc.includes('行动简报 // BRIEFING'));
+  check('升级卡军需化 + 已选盖章 + 出击切角',
+    cssSrc.includes('repeating-linear-gradient(45deg, var(--line)') && cssSrc.includes("content: '已选'")
+    && cssSrc.includes('clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%)'));
+  check('HUD 军规化（1P/2P 铭牌 + 血条刻度 + 军规配色血量）',
+    cssSrc.includes('.bb-name') && cssSrc.includes('repeating-linear-gradient(90deg, transparent 0 22px')
+    && fs.readFileSync(base + 'game.js', 'utf8').includes("linear-gradient(#9cbb61,#7d9c48)"));
 }
 
 // ==================== 第十八轮：佣兵王/双人难度/抽卡/寻路 ====================

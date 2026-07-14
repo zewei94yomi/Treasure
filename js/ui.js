@@ -21,10 +21,36 @@ const UI = (() => {
     showScreen('screen-menu');
     const done = collectedCount();
     const newCount = TREASURES.filter(t => SAVE.codex[t.id] && SAVE.codex[t.id].isNew).length;
+    const trophies = Object.keys(SAVE.trophies || {}).length;
+    const intel = [
+      '情报：今夜可能出现 <b>血月</b> — 怪物更凶，宝物更肥。建议携带重型护甲。',
+      '情报：<b>神秘商人</b> 只在困难与地狱难度出没，收宝物按 55% 折现、不计图鉴。',
+      '情报：潜行状态从背后近战未察觉的普通怪 = <b>一击处决</b>。军需处提醒：省子弹。',
+      '情报：<b>撤离才算数</b>。身上的宝物只有活着带出去，才会收录进图鉴。',
+      '情报：割草模式结算有 <b>三箱选一</b>，胜利金箱可能开出神话级红宝。',
+    ];
+    // 行动简报档案（方向A）
     $('menu-info').innerHTML = `
-      <span class="gold-chip">💰 ${SAVE.gold}</span>
-      <span class="title-chip">🏅 ${collectorTitle()}</span>
-      <span class="codex-chip">📖 图鉴 ${done}/${TREASURES.length}</span>`;
+      <div class="brief-head"><b>行动简报 // BRIEFING</b><span class="brief-secret">绝密·仅限鸭眼</span></div>
+      <div class="brief-row">
+        <div class="brief-cell">
+          <label>金币 GOLD</label>
+          <div class="brief-gold"><span class="coin"></span><b>${SAVE.gold.toLocaleString()}</b></div>
+        </div>
+        <div class="brief-cell">
+          <label>藏家头衔 RANK</label>
+          <div class="brief-title-txt">${collectorTitle()}</div>
+        </div>
+      </div>
+      <div class="brief-cell">
+        <div class="brief-bar-row"><span>图鉴收集</span><span class="n">${done} / ${TREASURES.length}</span></div>
+        <div class="brief-bar"><i class="g" style="width:${Math.round(done / TREASURES.length * 100)}%"></i></div>
+        <div class="brief-bar-row"><span>奖杯陈列</span><span class="n">${trophies} / ${TROPHIES.length}</span></div>
+        <div class="brief-bar"><i style="width:${Math.round(trophies / TROPHIES.length * 100)}%"></i></div>
+      </div>
+      <div class="brief-intel">${intel[(Math.random() * intel.length) | 0]}</div>`;
+    const ce = $('menu-codex-en'); if (ce) ce.textContent = `CODEX ${done}/${TREASURES.length}`;
+    const te = $('menu-trophy-en'); if (te) te.textContent = `TROPHY ${trophies}/${TROPHIES.length}`;
     $('menu-codex-badge').style.display = newCount ? '' : 'none';
     $('menu-codex-badge').textContent = newCount;
     const bm = $('btn-music');
