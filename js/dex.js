@@ -152,7 +152,7 @@ const Dex = (() => {
     missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.5, 1.6 - lv * 0.2).toFixed(1)}s 发射 ${1 + Math.floor(lv / 2)} 枚追踪鸭雷，命中 ${18 + lv * 7} 伤害` },
     nova:      { fx: 'nova',      info: lv => `每 ${Math.max(2.5, 6 - lv * 0.7).toFixed(1)}s 冻结新星：${13 + lv * 6} 伤害 + 冻结身边怪` },
     trail:     { fx: 'trail',     info: lv => `跑动残留火径，踩中每跳 ${5 + lv * 3} 伤害` },
-    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${2 + lv} 跳，每跳 ${17 + lv * 6} 伤害（0.09s/跳）` },
+    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${2 + lv} 跳，每跳 ${17 + lv * 6} 伤害（${tune('zapHop')}s/跳，面板可调）` },
     whirlwind: { fx: 'whirlwind', info: lv => `每 ${Math.max(1.2, 2.6 - lv * 0.25).toFixed(1)}s 圣剑横扫：半径 ${90 + lv * 8}，${18 + lv * 8} 伤害 + 击飞` },
     barrier:   { fx: 'barrier',   info: lv => `每 ${Math.max(5, 12 - lv)}s 获得 ${20 + lv * 10} 点吸收护盾` },
     mines:     { fx: 'mines',     info: lv => `边跑边埋雷（场上至多 ${6 + lv} 颗），踩中 ${26 + lv * 10} 伤害 + 击飞` },
@@ -166,6 +166,7 @@ const Dex = (() => {
     fireball:  { fx: 'fireball',  info: lv => `火球 ${18 + lv * 7} 伤害，爆炸半径 ${58 + lv * 7} + 灼烧 2s` },
     summon:    { fx: 'summon',    info: lv => `${lv} 只鸭灵（${100 + lv * 50} 血 / ${12 + lv * 6} 伤害），阵亡 5s 复活` },
     revenge:   { fx: 'revenge',   info: lv => `受击炸出火焰云怒环：${16 + lv * 10} 伤害 + 灼烧 + 击飞（半径 150）` },
+    arty:      { fx: 'arty',      info: lv => `每 ${Math.max(7, 14 - lv * 2)}s 呼叫火炮：${5 + lv * 2} 发炮弹覆盖射击方向大范围` },
   };
   // 变体强化归到母技能卡下备注
   const SKILL_VARIANTS = {};
@@ -237,19 +238,41 @@ const Dex = (() => {
       glow(ctx, DUCK_X, MID_Y, 20, ICE, (1 - k) * 0.5);
     },
     trail(ctx, t, lv) {
+      // 火焰云贴图足迹（三帧轮播）
       for (let i = 0; i < 6; i++) {
-        const x = DUCK_X + 20 + i * 18, flick = Math.sin(t * 10 + i) * 2;
-        glow(ctx, x, MID_Y + 8, 9 + lv, FIRE, 0.5 + flick * 0.1);
+        const x = DUCK_X + 20 + i * 18;
+        const fimg = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + ((Math.floor(t * 9) + i) % 3)];
+        glow(ctx, x, MID_Y + 10, 8 + lv, FIRE, 0.4);
+        if (fimg && fimg.naturalWidth) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(fimg, x - 9, MID_Y - 4 - Math.sin(t * 10 + i) * 1.5, 18, 18);
+          ctx.imageSmoothingEnabled = true;
+        }
       }
     },
     lightning(ctx, t, lv) {
-      if (Math.sin(t * 4) > 0.3) {
-        ctx.strokeStyle = '#ffe95c'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(DUCK_X + 10, MID_Y - 6);
-        let x = DUCK_X + 10;
-        while (x < TGT_X) { x += 18; ctx.lineTo(x, MID_Y - 6 + (Math.random() - 0.5) * 18); }
+      // 逐跳传导：三个节点依次被劈中
+      const nodes = [[DUCK_X + 52, MID_Y - 12], [DUCK_X + 96, MID_Y + 10], [TGT_X, MID_Y]];
+      const k = (t % 1.4) / 1.4;
+      const lit = Math.min(nodes.length, Math.floor(k * 5));
+      let px = DUCK_X + 10, py = MID_Y - 6;
+      for (let i = 0; i < lit; i++) {
+        const [nx, ny] = nodes[i];
+        ctx.strokeStyle = i === lit - 1 ? '#fffbe0' : 'rgba(255,233,92,.45)';
+        ctx.lineWidth = i === lit - 1 ? 2.4 : 1.4;
+        ctx.beginPath(); ctx.moveTo(px, py);
+        const mx2 = (px + nx) / 2 + (Math.random() - 0.5) * 8;
+        ctx.lineTo(mx2, (py + ny) / 2 + (Math.random() - 0.5) * 10);
+        ctx.lineTo(nx, ny);
         ctx.stroke();
-        glow(ctx, TGT_X, MID_Y, 16, HOLY, 0.7);
+        if (i === lit - 1) glow(ctx, nx, ny, 13, HOLY, 0.8);
+        for (let d2 = 0; d2 < 2; d2++) { ctx.fillStyle = '#8a74b8'; ctx.strokeStyle = '#100e1d'; }
+        px = nx; py = ny;
+      }
+      // 小节点示意怪
+      for (const [nx, ny] of nodes.slice(0, 2)) {
+        ctx.fillStyle = '#8a74b8'; ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(nx, ny + 6, 7, 8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     },
     whirlwind(ctx, t, lv) {
@@ -301,12 +324,27 @@ const Dex = (() => {
       } else if (k < 0.75) glow(ctx, TGT_X + 20, MID_Y + 6, 36 + lv * 3, FIRE, (0.75 - k) * 7);
     },
     boomerang(ctx, t, lv) {
+      // 巨型锯盘：钢盘锯齿去而复返（3 级双盘）
+      const draw = (k, flip) => {
+        const d = k < 0.5 ? k * 2 : (1 - k) * 2;
+        const x = DUCK_X + (flip ? -1 : 1) * d * (96 + lv * 5);
+        ctx.save(); ctx.translate(x, MID_Y - 4); ctx.rotate(t * 16);
+        const R = 10;
+        ctx.fillStyle = '#aeb6c8'; ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a0 = i * Math.PI / 5, a1 = a0 + Math.PI / 10;
+          ctx.lineTo(Math.cos(a0) * (R + 3.4), Math.sin(a0) * (R + 3.4));
+          ctx.lineTo(Math.cos(a1) * R, Math.sin(a1) * R);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#3a4152';
+        ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      };
       const k = (t % 1.6) / 1.6;
-      const d = k < 0.5 ? k * 2 : (1 - k) * 2;
-      const x = DUCK_X + d * (100 + lv * 6);
-      ctx.save(); ctx.translate(x, MID_Y - 4); ctx.rotate(t * 14);
-      ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🥏', 0, 5);
-      ctx.restore();
+      draw(k, false);
+      if (lv >= 3) draw(k, true);
     },
     chrono(ctx, t, lv) {
       ctx.strokeStyle = 'rgba(160,200,255,.5)'; ctx.lineWidth = 1.5;
@@ -318,16 +356,24 @@ const Dex = (() => {
       glow(ctx, DUCK_X, MID_Y, 30 + lv * 2, 'rgba(200,230,140,$)', 0.35 + Math.sin(t * 3) * 0.1);
     },
     spears(ctx, t, lv) {
+      // 白骨碎片贴图放射
       const k = (t % 1.4) / 1.4;
-      const n = 6 + lv;
-      ctx.strokeStyle = '#e8e2d0'; ctx.lineWidth = 2;
+      const n = 8 + lv;
+      const bimg = typeof MonsterImages !== 'undefined' && MonsterImages.fx_bone;
       for (let i = 0; i < n; i++) {
         const a = i * Math.PI * 2 / n;
-        const r0 = 14 + k * 40;
-        ctx.beginPath();
-        ctx.moveTo(DUCK_X + Math.cos(a) * r0, MID_Y + Math.sin(a) * r0);
-        ctx.lineTo(DUCK_X + Math.cos(a) * (r0 + 8), MID_Y + Math.sin(a) * (r0 + 8));
-        ctx.stroke();
+        const r0 = 14 + k * 44;
+        const bx = DUCK_X + Math.cos(a) * r0, by = MID_Y + Math.sin(a) * r0;
+        if (bimg && bimg.naturalWidth) {
+          ctx.save(); ctx.translate(bx, by); ctx.rotate(a);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(bimg, -7, -7, 14, 14);
+          ctx.imageSmoothingEnabled = true;
+          ctx.restore();
+        } else {
+          ctx.strokeStyle = '#e8e2d0'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a) * 8, by + Math.sin(a) * 8); ctx.stroke();
+        }
       }
     },
     drone(ctx, t, lv) {
@@ -377,11 +423,44 @@ const Dex = (() => {
       for (let i = 0; i < lv; i++) drawDuck(ctx, DUCK_X + 30 + i * 24, MID_Y + 8, t + i);
     },
     revenge(ctx, t, lv) {
+      // 火焰云怒环 + 双冲击波（与实战 fxRevenge 一致）
       const k = (t % 1.8) / 1.8;
-      if (k < 0.3) {
-        ctx.strokeStyle = `rgba(255,140,60,${(0.3 - k) * 3})`; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(DUCK_X, MID_Y, k * 130, 0, Math.PI * 2); ctx.stroke();
-        glow(ctx, DUCK_X, MID_Y, 24, FIRE, (0.3 - k) * 2);
+      if (k < 0.38) {
+        const kk = k / 0.38;
+        ctx.strokeStyle = `rgba(255,150,60,${(1 - kk) * 0.9})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(DUCK_X, MID_Y, kk * 120, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,220,140,${(1 - kk) * 0.6})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(DUCK_X, MID_Y, kk * 86, 0, Math.PI * 2); ctx.stroke();
+        glow(ctx, DUCK_X, MID_Y, 26, FIRE, (1 - kk) * 1.2);
+        const n = 10;
+        for (let i = 0; i < n; i++) {
+          const a = i * Math.PI * 2 / n;
+          const fr = kk * 58;
+          const fimg = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + (i % 3)];
+          if (fimg && fimg.naturalWidth) {
+            ctx.save();
+            ctx.globalAlpha = 1 - kk;
+            ctx.translate(DUCK_X + Math.cos(a) * fr, MID_Y + Math.sin(a) * fr);
+            ctx.rotate(a);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(fimg, -8, -8, 16, 16);
+            ctx.imageSmoothingEnabled = true;
+            ctx.restore();
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+    },
+    arty(ctx, t, lv) {
+      // 火炮支援：预警圈 + 依次落弹
+      const k = (t % 2) / 2;
+      for (let i = 0; i < 3; i++) {
+        const x = TGT_X - 30 + i * 26, y = MID_Y - 8 + (i % 2) * 16;
+        const bt = k * 3 - i * 0.5;
+        if (bt < 1 && bt > 0) {
+          ctx.strokeStyle = `rgba(255,120,40,${0.8 - bt * 0.4})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke();
+        } else if (bt >= 1 && bt < 1.3) glow(ctx, x, y, 22, FIRE, (1.3 - bt) * 3);
       }
     },
   };

@@ -147,7 +147,7 @@ Object.assign(Game.prototype, {
             const d = Math.hypot(m.x - mt.x, m.y - mt.y);
             if (d > mR + m.r) continue;
             m.burnT = Math.max(m.burnT, 1.5);
-            if (m.hurt(30 + S.meteor * 12, this)) this.killMonster(m, this.players[0]);
+            if (m.hurt(mt.arty ? 26 + (mt.lv || 1) * 9 : 30 + S.meteor * 12, this)) this.killMonster(m, this.players[0]);
           }
         }
       }
@@ -217,7 +217,7 @@ Object.assign(Game.prototype, {
           for (let i = 0; i < n; i++) {
             const a = i * Math.PI * 2 / n + this.time;
             this.bullets.push(new Bullet(p.x, p.y, a,
-              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110 }, p, 1));
+              { id: 'spear', dmg: 14 + S.spears * 6, speed: 560, range: 260 + S.spears * 18, knock: 110, noHoming: true }, p, 1));
           }
         }
         Sfx.crossbow();
@@ -279,25 +279,47 @@ Object.assign(Game.prototype, {
         }
       }
     }
-    // 🐥 召唤鸭灵：常驻小战士（阵亡 5 秒固定复活；成群/战意变体可强化）
+    // 🐥 召唤鸭灵：持圣剑的小战士——每只阵亡后独立计时 5 秒并行复活（修复：团灭后只能 5 秒回一只）
     if (S.summon > 0) {
       if (!ex.pets) ex.pets = [];
+      if (!ex.petQueue) ex.petQueue = [];
+      const before = ex.pets.length;
       ex.pets = ex.pets.filter(pet => pet.hp > 0);
-      ex.petRespawnT = Math.max(0, (ex.petRespawnT || 0) - dt);
+      for (let i = 0; i < before - ex.pets.length; i++) ex.petQueue.push(5);   // 每只阵亡挂一个 5s 复活计时
       const petCap = S.summon + (H.mods.petN || 0);
       const pow = 1 + (H.mods.petPow || 0) * 0.4;
-      if (ex.pets.length < petCap && ex.petRespawnT <= 0) {
-        ex.petRespawnT = 5;
+      while (ex.pets.length + ex.petQueue.length < petCap) ex.petQueue.push(0.5);  // 新升级立刻补编制
+      for (let i = ex.petQueue.length - 1; i >= 0; i--) {
+        ex.petQueue[i] -= dt;
+        if (ex.petQueue[i] > 0 || ex.pets.length >= petCap) continue;
+        ex.petQueue.splice(i, 1);
         const owner = this.players.find(p => p.active);
-        if (owner) {
-          const pet = new Mercenary(owner.x + 26, owner.y + 26,
-            { id: 'petduck', name: '鸭灵', icon: '🐥', hp: Math.round((100 + S.summon * 50) * pow), dmg: Math.round((12 + S.summon * 6) * pow),
-              rate: 1.6, melee: true, range: 46, speed: 175 }, owner);
-          pet.isPet = true;
-          unstick(pet);
-          this.mercs.push(pet);
-          ex.pets.push(pet);
-          this.floater(pet.x, pet.y - 20, '🐥 鸭灵苏醒！', '#ffd93d');
+        if (!owner) continue;
+        const pet = new Mercenary(owner.x + 26, owner.y + 26,
+          { id: 'petduck', name: '鸭灵', icon: '🐥', hp: Math.round((100 + S.summon * 50) * pow), dmg: Math.round((14 + S.summon * 7) * pow),
+            rate: 1.6, melee: true, range: 70, sword: true, speed: 175 }, owner);
+        pet.isPet = true;
+        unstick(pet);
+        this.mercs.push(pet);
+        ex.pets.push(pet);
+        this.floater(pet.x, pet.y - 20, '🐥 鸭灵苏醒！', '#ffd93d');
+      }
+    }
+    // 📡 呼叫支援：周期火炮空袭——沿射击方向的大范围炮弹雨
+    if (S.arty > 0) {
+      ex.artyT = (ex.artyT === undefined ? 6 : ex.artyT) - dt;
+      if (ex.artyT <= 0) {
+        ex.artyT = Math.max(7, 14 - S.arty * 2);
+        for (const p of this.players) {
+          if (!p.active) continue;
+          const cx = p.x + Math.cos(p.facing) * 260, cy = p.y + Math.sin(p.facing) * 260;
+          const shells = 5 + S.arty * 2;
+          for (let i = 0; i < shells; i++) {
+            ex.meteors.push({ x: cx + (Math.random() - 0.5) * 340, y: cy + (Math.random() - 0.5) * 260,
+                              t: 0.5 + i * 0.14, arty: true, lv: S.arty });
+          }
+          this.floater(p.x, p.y - 46, '📡 火炮支援已呼叫！', '#7ef7ff');
+          Sfx.aggro();
         }
       }
     }
@@ -370,7 +392,7 @@ Object.assign(Game.prototype, {
     }
     for (const mt of ex.meteors) {
       const [sx, sy] = W2S(mt.x, mt.y);
-      const prog = 1 - mt.t / 0.8;
+      const prog = Math.max(0, Math.min(1, 1 - mt.t / 0.8));   // 火炮引信可长于 0.8s，收拢进度须钳制
       // 落点预警：双环 + 随进度收拢的实心警告
       ctx.strokeStyle = `rgba(255,120,40,${0.45 + Math.sin(this.time * 10) * 0.2})`;
       ctx.lineWidth = 3;

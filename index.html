@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=16">
+<link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 
@@ -143,6 +143,7 @@
           </div>
         </div>
       </div>
+      <div id="ally-panel"></div>
       <div id="hud-supplies"></div>
       <div id="hud-toasts"></div>
       <div id="vignette"></div>
@@ -253,6 +254,7 @@
     <div class="menu-buttons" style="margin-top:6px">
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showKeybinds()">⌨️ 键位设置（含双人练习场）</button>
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showTuning()">🎛️ 策划调参面板</button>
+      <button class="btn big" id="btn-mouseaim" onclick="UI.toggleMouseAim()">🖱️ 鼠标操控（单人）：开</button>
       <button class="btn big" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
     </div>
     <div style="display:flex; justify-content:center; margin-top:12px">
@@ -332,24 +334,24 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=16"></script>
-<script src="js/music.js?v=16"></script>
-<script src="js/skins-data.js?v=16"></script>
-<script src="js/monsters-data.js?v=16"></script>
-<script src="js/tiles-data.js?v=16"></script>
-<script src="js/data.js?v=16"></script>
-<script src="js/save.js?v=16"></script>
-<script src="js/map.js?v=16"></script>
-<script src="js/vision.js?v=16"></script>
-<script src="js/entities.js?v=16"></script>
-<script src="js/game.js?v=16"></script>
-<script src="js/fx.js?v=16"></script>
-<script src="js/dex.js?v=16"></script>
-<script src="js/horde.js?v=16"></script>
-<script src="js/weather.js?v=16"></script>
-<script src="js/powerups.js?v=16"></script>
-<script src="js/ui.js?v=16"></script>
-<script src="js/trainer.js?v=16"></script>
-<script src="js/main.js?v=16"></script>
+<script src="js/sfx.js?v=18"></script>
+<script src="js/music.js?v=18"></script>
+<script src="js/skins-data.js?v=18"></script>
+<script src="js/monsters-data.js?v=18"></script>
+<script src="js/tiles-data.js?v=18"></script>
+<script src="js/data.js?v=18"></script>
+<script src="js/save.js?v=18"></script>
+<script src="js/map.js?v=18"></script>
+<script src="js/vision.js?v=18"></script>
+<script src="js/entities.js?v=18"></script>
+<script src="js/game.js?v=18"></script>
+<script src="js/fx.js?v=18"></script>
+<script src="js/dex.js?v=18"></script>
+<script src="js/horde.js?v=18"></script>
+<script src="js/weather.js?v=18"></script>
+<script src="js/powerups.js?v=18"></script>
+<script src="js/ui.js?v=18"></script>
+<script src="js/trainer.js?v=18"></script>
+<script src="js/main.js?v=18"></script>
 </body>
 </html>

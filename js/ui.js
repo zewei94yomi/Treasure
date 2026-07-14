@@ -37,6 +37,16 @@ const UI = (() => {
     $('settingshub-overlay').style.display = 'flex';
     const b = $('btn-music');
     if (b) b.textContent = Music.enabled() ? '🎵 音乐：开' : '🔇 音乐：关';
+    const ma = $('btn-mouseaim');
+    if (ma) ma.textContent = SAVE.settings.mouseAim !== false
+      ? '🖱️ 鼠标操控（单人）：开 — 准星瞄准/左键攻击/右键翻滚'
+      : '⌨️ 鼠标操控（单人）：关 — 使用键盘朝向';
+  }
+  function toggleMouseAim() {
+    SAVE.settings.mouseAim = SAVE.settings.mouseAim === false;
+    persistSave();
+    showSettingsHub();
+    Sfx.tick();
   }
   function hideSettingsHub() { $('settingshub-overlay').style.display = 'none'; }
 
@@ -915,7 +925,7 @@ const UI = (() => {
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setMerc2, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
-           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub,
+           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleMouseAim,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive };

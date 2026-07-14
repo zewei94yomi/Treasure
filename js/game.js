@@ -16,7 +16,8 @@ function buildKeymaps() {
 }
 buildKeymaps();
 
-const Input = { keys: {}, sneakToggle: [false, false], lastCode: '', imeWarned: false };
+const Input = { keys: {}, sneakToggle: [false, false], lastCode: '', imeWarned: false,
+                mouse: { x: 0, y: 0 }, mouseL: false, mouseR: false };
 
 // 中文输入法防御：IME 接管标点键时 e.code 可能缺失/异常，用 e.key 的全角字符回退映射
 function normalizeCode(e) {
@@ -68,6 +69,7 @@ class Game {
 
     this.players = [];
     this.mercs = [];
+    this.mouseAimRun = this.mode === 1 && SAVE.settings.mouseAim !== false;
     for (let i = 0; i < mode; i++) {
       const sp = MapData.spawns[i];
       const lo = loadouts[i] || {};
@@ -75,6 +77,7 @@ class Game {
       const w2 = SAVE.weapons.find(w => w.uid === lo.w2) || null;
       const armor = SAVE.armors.find(a => a.uid === lo.armor) || null;
       const p = new Player(i, sp.x, sp.y, [w1, w2], skinIds && skinIds[i], armor, lo.pouch, lo.acc);
+      if (i === 0 && this.mouseAimRun) p.mouseAimed = true;
       p.maxHp = Math.round(p.maxHp * tune('pHp')); p.hp = p.maxHp;
       this.players.push(p);
       if (lo.merc2 && MERCS[lo.merc2]) {
@@ -161,7 +164,7 @@ class Game {
       this.hordeState = {
         level: 1, xp: 0, xpNeed: Math.round(8 * (mode === 2 ? 1.35 : 1)),
         mods: { dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 },
-        skills: { orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0 },
+        skills: { orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0, arty: 0 },
         spawnT: 1.2, missileT: 2, novaT: 4, boltT: 3, trailT: 0, fireTickT: 0,
         gems: [], firePatches: [], novaRings: [], bolts: [],
         bossIdx: 0, boss: null, victory: false, freeChoices: 0,
@@ -334,6 +337,7 @@ class Game {
     for (const s of this.sparks) { s.t -= dt; s.x += s.vx * dt; s.y += s.vy * dt; }
     this.sparks = this.sparks.filter(s => s.t > 0);
     this.updateFx(dt);
+    this.updateAllyFx(dt);
 
     this.updateWeather(dt);
     this.updatePowerups(dt);
@@ -547,7 +551,7 @@ class Game {
         for (const job of H.chainJobs) {
           job.hopT -= dt;
           if (job.hopT > 0) continue;
-          job.hopT = 0.09;
+          job.hopT = tune('zapHop');
           const node = job.node;
           if (!node || job.left <= 0 || node.hp <= 0 || !this.monsters.includes(node)) { job.done = true; continue; }
           job.left--;
@@ -614,6 +618,8 @@ class Game {
       H.xp -= H.xpNeed;
       H.level++;
       H.xpNeed = Math.round((8 + H.level * 4 + H.level * H.level * 0.15) * (this.mode === 2 ? 1.25 : 1));
+      // 升级回血：每级回复 6% 最大生命
+      for (const p of this.players) if (p.active) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.06);
       H.freeChoices++;
       Sfx.extract();
       this.floater(this.players[0].x, this.players[0].y - 40, `⬆ 升级 Lv.${H.level}！`, '#ffd93d');
@@ -704,6 +710,11 @@ class Game {
     Sfx.brute();
     this.shake = 10;
     this.toast(`⚠️ ${boss.type.name}降临战场！击杀它获得免费升级！`, '#ff5c5c');
+  }
+
+  // 鼠标操控开关：单人模式 1P + 设置未关闭
+  mouseAimOn(p) {
+    return this.mode === 1 && p.idx === 0 && SAVE.settings.mouseAim !== false;
   }
 
   tryRoll(p) {
@@ -802,18 +813,32 @@ class Game {
     const spd = (this.horde
       ? PLAYER_SPEED * 1.06 * this.hordeState.mods.speed * (p.sodaTime > 0 ? p.sodaMul : 1)
       : PLAYER_SPEED * p.speedMul()) * this.weatherPSpd();
+    const mAim = this.mouseAimOn(p);
     let wishX = 0, wishY = 0;
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
       const cand = Math.atan2(dy, dx);
-      if (dx !== 0 && dy !== 0) {          // 斜向输入立即采用并"粘住"
-        p.facing = cand;
-        p.faceStick = 0.12;
-      } else {                              // 单轴输入需持续片刻才覆盖斜角（消除松键抖动）
-        p.faceStick = Math.max(0, (p.faceStick || 0) - dt);
-        if (p.faceStick <= 0) p.facing = cand;
+      if (!mAim) {
+        if (dx !== 0 && dy !== 0) {          // 斜向输入立即采用并"粘住"
+          p.facing = cand;
+          p.faceStick = 0.12;
+        } else {                              // 单轴输入需持续片刻才覆盖斜角（消除松键抖动）
+          p.faceStick = Math.max(0, (p.faceStick || 0) - dt);
+          if (p.faceStick <= 0) p.facing = cand;
+        }
       }
       wishX = (dx / len) * spd; wishY = (dy / len) * spd;
+    }
+    // —— 鼠标操控（单人）：朝向 360° 跟随准星，移动与瞄准解耦（双摇杆手感） ——
+    if (mAim) {
+      const cam = this.cams[0];
+      p.facing = Math.atan2(Input.mouse.y + cam.y - p.y, Input.mouse.x + cam.x - p.x);
+      // 右键：向准星方向翻滚
+      if (Input.mouseR) {
+        Input.mouseR = false;
+        this.tryRoll(p);
+        if (p.rollT > 0) p.rollDir = p.facing;
+      }
     }
     // 冰面滑行：速度缓慢逼近目标方向；普通地面直接响应
     if (MapData.mods.slippery && isDecorAt(p.x, p.y)) {
@@ -846,7 +871,7 @@ class Game {
     p.x = Math.max(TILE, Math.min(MapData.pxW - TILE, p.x));
     p.y = Math.max(TILE, Math.min(MapData.pxH - TILE, p.y));
 
-    if (Input.keys[km.shoot] || (km.shoot2 && Input.keys[km.shoot2])) this.tryAttack(p);
+    if (Input.keys[km.shoot] || (km.shoot2 && Input.keys[km.shoot2]) || (mAim && Input.mouseL)) this.tryAttack(p);
     this.interactHold(p, dt, Input.keys[km.interact]);
 
     for (const g of this.groundLoot) {
@@ -1011,7 +1036,7 @@ class Game {
       bdef = Object.assign({}, def, {
         pierce: (def.pierce || 1) + H.pierce,
         range: (def.range || 500) * H.range,
-        knock: (def.knock || 80) * H.knock,
+        knock: (def.knock || 80) * H.knock * 1.15,   // 武器流爽感：基础击退 +15%
         speed: (def.speed || 500) * (H.bSpeed || 1),
       });
     }
@@ -1033,10 +1058,20 @@ class Game {
     }
     this.spark(p.x + Math.cos(angle) * 24, p.y + Math.sin(angle) * 24, '#ffe28a');
     this.fxMuzzle(p.x + Math.cos(angle) * 24, p.y + Math.sin(angle) * 24, angle);
-    if (def.id === 'laser') Sfx.laser();
+    if (def.sfx && Sfx[def.sfx]) Sfx[def.sfx]();
+    else if (def.id === 'laser') Sfx.laser();
     else if (def.id === 'crossbow') Sfx.crossbow();
-    else if (def.id === 'cannon') Sfx.shotgun();
-    else (def.pellets ? Sfx.shotgun : Sfx.shoot)();
+    else if (def.id === 'rpg') Sfx.rpg();
+    else if (def.id === 'sniper') Sfx.sniper();
+    else if (def.id === 'cannon' || def.pellets) Sfx.shotgun();
+    else if (def.id === 'smg') Sfx.smg();
+    else Sfx.shoot();
+    // 弹壳抛出（爽感小料）
+    if (!def.melee && tune('juice') >= 1) {
+      const ca = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+      this.sparks.push({ x: p.x + Math.cos(angle) * 14, y: p.y + Math.sin(angle) * 14,
+        vx: Math.cos(ca) * 90, vy: Math.sin(ca) * 90 - 40, t: 0.3, color: '#d9b44a' });
+    }
     if (!def.silent && !this.horde) this.emitNoise(p.x, p.y, this.cfg.hear * (def.explosive ? 1.3 : 1));
     if (!def.silent && p.sneak) { p.sneak = false; this.floater(p.x, p.y - 46, '枪声破隐！', '#ff8f8f'); }
     if (inst.dur <= 0 && !this.horde) this.breakWeapon(p);
@@ -1169,8 +1204,8 @@ class Game {
       this.floater(p.x, p.y - 40, '💨 闪避！', '#9fd8ff');
       return;
     }
-    // 复仇之焰：受击反噬——火焰云环形爆发（半径 150，附灼烧+击飞）
-    if (this.horde && this.hordeState.skills.revenge > 0 && dmg > 0) {
+    // 复仇之焰：仅怪物直接攻击触发（中毒/毒雾/死亡之潮/落石等环境伤害与 DoT 不触发）
+    if (this.horde && this.hordeState.skills.revenge > 0 && dmg > 0 && src && src.hurt) {
       const lv = this.hordeState.skills.revenge;
       const R = 150;
       for (const m of this.monsters.slice()) {
@@ -1727,6 +1762,61 @@ class Game {
     }
   }
 
+  // ---------- 盟友技能特效层（法师黑龙波/激光/火环 + 机兵火炮） ----------
+  allyFx() {
+    if (!this._allyFx) this._allyFx = { waves: [], beams: [], fires: [], strikes: [] };
+    return this._allyFx;
+  }
+  updateAllyFx(dt) {
+    if (!this._allyFx) return;
+    const A = this._allyFx;
+    // 🐉 黑龙波：直线扫过，命中打硬直
+    for (const w of A.waves) {
+      w.t -= dt;
+      w.x += Math.cos(w.a) * 320 * dt;
+      w.y += Math.sin(w.a) * 320 * dt;
+      for (const m of this.monsters.slice()) {
+        if (w.hit.has(m)) continue;
+        if (Math.hypot(m.x - w.x, m.y - w.y) < m.r + 26) {
+          w.hit.add(m);
+          m.stunT = Math.max(m.stunT, 0.9);
+          m.knock(w.a, 320);
+          if (m.hurt(32, this)) this.killMonster(m, this.players[0]);
+        }
+      }
+    }
+    A.waves = A.waves.filter(w => w.t > 0 && !isSolidAt(w.x, w.y));
+    for (const b of A.beams) b.t -= dt;
+    A.beams = A.beams.filter(b => b.t > 0);
+    // 🔥 烈焰之环：持续灼烧圈
+    for (const f of A.fires) {
+      f.t -= dt; f.tick -= dt;
+      if (f.tick <= 0) {
+        f.tick = 0.5;
+        for (const m of this.monsters.slice()) {
+          if (Math.hypot(m.x - f.x, m.y - f.y) > f.r + m.r) continue;
+          m.burnT = Math.max(m.burnT, 1);
+          if (m.hurt(9, this)) this.killMonster(m, this.players[0]);
+        }
+      }
+    }
+    A.fires = A.fires.filter(f => f.t > 0);
+    // 📡 火炮：预警后落地爆炸（只伤怪）
+    for (const s of A.strikes) {
+      s.t -= dt;
+      if (s.t <= 0) {
+        this.fxExplosion(s.x, s.y, 58);
+        Sfx.boom();
+        for (const m of this.monsters.slice()) {
+          if (Math.hypot(m.x - s.x, m.y - s.y) > 66 + m.r) continue;
+          m.knock(Math.atan2(m.y - s.y, m.x - s.x), 500);
+          if (m.hurt(30, this)) this.killMonster(m, this.players[0]);
+        }
+      }
+    }
+    A.strikes = A.strikes.filter(s => s.t > 0);
+  }
+
   // ---------- 特效 ----------
   floater(x, y, text, color) { this.floaters.push({ x, y, text, color, t: 1.6 }); }
   // 伤害数字（打击感），暴击更大更黄
@@ -2173,6 +2263,15 @@ class Game {
       } else if (b.frost) {
         ctx.fillStyle = 'rgba(190,233,255,.8)';
         ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI*2); ctx.fill();
+      } else if (b.arrowC) {
+        // 弓箭手的箭：彩色箭杆 + 箭头
+        ctx.save();
+        ctx.translate(sx, sy); ctx.rotate(b.angle);
+        ctx.strokeStyle = b.arrowC; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(7, 0); ctx.stroke();
+        ctx.fillStyle = b.arrowC;
+        ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(5, -3.5); ctx.lineTo(5, 3.5); ctx.closePath(); ctx.fill();
+        ctx.restore();
       } else if (b.bone) {
         // 骨刺：白骨碎片贴图，随弹道旋转
         const bimg = typeof MonsterImages !== 'undefined' && MonsterImages.fx_bone;
@@ -2229,6 +2328,65 @@ class Game {
     }
     ctx.globalAlpha = 1;
     this.drawFx(ctx, cam, w);   // 高级粒子层（爆炸/枪口焰/烟尘）
+    // —— 盟友技能特效层 ——
+    if (this._allyFx) {
+      const A = this._allyFx;
+      const dimg = typeof MonsterImages !== 'undefined' && MonsterImages.m_dragon;
+      for (const wv of A.waves) {
+        const [sx, sy] = W2S(wv.x, wv.y);
+        if (!onScreen(sx, sy, 80)) continue;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(FxTex.glow, sx - 30, sy - 30, 60, 60);
+        ctx.restore();
+        if (dimg && dimg.naturalWidth) {
+          ctx.save();
+          ctx.translate(sx, sy + Math.sin(this.time * 8 + wv.y) * 3);
+          if (Math.cos(wv.a) > 0) ctx.scale(-1, 1);   // 素材原生朝左
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(dimg, -26, -26, 52, 52);
+          ctx.imageSmoothingEnabled = true;
+          ctx.restore();
+        }
+      }
+      for (const bm of A.beams) {
+        const [x0, y0] = W2S(bm.x0, bm.y0), [x1, y1] = W2S(bm.x1, bm.y1);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(126,247,255,${bm.t * 3})`;
+        ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,255,255,${bm.t * 3})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.restore();
+      }
+      for (const f of A.fires) {
+        const [sx, sy] = W2S(f.x, f.y);
+        if (!onScreen(sx, sy, 140)) continue;
+        ctx.strokeStyle = `rgba(255,140,60,${Math.min(0.8, f.t * 0.5)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(sx, sy, f.r, 0, Math.PI * 2); ctx.stroke();
+        const n = 10;
+        for (let i = 0; i < n; i++) {
+          const a = i * Math.PI * 2 / n + this.time * 0.8;
+          const fimg = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + ((i + Math.floor(this.time * 8)) % 3)];
+          if (fimg && fimg.naturalWidth) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(fimg, sx + Math.cos(a) * f.r - 12, sy + Math.sin(a) * f.r - 18, 24, 24);
+            ctx.imageSmoothingEnabled = true;
+          }
+        }
+      }
+      for (const s of A.strikes) {
+        const [sx, sy] = W2S(s.x, s.y);
+        ctx.strokeStyle = `rgba(255,120,40,${0.4 + Math.sin(this.time * 12) * 0.25})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(sx, sy, 44, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(sx, sy, 44 * Math.max(0, 1 - s.t / 0.9), 0, Math.PI * 2); ctx.stroke();
+      }
+    }
 
     const lights = this.players.filter(p => p.active).map(p => ({ x: p.x, y: p.y, radius: VISION.baseRadius * p.visionMul() * (this.horde ? 2.1 : 1) * this.weatherVision() }));
     for (const p of this.players) if (p.downed) lights.push({ x: p.x, y: p.y, radius: 90 });
@@ -2312,6 +2470,17 @@ class Game {
     this.drawInteractionUI(ctx, cam);
 
     ctx.textAlign = 'center';
+    // —— 鼠标准星（单人鼠标操控）——
+    if (v.idx === 0 && this.mode === 1 && SAVE.settings.mouseAim !== false && !this.paused) {
+      const mx = Input.mouse.x, my = Input.mouse.y;
+      ctx.strokeStyle = 'rgba(255,217,61,.9)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(mx, my, 9, 0, Math.PI * 2); ctx.stroke();
+      for (const [ox, oy] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) {
+        ctx.beginPath(); ctx.moveTo(mx + ox * 0.55, my + oy * 0.55); ctx.lineTo(mx + ox, my + oy); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,217,61,.9)';
+      ctx.beginPath(); ctx.arc(mx, my, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
     // 伤害数字（普通白、重击金色大号、玩家受伤红色）
     for (const n of this.dmgNums) {
       const [sx, sy] = W2S(n.x, n.y);
@@ -2793,6 +2962,79 @@ class Game {
   }
 
   // 雇佣兵：戴贝雷帽的战斗鸭
+  // —— 卡通枪械手持造型（原点=持枪手，朝 +x）——
+  drawGun(ctx, def) {
+    ctx.strokeStyle = '#241f38'; ctx.lineWidth = 1.5;
+    const id = def.id;
+    if (id === 'ak') {
+      ctx.fillStyle = '#7a4a26';                                    // 木托
+      ctx.fillRect(4, -3, 7, 6); ctx.strokeRect(4, -3, 7, 6);
+      ctx.fillStyle = '#3a3a44';                                    // 机匣+枪管
+      ctx.fillRect(10, -3, 16, 5); ctx.strokeRect(10, -3, 16, 5);
+      ctx.fillRect(26, -1.5, 6, 2.5);
+      ctx.fillStyle = '#7a4a26';                                    // 弯弹匣
+      ctx.beginPath(); ctx.moveTo(15, 2); ctx.quadraticCurveTo(15, 9, 20, 10); ctx.lineTo(21, 6); ctx.quadraticCurveTo(18, 5, 18, 2); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    } else if (id === 'mg3') {
+      ctx.fillStyle = '#33333e';                                    // 长机匣
+      ctx.fillRect(6, -4, 24, 7); ctx.strokeRect(6, -4, 24, 7);
+      ctx.fillRect(30, -2, 8, 3);                                    // 粗枪管
+      ctx.fillStyle = '#4a4a58';                                     // 弹箱
+      ctx.fillRect(12, 3, 8, 6); ctx.strokeRect(12, 3, 8, 6);
+      ctx.strokeStyle = '#555';                                      // 两脚架
+      ctx.beginPath(); ctx.moveTo(28, 3); ctx.lineTo(24, 9); ctx.moveTo(28, 3); ctx.lineTo(32, 9); ctx.stroke();
+    } else if (id === 'rpg') {
+      ctx.fillStyle = '#4a5a3a';                                     // 发射筒
+      ctx.fillRect(2, -4, 26, 8); ctx.strokeRect(2, -4, 26, 8);
+      ctx.fillStyle = '#5c1420';                                     // 弹头
+      ctx.beginPath(); ctx.moveTo(28, -5); ctx.lineTo(36, 0); ctx.lineTo(28, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (id === 'sniper' || id === 'rifle') {
+      ctx.fillStyle = id === 'sniper' ? '#2c3444' : '#5a4a30';
+      ctx.fillRect(6, -2.5, 26, 5); ctx.strokeRect(6, -2.5, 26, 5);
+      ctx.fillRect(32, -1.2, 6, 2.4);
+      ctx.fillStyle = '#222';                                         // 瞄具
+      ctx.fillRect(14, -6, 9, 3); ctx.strokeRect(14, -6, 9, 3);
+    } else if (id === 'shotgun') {
+      ctx.fillStyle = '#6a4426';
+      ctx.fillRect(4, -3, 8, 6); ctx.strokeRect(4, -3, 8, 6);
+      ctx.fillStyle = '#3a3a44';
+      ctx.fillRect(12, -3.5, 18, 3); ctx.fillRect(12, 0.5, 18, 3);
+      ctx.strokeRect(12, -3.5, 18, 3); ctx.strokeRect(12, 0.5, 18, 3);
+    } else if (id === 'smg') {
+      ctx.fillStyle = '#444452';
+      ctx.fillRect(7, -3, 14, 6); ctx.strokeRect(7, -3, 14, 6);
+      ctx.fillRect(21, -1.5, 5, 3);
+      ctx.fillStyle = '#33333e';
+      ctx.fillRect(12, 3, 4, 7); ctx.strokeRect(12, 3, 4, 7);
+    } else if (id === 'flamer' || id === 'frost' || id === 'freezer') {
+      const col = id === 'flamer' ? '#a04a20' : '#3a6a8a';
+      ctx.fillStyle = col;
+      ctx.fillRect(6, -4, 12, 8); ctx.strokeRect(6, -4, 12, 8);     // 罐体
+      ctx.fillStyle = '#3a3a44';
+      ctx.fillRect(18, -2, 12, 4); ctx.strokeRect(18, -2, 12, 4);   // 喷管
+      ctx.fillStyle = id === 'flamer' ? '#ff9a4d' : '#9fd8ff';
+      ctx.beginPath(); ctx.arc(31, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+    } else if (id === 'crossbow') {
+      ctx.fillStyle = '#5a4a30';
+      ctx.fillRect(6, -2, 20, 4); ctx.strokeRect(6, -2, 20, 4);
+      ctx.strokeStyle = '#8a6a3b'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(22, -9); ctx.quadraticCurveTo(30, 0, 22, 9); ctx.stroke();
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(22, -9); ctx.lineTo(10, 0); ctx.lineTo(22, 9); ctx.stroke();
+    } else if (id === 'revolver') {
+      ctx.fillStyle = '#6a6a78';
+      ctx.fillRect(8, -2.5, 15, 5); ctx.strokeRect(8, -2.5, 15, 5);
+      ctx.beginPath(); ctx.arc(13, 1, 3.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();  // 转轮
+      ctx.fillStyle = '#7a4a26';
+      ctx.fillRect(5, 1, 5, 6); ctx.strokeRect(5, 1, 5, 6);
+    } else {
+      ctx.fillStyle = '#3a3a48';
+      ctx.fillRect(8, -3, 16, 6); ctx.strokeRect(8, -3, 16, 6);
+      ctx.fillStyle = '#55555f';
+      ctx.fillRect(10, 3, 4, 5);
+    }
+  }
+
   drawMerc(ctx, mc, sx, sy) {
     const walk = mc.moving ? Math.sin(mc.anim * 11) : 0;
     const fx = Math.cos(mc.facing), fy = Math.sin(mc.facing);
@@ -2956,8 +3198,7 @@ class Game {
         ctx.fillRect(8, -4, 20, 8); ctx.strokeRect(8, -4, 20, 8);
         ctx.fillStyle = '#7ef7ff'; ctx.fillRect(24, -2, 5, 4);
       } else {
-        ctx.fillStyle = '#3a3a48'; ctx.strokeStyle = '#241f38'; ctx.lineWidth = 1.5;
-        ctx.fillRect(8, -3, 18, 6); ctx.strokeRect(8, -3, 18, 6);
+        this.drawGun(ctx, def);   // 按武器族的卡通枪械造型
       }
       ctx.restore();
     }
@@ -3088,7 +3329,74 @@ class Game {
   }
 
   // ---------- HUD ----------
+  // —— 左侧盟友面板：所有佣兵/召唤物统一显示（头像/血条/攻击力/复活倒计时，阵亡变灰） ——
+  allyAvatar(def) {
+    Game._avCache = Game._avCache || {};
+    if (Game._avCache[def.id]) return Game._avCache[def.id];
+    const c = document.createElement('canvas');
+    c.width = c.height = 36;
+    const x = c.getContext('2d');
+    if (def.sprite && typeof MonsterImages !== 'undefined' && MonsterImages[def.sprite] && MonsterImages[def.sprite].naturalWidth) {
+      x.imageSmoothingEnabled = false;
+      x.drawImage(MonsterImages[def.sprite], 2, 2, 32, 32);
+    } else {
+      // 程序鸭头像：底色鸭 + 贝雷帽
+      x.fillStyle = '#e8ddc8'; x.strokeStyle = '#100e1d'; x.lineWidth = 2;
+      x.beginPath(); x.ellipse(18, 20, 11, 12, 0, 0, Math.PI * 2); x.fill(); x.stroke();
+      x.fillStyle = '#ff9f1c';
+      x.beginPath(); x.ellipse(26, 20, 5, 3.5, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#100e1d';
+      x.beginPath(); x.arc(21, 15, 1.8, 0, Math.PI * 2); x.fill();
+      x.fillStyle = def.color || '#888';
+      x.beginPath(); x.ellipse(16, 9, 9, 4.5, -0.15, 0, Math.PI * 2); x.fill(); x.stroke();
+    }
+    Game._avCache[def.id] = c.toDataURL();
+    return Game._avCache[def.id];
+  }
+  renderAllyPanel() {
+    const el = document.getElementById('ally-panel');
+    if (!el) return;
+    const rows = [];
+    for (const mc of this.mercs) {
+      if (mc.hp <= 0) continue;
+      const frac = Math.max(0, mc.hp / mc.maxHp);
+      const stat = mc.def.heal ? `💚${mc.def.heal}/次` : mc.def.fetch ? '🐾拾取' : mc.def.mage ? '🔮法术' : `⚔️${mc.def.dmg}`;
+      rows.push(`<div class="ally-row">
+        <img src="${this.allyAvatar(mc.def)}" class="ally-av">
+        <div class="ally-info">
+          <div class="ally-name">${mc.def.name.split('·')[0]}</div>
+          <div class="ally-hpbar"><i style="width:${Math.round(frac * 100)}%"></i></div>
+          <div class="ally-meta">${stat}${mc.despawnT !== undefined ? ` · ⏳${Math.ceil(mc.despawnT)}s` : ''}</div>
+        </div>
+      </div>`);
+    }
+    // 鸭灵复活倒计时
+    if (this.horde && this.hordeState.ex && this.hordeState.ex.petQueue) {
+      for (const q of this.hordeState.ex.petQueue) {
+        rows.push(`<div class="ally-row dead">
+          <img src="${this.allyAvatar({ id: 'petduck_gray', color: '#ffd93d' })}" class="ally-av">
+          <div class="ally-info"><div class="ally-name">鸭灵</div><div class="ally-meta">💤 复活 ${Math.max(0, q).toFixed(1)}s</div></div>
+        </div>`);
+      }
+    }
+    // 阵亡名单（灰头像）
+    for (const f of (this.allyFallen || []).slice(-4)) {
+      rows.push(`<div class="ally-row dead">
+        <img src="${this.allyAvatar(MERCS[f.id] || { id: f.id })}" class="ally-av">
+        <div class="ally-info"><div class="ally-name">${f.name.split('·')[0]}</div><div class="ally-meta">☠️ 阵亡</div></div>
+      </div>`);
+    }
+    const html = rows.length ? rows.join('') : '';
+    if (this._allyHtml !== html) {
+      this._allyHtml = html;
+      el.innerHTML = html;
+      el.style.display = html ? '' : 'none';
+    }
+  }
+
   updateHud() {
+    this._allyT = (this._allyT || 0) - 1;
+    if (this._allyT <= 0) { this._allyT = 12; this.renderAllyPanel(); }
     let anyLow = false;
     for (const p of this.players) {
       const el = document.getElementById(`hud-bot-p${p.idx + 1}`);

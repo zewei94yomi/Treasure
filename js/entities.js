@@ -759,11 +759,13 @@ class Bullet {
     this.owner = owner;
     this.laser = def.id === 'laser';
     this.frost = def.id === 'frost';
-    this.homing = !def.pellets;   // 散射类武器不追踪
+    this.homing = !def.pellets && !def.noHoming;   // 散射/骨刺类不追踪
     const hb = def.homing || {};  // 武器专属追踪强化（静音鹅弩）
     this.turn = hb.turn || def.turn || HOMING.turn;
     this.hCone = hb.cone || HOMING.cone;
     this.hDist = hb.dist || HOMING.dist;
+    // 鼠标操控：你自己瞄，弹道追踪大幅削弱（技能弹不受影响）
+    if (owner && owner.mouseAimed && !def.duck) { this.turn *= 0.25; this.hCone *= 0.4; this.hDist *= 0.55; }
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
     this.bone = def.id === 'spear';      // 骨刺：白骨贴图弹体
@@ -814,6 +816,7 @@ class Bullet {
           this.hitSet.add(m);
           game.spark(this.x, this.y, this.frost || this.freeze ? '#bfe9ff' : '#ff8f5c');
           game.fxHit(this.x, this.y, this.angle);
+          if (this.owner && this.owner.weaponDef) Sfx.impact();   // 武器命中专属闷响
           m.knock(this.angle, this.knock * 4);
           if (this.slow) m.slowT = Math.max(m.slowT, this.slow);
           if (this.burn) m.burnT = Math.max(m.burnT, this.burn);
@@ -826,6 +829,25 @@ class Bullet {
             if (Math.abs(da) > 2.1) { dmg = Math.max(1, Math.round(dmg * 0.35)); game.floater(m.x, m.y - 22, '格挡!', '#c9ced8'); }
           }
           if (m.hurt(dmg, game)) game.killMonster(m, this.owner);
+          // 雷电箭：命中放出两跳小闪电
+          if (this.zapArrow) {
+            let node = m;
+            const hs = new Set([m]);
+            for (let c = 0; c < 2; c++) {
+              let nx = null, nd = 140;
+              for (const mm of game.monsters) {
+                if (hs.has(mm)) continue;
+                const dd = Math.hypot(mm.x - node.x, mm.y - node.y);
+                if (dd < nd) { nx = mm; nd = dd; }
+              }
+              if (!nx) break;
+              hs.add(nx);
+              if (game.horde && game.hordeState.bolts) game.hordeState.bolts.push({ pts: [{ x: node.x, y: node.y }, { x: nx.x, y: nx.y }], t: 0.14 });
+              game.spark(nx.x, nx.y, '#ffe95c');
+              if (nx.hurt(Math.max(1, Math.round(this.dmg * 0.5)), game)) game.killMonster(nx, this.owner);
+              node = nx;
+            }
+          }
           // —— 攻击流派弹芯（割草升级；弹片自身不再触发，防止无限连锁） ——
           if (game.horde && this.owner && this.owner.weaponDef && !this.sub && m.hp > 0) {
             const M = game.hordeState.mods;
@@ -917,6 +939,10 @@ class Mercenary {
     if (this.hp <= 0) {
       game.floater(this.x, this.y - 24, `${this.def.name} 倒下了…`, '#ff8f8f');
       game.toast(`${this.def.name} 阵亡了`, '#ff8f8f');
+      if (!this.isPet) {   // 左侧面板：阵亡名单（鸭灵走复活队列不进名单）
+        game.allyFallen = game.allyFallen || [];
+        game.allyFallen.push({ id: this.def.id, name: this.def.name, icon: this.def.icon });
+      }
       Sfx.death();
     }
   }
@@ -927,6 +953,101 @@ class Mercenary {
     this.hurtCd = Math.max(0, this.hurtCd - dt);
     const o = this.owner;
     const pow = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);   // 战友号令：伤害与攻速增益
+    // —— 元素法师：四系法术轮转（水元素/黑龙波/激光束/烈焰之环） ——
+    if (this.def.mage) {
+      this.castT = (this.castT === undefined ? 2.2 : this.castT) - dt;
+      let tgt = null, td2 = this.def.range;
+      for (const m of game.monsters) {
+        if (m.state === 'ambush') continue;
+        const d = Math.hypot(m.x - this.x, m.y - this.y);
+        if (d < td2) { tgt = m; td2 = d; }
+      }
+      if (tgt && this.castT <= 0) {
+        this.castT = 3.6 / pow;
+        this.spellIdx = ((this.spellIdx || 0) % 4) + 1;
+        this.facing = Math.atan2(tgt.y - this.y, tgt.x - this.x);
+        const A = game.allyFx();
+        if (this.spellIdx === 1) {
+          // 💧 召唤水元素（同场限一只，存在则快速跳下一法术）
+          if (!game.mercs.some(mc => mc.def.id === 'waterele' && mc.hp > 0)) {
+            const we = new Mercenary(this.x + 26, this.y, { id: 'waterele', name: '水元素', icon: '💧',
+              hp: 240, dmg: 0, rate: 0, range: 0, speed: 150, color: '#6fc8ff', sprite: 'm_waterele', waterele: true }, this.owner);
+            we.despawnT = 22;
+            unstick(we);
+            game.mercs.push(we);
+            game.floater(this.x, this.y - 28, '💧 水元素苏醒！', '#6fc8ff');
+            Sfx.wisp();
+          } else this.castT = 0.4;
+        } else if (this.spellIdx === 2) {
+          // 🐉 黑龙波：三条黑龙横扫，打出硬直（致敬奇迹MU）
+          for (let i = -1; i <= 1; i++) {
+            A.waves.push({ x: this.x, y: this.y + i * 46, a: this.facing, t: 2.0, hit: new Set() });
+          }
+          game.floater(this.x, this.y - 28, '🐉 黑龙波！', '#b48aff');
+          Sfx.banshee();
+        } else if (this.spellIdx === 3) {
+          // ⚡ 激光束：直线贯穿
+          A.beams.push({ x0: this.x, y0: this.y, x1: tgt.x, y1: tgt.y, t: 0.28 });
+          const dx2 = tgt.x - this.x, dy2 = tgt.y - this.y, len2 = Math.hypot(dx2, dy2) || 1;
+          for (const m of game.monsters.slice()) {
+            const t2 = Math.max(0, Math.min(1, ((m.x - this.x) * dx2 + (m.y - this.y) * dy2) / (len2 * len2)));
+            const px2 = this.x + dx2 * t2, py2 = this.y + dy2 * t2;
+            if (Math.hypot(m.x - px2, m.y - py2) < m.r + 14) {
+              if (m.hurt(Math.round(42 * pow), game)) game.killMonster(m, this.owner);
+            }
+          }
+          Sfx.laser();
+        } else {
+          // 🔥 烈焰之环（血法师的火圈）
+          A.fires.push({ x: tgt.x, y: tgt.y, r: 95, t: 3.5, tick: 0 });
+          game.floater(tgt.x, tgt.y - 28, '🔥 烈焰之环！', '#ff9a4d');
+          Sfx.boom();
+        }
+      }
+      if (o && o.alive) {
+        const d = Math.hypot(o.x - this.x, o.y - this.y);
+        if (d > 96) {
+          const a = Math.atan2(o.y - this.y, o.x - this.x);
+          this.facing = a;
+          const r = resolveCircle(this.x + Math.cos(a) * this.def.speed * dt, this.y + Math.sin(a) * this.def.speed * dt, 13);
+          this.x = r.x; this.y = r.y;
+          this.moving = true;
+        } else this.moving = false;
+      }
+      unstick(this);
+      return;
+    }
+    // —— 水元素：贴近怪群释放范围水波（击退+减速） ——
+    if (this.def.waterele) {
+      this.novaT = (this.novaT === undefined ? 1.4 : this.novaT) - dt;
+      let near = null, nd2 = 300;
+      for (const m of game.monsters) {
+        const d = Math.hypot(m.x - this.x, m.y - this.y);
+        if (d < nd2) { near = m; nd2 = d; }
+      }
+      if (this.novaT <= 0 && near && nd2 < 140) {
+        this.novaT = 2.4;
+        game.fxP({ tex: FxTex.ring, x: this.x, y: this.y, s0: 40, s1: 300, a0: 0.9, a1: 0, life: 0.4 });
+        game.fxP({ tex: FxTex.glow, x: this.x, y: this.y, s0: 60, s1: 160, a0: 0.6, a1: 0, life: 0.3 });
+        for (const m of game.monsters.slice()) {
+          if (Math.hypot(m.x - this.x, m.y - this.y) > 130 + m.r) continue;
+          m.knock(Math.atan2(m.y - this.y, m.x - this.x), 620);
+          m.slowT = Math.max(m.slowT, 1.2);
+          if (m.hurt(22, game)) game.killMonster(m, this.owner);
+        }
+        Sfx.wisp();
+      }
+      const goal2 = (near && nd2 < 280) ? near : (o && o.alive && Math.hypot(o.x - this.x, o.y - this.y) > 90 ? o : null);
+      if (goal2) {
+        const a = Math.atan2(goal2.y - this.y, goal2.x - this.x);
+        this.facing = a;
+        const r = resolveCircle(this.x + Math.cos(a) * this.def.speed * dt, this.y + Math.sin(a) * this.def.speed * dt, 13);
+        this.x = r.x; this.y = r.y;
+        this.moving = true;
+      } else this.moving = false;
+      unstick(this);
+      return;
+    }
     // —— 牧师鸭：不打怪，周期治疗血量比例最低的队友（玩家+佣兵） ——
     if (this.def.heal) {
       this.healT = (this.healT || 0) - dt;
@@ -1012,18 +1133,70 @@ class Mercenary {
         else if (this.attackCd <= 0) {
           this.attackCd = 1 / (this.def.rate * pow);
           Sfx.melee();
-          target.knock(this.facing, 500);
-          if (target.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(target, o);
+          this.swingT = 0.25;                       // 挥剑动画计时（drawMerc 用）
+          if (this.def.sword) {                      // 鸭灵圣剑：小范围横扫（不止单体）
+            for (const mm of game.monsters.slice()) {
+              if (Math.hypot(mm.x - this.x, mm.y - this.y) > this.def.range + mm.r) continue;
+              mm.knock(Math.atan2(mm.y - this.y, mm.x - this.x), 420);
+              if (mm.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(mm, o);
+            }
+          } else {
+            target.knock(this.facing, 500);
+            if (target.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(target, o);
+          }
         }
       } else {
         if (td > this.def.range) goal = target;
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
         if (this.attackCd <= 0 && td <= this.def.range) {
           this.attackCd = 1 / (this.def.rate * pow);
-          (this.def.id === 'sniper' ? Sfx.crossbow : Sfx.shoot)();
-          game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
-            this.facing + (Math.random() - 0.5) * 0.06,
-            { id:'mercgun', dmg:Math.round(this.def.dmg * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+          if (this.def.archer) {
+            // 百变箭手：六种箭随机上弦
+            const kinds = [
+              { c: '#ff9a4d', burn: 2.2, n: '火' },
+              { c: '#9fd8ff', slow: 2, freeze: 0.5, n: '冰' },
+              { c: '#7ac74f', burn: 3, n: '毒' },
+              { c: '#ffe95c', zapArrow: true, n: '雷' },
+              { c: '#ff7b2d', explosive: 62, n: '爆' },
+              { c: '#c9ced8', knock: 460, n: '退' },
+            ];
+            const k = kinds[Math.floor(Math.random() * kinds.length)];
+            const ab = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
+              this.facing + (Math.random() - 0.5) * 0.04,
+              { id: 'arrow', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80,
+                knock: k.knock || 90, burn: k.burn, slow: k.slow, freeze: k.freeze, explosive: k.explosive, noHoming: true }, o);
+            ab.arrowC = k.c;
+            ab.zapArrow = !!k.zapArrow;
+            game.bullets.push(ab);
+            Sfx.crossbow();
+          } else if (this.def.mech) {
+            // 重装机兵：双管 MG3 交替喷射 + 周期火炮支援
+            this.barrel = 1 - (this.barrel || 0);
+            const side = this.barrel ? 1 : -1;
+            const ox2 = Math.cos(this.facing + Math.PI / 2) * 10 * side, oy2 = Math.sin(this.facing + Math.PI / 2) * 10 * side;
+            game.bullets.push(new Bullet(this.x + ox2 + Math.cos(this.facing) * 20, this.y + oy2 + Math.sin(this.facing) * 20,
+              this.facing + (Math.random() - 0.5) * 0.12,
+              { id: 'mercgun', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80, knock: 60, spread: 0 }, o));
+            if (this.barrel) Sfx.mg();
+          } else {
+            (this.def.id === 'sniper' ? Sfx.crossbow : Sfx.shoot)();
+            game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
+              this.facing + (Math.random() - 0.5) * 0.06,
+              { id:'mercgun', dmg:Math.round(this.def.dmg * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+          }
+        }
+        // 机兵：周期呼叫火炮覆盖目标区域
+        if (this.def.mech) {
+          this.artyT = (this.artyT === undefined ? 8 : this.artyT) - dt;
+          if (this.artyT <= 0 && target) {
+            this.artyT = 9;
+            const A = game.allyFx();
+            for (let i = 0; i < 5; i++) {
+              A.strikes.push({ x: target.x + (Math.random() - 0.5) * 240, y: target.y + (Math.random() - 0.5) * 200, t: 0.5 + i * 0.16 });
+            }
+            game.floater(this.x, this.y - 30, '📡 火炮支援！', '#7ef7ff');
+            Sfx.aggro();
+          }
         }
       }
     } else if (o && o.alive) {

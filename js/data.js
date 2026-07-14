@@ -158,6 +158,8 @@ const WEAPONS = {
   flamer:   { id:'flamer',   name:'火舌喷灯',       icon:'🔥', dmg:5,  rate:10,  speed:260, range:190, knock:20,  ammo:'cell',  spread:0.30,  pellets:2, mag:45, reload:1.8, dur:150, weight:2.5, price:2400, repairCost:2.0, burn:2.5, desc:'一条火舌舔过去，怪物边跑边烧。' },
   freezer:  { id:'freezer',  name:'急冻线圈枪',     icon:'❄️', dmg:8,  rate:1.4, speed:520, range:420, knock:60,  ammo:'cell',  spread:0.02,  mag:8, reload:1.4, dur:70,  weight:2, price:2000, repairCost:2.2, freeze:1.3, desc:'命中直接冻成冰坨，动弹不得 1.3 秒。' },
   sniper:   { id:'sniper',   name:'鹅王·穿云',      icon:'🛰️', dmg:90, rate:0.5, speed:1100, range:1400, knock:340, ammo:'heavy', spread:0.002, pierce:4, durPerShot:2, mag:3, reload:2.1, dur:35, weight:4, price:4500, repairCost:4.0, desc:'超越视野的一枪。听到枪声时子弹已经到了。' },
+  ak:       { id:'ak',       name:'AK-鸭7 突击步枪', icon:'🥖', dmg:16, rate:6.0, speed:640, range:520, knock:110, ammo:'light', spread:0.07, mag:30, reload:1.6, dur:120, weight:2.5, price:1900, repairCost:1.6, sfx:'ak', desc:'哒哒哒哒。可靠、暴躁、永远不卡壳（大概）。' },
+  mg3:      { id:'mg3',      name:'MG3 通用机枪',    icon:'⛓️', dmg:12, rate:11,  speed:700, range:560, knock:90,  ammo:'heavy', spread:0.10, mag:60, reload:2.6, dur:160, weight:4.5, price:3400, repairCost:2.8, sfx:'mg', desc:'泼出一整条金属风暴，换弹时记得找掩体。' },
   rpg:      { id:'rpg',      name:'呱牛 RPG',       icon:'🚀', dmg:85, rate:0.7, speed:520, range:700, knock:340, ammo:'shell', spread:0.01,  durPerShot:2, mag:1, reload:2.4, dur:40, weight:3.5, price:3800, repairCost:3.5, explosive:110, desc:'肩上一响，黄金万两。落点 110 半径灰飞烟灭。' },
   pickaxe:  { id:'pickaxe',  name:'矿脉鹤嘴镐',     icon:'⛏️', melee:true, dmg:26, rate:1.4, range:62, knock:240, dur:120, weight:1.5, price:800, repairCost:0.6, requires:'mine_relics', desc:'集齐「地心结晶」解锁。刨矿刨怪，一镐两用。' },
 };
@@ -480,6 +482,12 @@ const MERCS = {
            color:'#e8d8a0', desc:'不动手，只救人：周期治疗血量最低的队友（含雇佣兵）。' },
   dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:280, range:0, speed:195, price:1200, requiresMerc:'sniper',
            color:'#c9a06a', sprite:'fx_dog', desc:'自动叼回经验宝石与金币。只认鹰眼当主人。' },
+  archer:{ id:'archer', name:'百变箭手·翎', icon:'🏹', hp:210, dmg:24, rate:1.5, range:640, bulletSpeed:780, speed:150, price:2800,
+           color:'#7ac74f', sprite:'m_archer', archer:true, desc:'箭无定式：火/冰/毒/雷/爆/击退箭随机上弦。' },
+  mage:  { id:'mage',  name:'元素法师·蓝袍', icon:'🔮', hp:190, dmg:0, rate:0, range:560, speed:145, price:3600,
+           color:'#8e9bff', sprite:'m_mage', mage:true, desc:'水元素、黑龙波、激光束、烈焰之环轮番施法。' },
+  mech:  { id:'mech',  name:'重装机兵·GD鸭', icon:'🤖', hp:430, dmg:10, rate:13, range:520, bulletSpeed:820, speed:118, price:5200,
+           color:'#9aa4b8', sprite:'m_mech', mech:true, desc:'双持 MG3 泼弹幕，周期呼叫火炮覆盖。' },
 };
 
 // ============ 奖杯 ============
@@ -582,7 +590,8 @@ const HORDE_UPGRADES = [
   { id:'reloadspd', name:'快手换弹', icon:'⚡', max:3, desc:'换弹速度 +25%',            mod:m => m.reloadMul = (m.reloadMul || 1) * 0.75 },
   { id:'agility',   name:'灵敏反射', icon:'🩰', max:4, desc:'移速 +4%，闪避 +5%（完全躲开攻击）', mod:m => { m.speed *= 1.04; m.dodge = (m.dodge || 0) + 0.05; } },
   { id:'greed',     name:'贪婪之喙', icon:'🤑', max:3, desc:'怪物掉落金币 +40%',        mod:m => m.goldMul = (m.goldMul || 1) + 0.4 },
-  { id:'revenge',   name:'复仇之焰', icon:'💢', max:3, skill:'revenge',   desc:'受击时爆出一圈火焰反噬周围怪物' },
+  { id:'revenge',   name:'复仇之焰', icon:'💢', max:3, skill:'revenge',   desc:'被怪物直击时爆出火焰怒环反噬（DoT 不触发）' },
+  { id:'arty',      name:'呼叫支援', icon:'📡', max:3, skill:'arty',      desc:'周期呼叫火炮空袭：大范围炮弹覆盖射击方向' },
   // —— 变体强化（持有母技能后才会出现） ——
   { id:'meteor_big',  name:'陨石·巨岩', icon:'🪨', max:2, requires:'meteor', desc:'陨石半径 +35%', mod:m => m.meteorR = (m.meteorR || 1) + 0.35 },
   { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
@@ -674,6 +683,7 @@ const TUNE_DEFS = [
   { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.15, abs:true },
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
   { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:15, abs:true },
+  { id:'zapHop',   name:'闪电传导间隔(秒)', min:0.05, max:0.5,  step:0.05, def:0.2, abs:true },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

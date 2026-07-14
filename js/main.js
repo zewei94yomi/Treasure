@@ -29,4 +29,19 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   window.addEventListener('resize', fit);
   fit();
+
+  // —— 鼠标操控（单人）：准星跟踪 + 左键攻击 + 右键向准星翻滚 ——
+  const cvs = document.getElementById('game-canvas');
+  window.addEventListener('mousemove', e => {
+    const r = cvs.getBoundingClientRect();
+    if (!r.width) return;
+    Input.mouse.x = (e.clientX - r.left) * (VIEW_W / r.width);
+    Input.mouse.y = (e.clientY - r.top) * (VIEW_H / r.height);
+  });
+  cvs.addEventListener('mousedown', e => {
+    if (e.button === 0) Input.mouseL = true;
+    if (e.button === 2) { Input.mouseR = true; e.preventDefault(); }
+  });
+  window.addEventListener('mouseup', e => { if (e.button === 0) Input.mouseL = false; });
+  cvs.addEventListener('contextmenu', e => e.preventDefault());
 });
