@@ -361,7 +361,7 @@ function genEscapeAscii() {
     if (i === 0) return;                            // 出生房留干净
     put(r, '*', 2 + Math.floor(Math.random() * 3));
     put(r, 'm', i < 3 ? 2 : 3);
-    put(r, 'c', 2);
+    put(r, 'c', 3);
     put(r, 'g', 2);
     put(r, 't', 2);
   });

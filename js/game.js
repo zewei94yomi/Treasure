@@ -422,7 +422,7 @@ class Game {
     if (H.spawnT <= 0) {
       H.spawnT = interval;
       let batch = 1 + Math.floor(t / 60);
-      if (this.mode === 2) batch = Math.ceil(batch * 1.6);   // 双人：更多怪
+      if (this.mode === 2) batch = Math.ceil(batch * 1.95);   // 双人：怪量大幅上调
       for (let i = 0; i < batch; i++) {
         if (this.monsters.length >= HORDE_CAP) break;
         this.spawnHordeMonster();
@@ -443,7 +443,7 @@ class Game {
           const a = i * Math.PI / 4;
           const m = new Monster(tgt.x + Math.cos(a) * 460, tgt.y + Math.sin(a) * 460,
                                 this.cfg, pool[Math.floor(Math.random() * pool.length)]);
-          const hpScale = (1 + t / 50 * 0.25 + Math.max(0, t - 300) / 60 * 0.35) * (this.mode === 2 ? 1.3 : 1);
+          const hpScale = (1 + t / 50 * 0.25 + Math.max(0, t - 300) / 60 * 0.35) * (this.mode === 2 ? 1.5 : 1);
           m.hp *= hpScale; m.maxHp = m.hp;
           m.hordeDmgMul = 1 + t / 120 * 0.32;
           m.enraged = true;   // 涌潮怪全员狂暴
@@ -685,15 +685,20 @@ class Game {
     else if (u.special === 'maxhp') {
       for (const p of this.players) { p.maxHp = Math.round(p.maxHp * 1.3); p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5); }
     } else if (u.special === 'recruit') {
-      if (!this.canRecruitHero()) { this.toast('⚠️ 随行英雄已满 5 位', '#ff8f8f'); }
-      else {
-        const p0 = this.players.find(pl => pl.active) || this.players[0];
+      // 双人模式：为每位在场玩家各招募一位
+      let recruited = 0;
+      for (const p0 of this.players) {
+        if (!p0.active) continue;
+        if (!this.canRecruitHero(p0)) continue;
         const mc = new Mercenary(p0.x + 34, p0.y + 26, MERCS[u.mercId], p0);
         unstick(mc);
         this.mercs.push(mc);
-        this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} 应招而来！（看左侧面板）`, '#7dff9a');
-        Sfx.revive();
+        recruited++;
       }
+      if (recruited) {
+        this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} ×${recruited} 应招而来！（看左侧面板）`, '#7dff9a');
+        Sfx.revive();
+      } else this.toast('⚠️ 随行英雄已满（每人 5 位）', '#ff8f8f');
     } else if (u.special === 'marinehp') {
       for (const mc of this.mercs) if (mc.hp > 0 && mc.def.id === 'marine') { mc.maxHp = Math.round(mc.maxHp * 1.4); mc.hp = mc.maxHp; }
     } else if (u.hmod) {
@@ -748,9 +753,9 @@ class Game {
     const bossId = HORDE_BOSS_IDS[(this.hordeState.bossIdx - 1) % HORDE_BOSS_IDS.length];
     const boss = new Monster(n.x, n.y, this.cfg, bossId);
     boss.isBoss = true;
-    boss.hp = this.cfg.mHp * 34 * (1 + t / 260) * tune('bossHp') * (this.mode === 2 ? 1.4 : 1);
+    boss.hp = this.cfg.mHp * 39 * (1 + t / 260) * tune('bossHp') * (this.mode === 2 ? 1.9 : 1);   // Boss 全面增强，双人更狠
     boss.maxHp = boss.hp;
-    boss.hordeDmgMul = 2.0;
+    boss.hordeDmgMul = this.mode === 2 ? 2.5 : 2.2;
     unstick(boss);
     this.monsters.push(boss);
     this.hordeState.boss = boss;
@@ -1320,6 +1325,12 @@ class Game {
   killPlayer(p) {
     p.downed = false;
     p.dead = true;
+    // 主人阵亡：其招募的英雄随之离场（鸭灵为技能召唤不受影响）
+    let left = 0;
+    for (const mc of this.mercs) {
+      if (mc.hp > 0 && mc.owner === p && !mc.isPet) { mc.hp = 0; left++; }
+    }
+    if (left) this.toast(`${this.pname(p)} 的 ${left} 位随行英雄黯然离去……`, '#9a90b8');
     p.lostItems = p.bag.slice();
     if (p.bag.length) this.groundLoot.push(new GroundLoot(p.x, p.y, p.bag.slice()));
     p.bag = []; p.bagUsed = 0;
@@ -1769,7 +1780,17 @@ class Game {
   // 大逃亡开箱：不出宝物，出枪/金币/道具/急救
   escapeLoot(chest, p) {
     const roll = Math.random();
-    if (roll < 0.38) {
+    if (roll < 0.14) {
+      // 宝物！直接目击入图鉴并全额折现（大逃亡不背包）
+      const t = rollTreasure(chest.tier === 'gold' || chest.tier === 'mystery' ? 'gold' : chest.tier,
+        { difficulty: 'hard', mapId: 'manor', mythicSpawned: { v: false }, save: SAVE });
+      codexMarkSeen(t.id);
+      SAVE.gold += t.value; this.runCash += t.value;
+      this.toast(`${t.icon}【${t.name}】(${RARITIES[t.rarity].name}) 折现 +${t.value}💰，已记入图鉴目击`, RARITIES[t.rarity].color);
+      Sfx.pickup(t.rarity);
+      return;
+    }
+    if (roll < 0.44) {
       const pool = Object.values(WEAPONS).filter(w => w.price && !w.requires);
       const range = { wood: [0, 1300], silver: [420, 3100], gold: [1800, 99999], mystery: [1000, 99999] }[chest.tier] || [0, 99999];
       const cands = pool.filter(w => w.price >= range[0] && w.price <= range[1]);
@@ -1859,11 +1880,17 @@ class Game {
     if (this.runKills >= 150) grant('horde_slayer');
     if (this.runKills >= 15) grant('slayer');
     if (SAVE.gold >= 10000) grant('tycoon');
+    // 结算抽卡：三只战利箱选一（胜利=金箱概率池，可开出神话红宝）
+    const drawTier = H.victory ? 'gold' : 'wood';
+    const lootDraw = [];
+    for (let i = 0; i < 3; i++) {
+      lootDraw.push(rollTreasure(drawTier, { difficulty: 'hard', mapId: this.mapId, mythicSpawned: { v: false }, save: SAVE }));
+    }
     persistSave();
     document.getElementById('levelup-overlay').style.display = 'none';
 
     UI.showResult({
-      horde: true, victory: H.victory,
+      horde: true, victory: H.victory, lootDraw, lootTier: drawTier,
       mapName: this.mapName, mode: this.mode,
       time: shownT, duration: Math.round(hordeDuration() / 60), kills: this.runKills, level: H.level,
       cash: this.runCash, bonus, best: SAVE.hordeBest,
@@ -1885,9 +1912,10 @@ class Game {
     }
   }
 
-  // 随行英雄上限：5 位（鸭灵与召唤的水元素不计）
-  canRecruitHero() {
-    return this.mercs.filter(mc => mc.hp > 0 && !mc.isPet && mc.def.id !== 'waterele').length < 5;
+  // 随行英雄上限：每位玩家 5 位（鸭灵与召唤的水元素不计）
+  canRecruitHero(p) {
+    const owner = p || this.players[0];
+    return this.mercs.filter(mc => mc.hp > 0 && !mc.isPet && mc.def.id !== 'waterele' && mc.owner === owner).length < 5;
   }
 
   // ---------- 盟友技能特效层（法师黑龙波/激光/火环 + 机兵火炮） ----------
@@ -3266,6 +3294,20 @@ class Game {
         ctx.restore();
         ctx.restore();
       }
+      // 佣兵王：手持反器材狙击枪
+      if (mc.def.id === 'ace') {
+        ctx.save();
+        ctx.translate(sx, sy + 2);
+        ctx.rotate(mc.facing);
+        ctx.fillStyle = '#2c3444'; ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 1.5;
+        ctx.fillRect(2, -2.5, 26, 5); ctx.strokeRect(2, -2.5, 26, 5);   // 枪身
+        ctx.fillRect(28, -1.2, 8, 2.4);                                  // 长枪管
+        ctx.fillStyle = '#222';
+        ctx.fillRect(10, -6, 9, 3); ctx.strokeRect(10, -6, 9, 3);       // 瞄具
+        ctx.strokeStyle = '#555';
+        ctx.beginPath(); ctx.moveTo(30, 2); ctx.lineTo(27, 7); ctx.moveTo(30, 2); ctx.lineTo(33, 7); ctx.stroke();  // 两脚架
+        ctx.restore();
+      }
       // 弓箭手：手持长弓（贴图上叠加，攻击时拉弦）
       if (mc.def.archer) {
         ctx.save();
@@ -3352,11 +3394,11 @@ class Game {
       let color = aura.color;
       if (color === 'rainbow') {
         const hue = (this.time * 60) % 360;
-        ctx.fillStyle = `hsla(${hue}, 85%, 65%, 0.28)`;
-      } else ctx.fillStyle = `rgba(${color}, 0.26)`;
+        ctx.fillStyle = `hsla(${hue}, 85%, 65%, 0.45)`;
+      } else ctx.fillStyle = `rgba(${color}, 0.42)`;   // 提亮：割草亮场景下曾几乎看不见（"戴了不显示"）
       ctx.beginPath(); ctx.arc(sx, sy + 2, rr, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = color === 'rainbow' ? `hsla(${(this.time * 60 + 40) % 360}, 85%, 70%, .5)` : `rgba(${color}, .5)`;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = color === 'rainbow' ? `hsla(${(this.time * 60 + 40) % 360}, 85%, 70%, .8)` : `rgba(${color}, .8)`;
+      ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(sx, sy + 2, rr, 0, Math.PI*2); ctx.stroke();
     }
     ctx.save();

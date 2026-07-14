@@ -725,12 +725,38 @@ class Monster {
       r = (Math.hypot(r2.x - this.x, r2.y - this.y) > Math.hypot(r3.x - this.x, r3.y - this.y)) ? r2 : r3;
     }
     this.x = r.x; this.y = r.y;
-    // 卡墙侦测：实际位移远小于期望 → 累计后强制寻路
+    // 卡墙侦测：实际位移远小于期望 → 更快强制寻路 + 侧滑脱困
     const moved = Math.hypot(this.x - _bx, this.y - _by);
     if (moved < spd * dt * 0.3) {
       this.stuckT = (this.stuckT || 0) + dt;
-      if (this.stuckT > 0.35) { this.stuckT = 0; this.forcePathT = 2.5; this.pathT = 0; }
+      if (this.stuckT > 0.25) {
+        this.stuckT = 0;
+        this.forcePathT = 2.5;
+        this.pathT = 0;
+        // 侧滑：垂直于前进方向蹭开一步（左右交替），缓解走廊口堵死
+        this.slideSign = -(this.slideSign || 1);
+        const sa = this.faceDir + Math.PI / 2 * this.slideSign;
+        const sr = resolveCircle(this.x + Math.cos(sa) * this.r * 1.2, this.y + Math.sin(sa) * this.r * 1.2, this.r);
+        this.x = sr.x; this.y = sr.y;
+      }
     } else this.stuckT = 0;
+    // 怪物相互分离：追击中的怪不再叠成一坨堵路
+    this.sepT = (this.sepT || 0) - dt;
+    if (this.sepT <= 0) {
+      this.sepT = 0.12;
+      const all = Game.current ? Game.current.monsters : [];
+      for (const mm of all) {
+        if (mm === this) continue;
+        const dx3 = this.x - mm.x, dy3 = this.y - mm.y;
+        const dd3 = Math.hypot(dx3, dy3);
+        const minD3 = this.r + mm.r - 4;
+        if (dd3 > 0.01 && dd3 < minD3) {
+          const push3 = (minD3 - dd3) * 0.5;
+          const sr2 = resolveCircle(this.x + dx3 / dd3 * push3, this.y + dy3 / dd3 * push3, this.r);
+          this.x = sr2.x; this.y = sr2.y;
+        }
+      }
+    }
   }
 
   hurt(dmg, game) {
@@ -864,6 +890,10 @@ class Bullet {
             let da = this.angle - m.faceDir;
             da = Math.atan2(Math.sin(da), Math.cos(da));
             if (Math.abs(da) > 2.1) { dmg = Math.max(1, Math.round(dmg * 0.35)); game.floater(m.x, m.y - 22, '格挡!', '#c9ced8'); }
+          }
+          if (this.bossHunter && (m.isBoss || m.type.boss || m.isElite)) {
+            dmg *= 2;
+            game.floater(m.x, m.y - 26, '🎯 猎首！', '#ffd93d');
           }
           if (m.hurt(dmg, game)) game.killMonster(m, this.owner);
           // 雷电箭：命中放出两跳小闪电
@@ -1303,7 +1333,17 @@ class Mercenary {
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
         if (this.attackCd <= 0 && td <= this.def.range * rngM && !(this.def.mag && (this.mgReloadT !== undefined || this.mag <= 0))) {
           this.attackCd = 1 / (hv('rate', this.def.rate) * pow);
-          if (this.def.id === 'sniper') {
+          if (this.def.id === 'ace') {
+            // 佣兵王：反器材狙击（Boss/精英双倍）
+            const ab2 = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
+              this.facing + (Math.random() - 0.5) * 0.03,
+              { id: 'mercgun', dmg: Math.round(hv('dmg', 60) * pow), speed: this.def.bulletSpeed,
+                range: this.def.range + 100, knock: 200, pierce: 1, spread: 0 }, o);
+            ab2.bossHunter = true;
+            game.bullets.push(ab2);
+            this.mag--;
+            Sfx.sniper();
+          } else if (this.def.id === 'sniper') {
             // 鹰眼：超高伤狙击（升级卡：钨芯穿透 / 致命一击）
             const head = Math.random() < 0.15 * (HM.sniperCrit || 0);
             const sb2 = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,

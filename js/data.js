@@ -482,8 +482,9 @@ const MERCS = {
            color:'#c9853a', desc:'一把铁平底锅走天下，帮你挡刀。' },
   vet:   { id:'vet',   name:'独眼老兵',   icon:'🎖️', hp:200, dmg:15, rate:2.2, range:420, bulletSpeed:560, speed:148, price:1500,
            color:'#7a9c5a', mag:12, reload:1.6, desc:'手枪点射，弹无虚发。' },
-  ace:   { id:'ace',   name:'佣兵王·灰羽', icon:'🦅', hp:270, dmg:34, rate:1.1, range:560, bulletSpeed:780, speed:158, price:3200,
-           color:'#8a7ab8', mag:18, reload:1.8, desc:'战场传说，收费也传说。' },
+  ace:   { id:'ace',   name:'佣兵王·灰羽', icon:'🦅', hp:270, dmg:60, rate:0.8, range:720, bulletSpeed:1100, speed:158, price:3200,
+           color:'#8a7ab8', sprite:'m_ace', mag:8, reload:2.0, bossHunter:true,
+           desc:'反器材狙击：对 Boss 与精英双倍伤害。老兵管清杂，他管斩首。' },
   sniper:{ id:'sniper', name:'退役传奇·鹰眼', icon:'🎯', hp:190, dmg:150, rate:0.45, range:980, bulletSpeed:1350, speed:150, price:2600,
            color:'#5a7a9c', mag:5, reload:2.2, desc:'超高伤狙击：一枪带走精英。雇佣他，才能唤来爱犬「汪财」。' },
   priest:{ id:'priest', name:'圣光牧师·晨祷', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, buffCd:7, range:0, speed:152, price:2000,
@@ -732,6 +733,10 @@ const HERO_TUNE = {
     dmg:   { n: '火舌每跳伤害', min: 2,  max: 30,  step: 1,  def: 7 },
     range: { n: '火舌射程',    min: 120, max: 420, step: 10, def: 210 },
     burn:  { n: '灼烧时长(秒)', min: 0.5, max: 6,  step: 0.5, def: 1.5 },
+  } },
+  ace: { name: '🦅 佣兵王', params: {
+    dmg:  { n: '单发伤害', min: 20, max: 200, step: 5,   def: 60 },
+    rate: { n: '射速(发/秒)', min: 0.3, max: 2, step: 0.05, def: 0.8 },
   } },
   dog: { name: '🐕 汪财', params: {
     fetch: { n: '拾取范围', min: 200, max: 1400, step: 40, def: 560 },

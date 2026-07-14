@@ -208,7 +208,7 @@ body {
 .hud-player.p1 .hud-name { color: var(--gold); }
 .hud-player.p2 .hud-name { color: var(--blue); }
 .hp-bar { height: 10px; background: #1a1530; border-radius: 99px; overflow: hidden; margin: 4px 0 6px; }
-.hp-fill { height: 100%; border-radius: 99px; transition: width .15s; }
+.hp-fill { height: 100%; border-radius: 99px; transition: width .04s; }   /* 修：与场景内血条不同步的观感延迟 */
 .hud-weapon, .hud-bag { color: var(--text); }
 .hud-fx { color: var(--gold); font-size: 12px; min-height: 16px; }
 .hud-status { color: var(--red); font-weight: 800; }
@@ -258,7 +258,7 @@ body {
 
 /* ---------- HUD 扩展：护甲/双武器/药品/负重/背包 ---------- */
 .armor-bar { height: 6px; background: #1a1530; border-radius: 99px; overflow: hidden; margin: -2px 0 5px; }
-.armor-fill { height: 100%; background: linear-gradient(90deg, #8fa8c0, #c9d6e4); border-radius: 99px; transition: width .15s; }
+.armor-fill { height: 100%; background: linear-gradient(90deg, #8fa8c0, #c9d6e4); border-radius: 99px; transition: width .04s; }
 .hud-weapons { display: flex; gap: 6px; margin-bottom: 3px; }
 .wslot {
   flex: 1; background: rgba(20,16,40,.6); border: 1.5px solid var(--line); border-radius: 8px;
@@ -599,3 +599,13 @@ body {
 .ally-meta { font-size: 9.5px; white-space: nowrap; }
 .hud-weapons .wslot { white-space: nowrap; font-size: 12px; overflow: visible; }
 .hud-weapons { flex-wrap: wrap; max-width: none; }
+
+/* 第十八轮：结算抽卡 */
+.loot-draw { display: flex; gap: 14px; justify-content: center; margin: 8px 0; }
+.loot-chest { width: 120px; padding: 14px 8px; text-align: center; cursor: pointer;
+  background: rgba(255,255,255,.05); border: 2px solid rgba(255,217,61,.35); border-radius: 14px;
+  transition: transform .15s, box-shadow .15s; }
+.loot-chest:not(.opened):hover { transform: translateY(-4px) scale(1.05); box-shadow: 0 6px 18px rgba(255,217,61,.25); }
+.loot-lid { font-size: 34px; }
+.loot-hint { font-size: 12px; color: #c7cddc; margin-top: 6px; line-height: 1.4; }
+.loot-chest.opened { cursor: default; }

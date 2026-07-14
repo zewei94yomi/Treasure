@@ -205,8 +205,8 @@ check('新怪 6 种带贴图与机制字段', run(`
   MONSTER_TYPES.warlock.caster === true && MONSTER_TYPES.venomsnake.poison > 0 && MONSTER_TYPES.scorpion.paralyze > 0 && MONSTER_TYPES.leapspider.leap === true`));
 check('3 个 Boss 定义与轮换表', run(`
   HORDE_BOSS_IDS.length === 3 && HORDE_BOSS_IDS.every(id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss && MONSTER_TYPES[id].sprite)`));
-check('贴图数据 25 张（+持杖牧师/步兵喷火兵）且为 dataURI', run(`
-  Object.keys(MONSTER_SPRITES).length === 25 && MONSTER_SPRITES.m_archer && MONSTER_SPRITES.m_mage && MONSTER_SPRITES.m_mech && MONSTER_SPRITES.m_waterele && MONSTER_SPRITES.m_dragon && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
+check('贴图数据 26 张（+佣兵王）且为 dataURI', run(`
+  Object.keys(MONSTER_SPRITES).length === 26 && MONSTER_SPRITES.m_archer && MONSTER_SPRITES.m_mage && MONSTER_SPRITES.m_mech && MONSTER_SPRITES.m_waterele && MONSTER_SPRITES.m_dragon && Object.values(MONSTER_SPRITES).every(v => v.startsWith('data:image/png;base64,'))`));
 check('狂暴配置合法', run(`HORDE_ENRAGE.speedMul > 1 && HORDE_ENRAGE.atkMul < 1 && HORDE_ENRAGE.start > 0`));
 check('攻击%升级已削弱为加算', run(`
   (() => { const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); return Math.abs(m.dmg - 1.18) < 1e-9; })()`));
@@ -245,7 +245,7 @@ check('升级池扩至 74 项（+15 张英雄专属升级卡）', run(`HORDE_UPG
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=23') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=23') && !html.includes('?v=22'));
+    html.includes('js/fx.js?v=24') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=24') && !html.includes('?v=23'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -433,7 +433,7 @@ check('新调参默认值', run(`tune('mercRange') === 1 && tune('devXp') === 20
 
 // ==================== 第十六轮：英雄晋阶/形象重做/练习场增强 ====================
 check('英雄详细调参体系 + 鹰眼超高伤 + 机兵弹夹', run(`
-  Object.keys(HERO_TUNE).length === 8 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 150 && MERCS.mech.mag === 40`));
+  Object.keys(HERO_TUNE).length === 9 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 150 && MERCS.mech.mag === 40`));
 check('机兵=武器流最高形态（gate 5 次武器强化）', run(`
   typeof HORDE_UPGRADE_BY_ID.recruit_mech.gate === 'function' && !HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: {} }) &&
   HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: { dmg: 3, rate: 2 } })`));
@@ -468,6 +468,21 @@ check('佣兵进攻欲望入面板', run(`TUNE_DEFS.some(t => t.id === 'mercDesi
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('英雄调参面板 + 英雄图鉴页 + 面板血量状态',
     ['showHeroTune', 'setHeroTune', 'showHeroDex'].every(k => uiSrc.includes(k)) && gameSrc.includes('❤${Math.ceil(mc.hp)}'));
+}
+
+// ==================== 第十八轮：佣兵王/双人难度/抽卡/寻路 ====================
+check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprite === 'm_ace' && MERCS.ace.bossHunter === true && MERCS.ace.mag === 8 && HERO_TUNE.ace.params.dmg.def === 60`));
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('双人难度大幅上调 + Boss 增强', gameSrc.includes('batch * 1.95') && gameSrc.includes("this.mode === 2 ? 1.9 : 1") && gameSrc.includes('mHp * 39'));
+  check('双人双招募 + 每人上限5 + 主人阵亡英雄离场',
+    ['for (const p0 of this.players)', 'canRecruitHero(p)', '随行英雄黯然离去'].every(k => gameSrc.includes(k)));
+  check('结算抽卡（三箱选一）+ 大逃亡开出宝物', gameSrc.includes('lootDraw') && gameSrc.includes('折现') &&
+    fs.readFileSync(base + 'ui.js', 'utf8').includes('pickLootCard'));
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('怪物解堵（相互分离+侧滑脱困）+ 佣兵王猎首弹', ['怪物相互分离', '侧滑', 'bossHunter'].every(k => entSrc.includes(k)));
+  const cssSrc = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  check('血条过渡延迟修复 + 抽卡样式', cssSrc.includes('width .04s') && cssSrc.includes('.loot-chest'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

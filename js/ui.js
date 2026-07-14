@@ -534,6 +534,32 @@ const UI = (() => {
     }).join('');
     $('merchant-sell').innerHTML = sellHtml || '<div class="empty-tip">背包里没有可以出手的宝物</div>';
   }
+  let lootDrawState = null;
+  function pickLootCard(i) {
+    if (!lootDrawState || lootDrawState.picked) return;
+    lootDrawState.picked = true;
+    lootDrawState.list.forEach((t, j) => {
+      const el = $('loot-chest-' + j);
+      if (!el) return;
+      const col = RARITIES[t.rarity].color;
+      el.classList.add('opened');
+      el.innerHTML = `
+        <div class="loot-lid" style="text-shadow:0 0 14px ${col}">${t.icon}</div>
+        <div class="loot-hint" style="color:${col}">${t.name}<br><span style="font-size:10px">${RARITIES[t.rarity].name} · 💰${t.value}</span></div>`;
+      if (j === i) {
+        el.style.borderColor = col;
+        el.style.boxShadow = `0 0 18px ${col}`;
+      } else el.style.opacity = '0.4';
+    });
+    const t = lootDrawState.list[i];
+    const first = codexMarkCollected(t.id, t.value);
+    SAVE.gold += t.value;
+    persistSave();
+    Sfx.pickup(t.rarity);
+    const el = $('loot-chest-' + i);
+    if (el && first) el.querySelector('.loot-hint').innerHTML += '<br><span style="color:#7dff9a;font-size:10px">✨ 首次收录图鉴！</span>';
+  }
+
   function merchantRevive() {
     const g = Game.current;
     if (!g || !g.merchant) return;
@@ -1008,6 +1034,17 @@ const UI = (() => {
         hordeHtml += res.players.map(pr => `<div style="color:${pr.idx === 0 ? '#ffd93d' : '#9fd8ff'}">${pr.idx + 1}P 击杀 ${pr.kills}</div>`).join('');
       }
       hordeHtml += '</div>';
+      // 🎁 战利抽取：三箱选一（胜利=金箱，可能开出神话红宝）
+      if (res.lootDraw && res.lootDraw.length) {
+        lootDrawState = { list: res.lootDraw, picked: false };
+        hordeHtml += `<h4 class="section-label">🎁 战利抽取 · 三箱选一${res.lootTier === 'gold' ? '（金箱：有机会开出神话红宝！）' : '（木箱）'}</h4>
+        <div class="loot-draw">` +
+          res.lootDraw.map((t, i) => `
+          <div class="loot-chest" id="loot-chest-${i}" onclick="UI.pickLootCard(${i})">
+            <div class="loot-lid">${res.lootTier === 'gold' ? '🎁' : '📦'}</div>
+            <div class="loot-hint">点我开箱</div>
+          </div>`).join('') + '</div>';
+      }
       if (res.newTrophies && res.newTrophies.length) {
         hordeHtml += `<div class="result-rewards">${res.newTrophies.map(t => `<div>🏆 新奖杯：${t.icon} ${t.name}</div>`).join('')}</div>`;
       }
@@ -1069,5 +1106,5 @@ const UI = (() => {
            showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
-           renderMerchant, merchantBuy, merchantSell, merchantRevive };
+           renderMerchant, merchantBuy, merchantSell, merchantRevive, pickLootCard };
 })();
