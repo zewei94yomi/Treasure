@@ -342,6 +342,9 @@ class Game {
     this.sparks = this.sparks.filter(s => s.t > 0);
     this.updateFx(dt);
     this.updateAllyFx(dt);
+    this.xpBuffT = Math.max(0, (this.xpBuffT || 0) - dt);
+    // 开发者模式：金钱无限
+    if (SAVE.settings.devMode && SAVE.gold < 999999) SAVE.gold = 999999;
     // —— 掉落武器：走近自动与当前手持互换（1.4s 冷却防止来回横跳） ——
     if (this.weaponDrops && this.weaponDrops.length) {
       for (const wd of this.weaponDrops) {
@@ -627,7 +630,8 @@ class Game {
         this.gemComboT = 1.0;
         Sfx.gem(this.gemCombo);
         // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）；开发者模式 ×10 快速验证技能
-        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300) * (SAVE.settings.devMode ? tune('devXp') : 1)));
+        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300)
+          * (SAVE.settings.devMode ? tune('devXp') : 1) * (this.xpBuffT > 0 ? 1.5 : 1)));
       }
     }
     H.gems = H.gems.filter(g => !g.taken);
@@ -643,6 +647,17 @@ class Game {
       H.xpNeed = Math.round((8 + H.level * 4 + H.level * H.level * 0.15) * (this.mode === 2 ? 1.25 : 1));
       // 升级回血：每级回复 6% 最大生命
       for (const p of this.players) if (p.active) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.06);
+      // 随行英雄成长阶梯：玩家每 5 级，全体佣兵晋 1 阶（至 3 阶，解锁新能力）
+      if (H.level % 5 === 0) {
+        let promoted = false;
+        for (const mc of this.mercs) {
+          if (mc.hp <= 0 || (mc.tier || 1) >= 3) continue;
+          mc.tier = (mc.tier || 1) + 1;
+          promoted = true;
+          if (mc.def.id === 'marine' && mc.tier >= 3) { mc.maxHp = Math.round(mc.maxHp * 1.5); mc.hp = mc.maxHp; }  // 3阶战士：体魄强化
+        }
+        if (promoted) { this.toast(`⭐ 随行英雄晋阶！强度提升并解锁新能力`, '#ffd93d'); Sfx.revive(); }
+      }
       H.freeChoices++;
       Sfx.extract();
       this.floater(this.players[0].x, this.players[0].y - 40, `⬆ 升级 Lv.${H.level}！`, '#ffd93d');
@@ -800,6 +815,8 @@ class Game {
       if (p.active) { p.hp -= 4 * dt; if (Math.random() < dt * 6) this.spark(p.x, p.y - 8, '#ff8f5c'); if (p.hp <= 0) { p.hp = 1; p.burnT2 = 0; } }
     }
     p.rageT = Math.max(0, p.rageT - dt);
+    p.regenBuffT = Math.max(0, (p.regenBuffT || 0) - dt);
+    if (p.regenBuffT > 0 && p.active) p.hp = Math.min(p.maxHp, p.hp + 5 * dt);
     for (const a of p.arrows) a.t -= dt;
     p.arrows = p.arrows.filter(a => a.t > 0);
 
@@ -1519,6 +1536,23 @@ class Game {
       unstick(m);
       this.monsters.push(m);
     }
+  }
+  arenaPickWeapon(id) {
+    if (!WEAPONS[id]) return;
+    const p = this.players[0];
+    p.weapons[0] = { uid: -200, id, dur: 99999, temp: true };
+    p.activeSlot = 0;
+    p.mags[0] = null;
+    p.reloadT = 0;
+    this.toast(`🔫 试用：${WEAPONS[id].icon}【${WEAPONS[id].name}】`, '#ffd93d');
+  }
+  arenaPickHero(id) {
+    if (!MERCS[id]) return;
+    const p = this.players[0];
+    const mc = new Mercenary(p.x + 40, p.y + 30, MERCS[id], p);
+    unstick(mc);
+    this.mercs.push(mc);
+    this.toast(`${MERCS[id].icon} ${MERCS[id].name} 入队试用！`, '#7dff9a');
   }
   arenaNextWeapon() {
     const p = this.players[0];
@@ -2467,30 +2501,43 @@ class Game {
         const [x0, y0] = W2S(bm.x0, bm.y0), [x1, y1] = W2S(bm.x1, bm.y1);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `rgba(126,247,255,${bm.t * 3})`;
-        ctx.lineWidth = 7;
+        ctx.strokeStyle = `rgba(80,160,255,${bm.t * 2})`;
+        ctx.lineWidth = 22;
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-        ctx.strokeStyle = `rgba(255,255,255,${bm.t * 3})`;
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = `rgba(126,247,255,${bm.t * 3})`;
+        ctx.lineWidth = 12;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,255,255,${bm.t * 3.5})`;
+        ctx.lineWidth = 4.5;
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
         ctx.restore();
       }
       for (const f of A.fires) {
         const [sx, sy] = W2S(f.x, f.y);
         if (!onScreen(sx, sy, 140)) continue;
-        ctx.strokeStyle = `rgba(255,140,60,${Math.min(0.8, f.t * 0.5)})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(sx, sy, f.r, 0, Math.PI * 2); ctx.stroke();
-        const n = 10;
-        for (let i = 0; i < n; i++) {
-          const a = i * Math.PI * 2 / n + this.time * 0.8;
-          const fimg = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + ((i + Math.floor(this.time * 8)) % 3)];
-          if (fimg && fimg.naturalWidth) {
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(fimg, sx + Math.cos(a) * f.r - 12, sy + Math.sin(a) * f.r - 18, 24, 24);
-            ctx.imageSmoothingEnabled = true;
+        // 整圈火海：热浪底盘 + 三环火焰铺满 + 中心烈焰
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(0.55, f.t * 0.3);
+        ctx.drawImage(FxTex.fire, sx - f.r, sy - f.r, f.r * 2, f.r * 2);
+        ctx.restore();
+        ctx.imageSmoothingEnabled = false;
+        for (const [rr, n, sz] of [[f.r * 0.95, 12, 26], [f.r * 0.6, 8, 24], [f.r * 0.28, 5, 22]]) {
+          for (let i = 0; i < n; i++) {
+            const a = i * Math.PI * 2 / n + this.time * (0.5 + rr * 0.002);
+            const fimg = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + ((i + Math.floor(this.time * 9)) % 3)];
+            if (fimg && fimg.naturalWidth) {
+              const bob2 = Math.sin(this.time * 8 + i * 2) * 3;
+              ctx.drawImage(fimg, sx + Math.cos(a) * rr - sz / 2, sy + Math.sin(a) * rr - sz * 0.7 + bob2, sz, sz);
+            }
           }
         }
+        const fc = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + (Math.floor(this.time * 10) % 3)];
+        if (fc && fc.naturalWidth) ctx.drawImage(fc, sx - 16, sy - 24 + Math.sin(this.time * 7) * 3, 32, 32);
+        ctx.imageSmoothingEnabled = true;
+        ctx.strokeStyle = `rgba(255,140,60,${Math.min(0.85, f.t * 0.5)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(sx, sy, f.r, 0, Math.PI * 2); ctx.stroke();
       }
       for (const s of A.strikes) {
         const [sx, sy] = W2S(s.x, s.y);
@@ -3175,21 +3222,53 @@ class Game {
     const fx = Math.cos(mc.facing), fy = Math.sin(mc.facing);
     // 贴图佣兵（金币嗅探犬）：像素狗 + 描边 + 名牌血条
     if (mc.def.sprite && typeof MonsterImages !== 'undefined' && MonsterImages[mc.def.sprite] && MonsterImages[mc.def.sprite].naturalWidth) {
+      const size = mc.def.mech ? 52 : mc.def.mage ? 46 : mc.def.waterele ? 48 : 42;   // 英雄模型放大
       ctx.save();
       ctx.translate(sx, sy + Math.abs(walk) * -3);
       ctx.fillStyle = 'rgba(0,0,0,.3)';
-      ctx.beginPath(); ctx.ellipse(0, 13 + Math.abs(walk) * 3, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, size * 0.42 + Math.abs(walk) * 3, size * 0.34, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+      if (mc.def.waterele) {   // 水元素：WC3 风蓝色波光环
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.4 + Math.sin(mc.anim * 4) * 0.15;
+        ctx.drawImage(FxTex.glow, -size * 0.6, -size * 0.6, size * 1.2, size * 1.2);
+        ctx.restore();
+        ctx.strokeStyle = `rgba(120,200,255,${0.5 + Math.sin(mc.anim * 5) * 0.2})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, size * 0.34, size * 0.42, 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.imageSmoothingEnabled = false;
       if (fx > 0.2) ctx.scale(-1, 1);    // 素材原生朝左
-      ctx.drawImage(MonsterImages[mc.def.sprite], -16, -16, 32, 32);
+      ctx.drawImage(MonsterImages[mc.def.sprite], -size / 2, -size / 2, size, size);
       ctx.imageSmoothingEnabled = true;
       ctx.restore();
+      // 喷火兵：肩扛喷火器（罐+喷管+常燃火苗）
+      if (mc.def.flamerCone) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(mc.facing);
+        ctx.fillStyle = '#8a2f1a'; ctx.strokeStyle = '#100e1d'; ctx.lineWidth = 1.5;
+        ctx.fillRect(2, -10, 9, 8); ctx.strokeRect(2, -10, 9, 8);       // 燃料罐
+        ctx.fillStyle = '#3a3a44';
+        ctx.fillRect(8, -3, 18, 4); ctx.strokeRect(8, -3, 18, 4);       // 喷管
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(FxTex.fire, 24, -7 + Math.sin(this.time * 20) * 1.5, 14, 14);   // 常燃口焰
+        ctx.restore();
+        ctx.restore();
+      }
+      const tierStars = '⭐'.repeat(Math.max(0, (mc.tier || 1) - 1));
       ctx.font = 'bold 10px "PingFang SC",sans-serif'; ctx.textAlign = 'center';
       ctx.fillStyle = mc.def.color;
-      ctx.fillText(mc.def.name.split('·')[1] || mc.def.name, sx, sy - 22);
-      const w2 = 26;
-      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(sx - w2/2, sy - 18, w2, 3.5);
-      ctx.fillStyle = '#7dff9a'; ctx.fillRect(sx - w2/2, sy - 18, w2 * Math.max(0, mc.hp / mc.maxHp), 3.5);
+      ctx.fillText((mc.def.name.split('·')[1] || mc.def.name) + tierStars, sx, sy - size / 2 - 6);
+      const w2 = 28;
+      ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(sx - w2/2, sy - size / 2 - 2, w2, 3.5);
+      ctx.fillStyle = '#7dff9a'; ctx.fillRect(sx - w2/2, sy - size / 2 - 2, w2 * Math.max(0, mc.hp / mc.maxHp), 3.5);
+      if (mc.mgReloadT !== undefined) {
+        ctx.font = 'bold 9px "PingFang SC",sans-serif'; ctx.fillStyle = '#ffd93d';
+        ctx.fillText('装填…', sx, sy + size / 2 + 10);
+      }
       return;
     }
     ctx.save();
@@ -3506,7 +3585,9 @@ class Game {
     for (const mc of this.mercs) {
       if (mc.hp <= 0) continue;
       const frac = Math.max(0, mc.hp / mc.maxHp);
-      const stat = mc.def.heal ? `💚${mc.def.heal}/次` : mc.def.fetch ? '🐾拾取' : mc.def.mage ? '🔮法术' : `⚔️${mc.def.dmg}`;
+      const stat = (mc.def.heal ? `💚${mc.def.heal}/次` : mc.def.fetch ? '🐾拾取' : mc.def.mage ? '🔮法术' : `⚔️${mc.def.dmg}`)
+        + ('⭐'.repeat(Math.max(0, (mc.tier || 1) - 1)))
+        + (mc.mgReloadT !== undefined ? ' · 装填…' : '');
       rows.push(`<div class="ally-row">
         <img src="${this.allyAvatar(mc.def)}" class="ally-av">
         <div class="ally-info">

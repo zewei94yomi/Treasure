@@ -349,8 +349,8 @@ const SKINS = [
   { id:'swampduck',   name:'泽蛙蓑衣鸭', kind:'proc',  emoji:'🐸', body:'#8aa864', wing:'#5f7a42', requires:'swamp_relics' },
   { id:'midnight',    name:'午夜神鸭',   kind:'proc',  emoji:'✨', body:'#2c2440', wing:'#ffd93d', golden:true, requires:'mythic_relics' },
 ];
-function skinUnlocked(s, save) { return !s.requires || (save.claimedSeriesRewards || []).includes(s.requires); }
-function accUnlocked(a, save) { return (save.claimedSeriesRewards || []).includes(a.requires); }
+function skinUnlocked(s, save) { return (save.settings && save.settings.devMode) || !s.requires || (save.claimedSeriesRewards || []).includes(s.requires); }
+function accUnlocked(a, save) { return (save.settings && save.settings.devMode) || (save.claimedSeriesRewards || []).includes(a.requires); }
 const SkinImages = {};
 function preloadSkins() {
   for (const s of SKINS) if (s.kind === 'img') {
@@ -484,22 +484,22 @@ const MERCS = {
            color:'#7a9c5a', desc:'手枪点射，弹无虚发。' },
   ace:   { id:'ace',   name:'佣兵王·灰羽', icon:'🦅', hp:270, dmg:34, rate:1.1, range:560, bulletSpeed:780, speed:158, price:3200,
            color:'#8a7ab8', desc:'战场传说，收费也传说。' },
-  sniper:{ id:'sniper', name:'退役传奇·鹰眼', icon:'🎯', hp:190, dmg:78, rate:0.5, range:920, bulletSpeed:1150, speed:150, price:2600,
-           color:'#5a7a9c', desc:'一枪一个。雇佣他，才能唤来他的爱犬「汪财」。' },
-  priest:{ id:'priest', name:'牧师鸭·圣光', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, range:0, speed:152, price:2000,
-           color:'#e8d8a0', desc:'不动手，只救人：周期治疗血量最低的队友（含雇佣兵）。' },
+  sniper:{ id:'sniper', name:'退役传奇·鹰眼', icon:'🎯', hp:190, dmg:150, rate:0.45, range:980, bulletSpeed:1350, speed:150, price:2600,
+           color:'#5a7a9c', desc:'超高伤狙击：一枪带走精英。雇佣他，才能唤来爱犬「汪财」。' },
+  priest:{ id:'priest', name:'圣光牧师·晨祷', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, buffCd:7, range:0, speed:152, price:2000,
+           color:'#e8d8a0', sprite:'m_priest2', desc:'持杖治疗，并随机施放增益：经验/护甲/回血/移速/狂暴（各有 CD）。' },
   dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:280, range:0, speed:195, price:1200, requiresMerc:'sniper',
            color:'#c9a06a', sprite:'fx_dog', desc:'自动叼回经验宝石与金币。只认鹰眼当主人。' },
   archer:{ id:'archer', name:'百变箭手·翎', icon:'🏹', hp:210, dmg:24, rate:1.5, range:640, bulletSpeed:780, speed:150, price:2800,
            color:'#7ac74f', sprite:'m_archer', archer:true, desc:'箭无定式：火/冰/毒/雷/爆/击退箭随机上弦。' },
   mage:  { id:'mage',  name:'元素法师·蓝袍', icon:'🔮', hp:190, dmg:0, rate:0, range:560, speed:145, price:3600,
            color:'#8e9bff', sprite:'m_mage', mage:true, desc:'水元素、黑龙波、激光束、烈焰之环轮番施法。' },
-  mech:  { id:'mech',  name:'重装机兵·GD鸭', icon:'🤖', hp:430, dmg:10, rate:13, range:520, bulletSpeed:820, speed:118, price:5200,
-           color:'#9aa4b8', sprite:'m_mech', mech:true, desc:'双持 MG3 泼弹幕，周期呼叫火炮覆盖。' },
+  mech:  { id:'mech',  name:'重装机兵·GD鸭', icon:'🤖', hp:380, dmg:8, rate:10, range:500, bulletSpeed:820, speed:112, price:5200,
+           color:'#9aa4b8', sprite:'m_mech', mech:true, mag:40, reload:2.2, desc:'双持 MG3 泼弹幕（40 发弹链需换弹），周期呼叫火炮。' },
   marine:{ id:'marine', name:'星际战士·铁誓', icon:'🛡️', hp:320, dmg:15, rate:4.5, range:560, bulletSpeed:900, speed:135, price:3000,
            color:'#7a9cc9', sprite:'m_marine', desc:'动力甲加步枪，三连点射从不停火。为了鸭皇！' },
-  flamerguy:{ id:'flamerguy', name:'喷火兵·燎原', icon:'🔥', hp:280, dmg:6, rate:0, range:200, speed:140, price:2600,
-           color:'#e07030', sprite:'m_flamer', flamerCone:true, desc:'一条火舌横扫身前，怪物排着队变烤串。' },
+  flamerguy:{ id:'flamerguy', name:'喷火兵·燎原', icon:'🔥', hp:280, dmg:7, rate:0, range:210, speed:140, price:2600,
+           color:'#e07030', sprite:'m_flamer2', flamerCone:true, desc:'肩扛喷火器的步兵，火舌横扫身前，怪物排队变烤串。' },
 };
 
 // ============ 奖杯 ============
@@ -628,7 +628,8 @@ const HORDE_UPGRADES = [
   { id:'recruit_priest', name:'招募·牧师',   icon:'✨', max:1, special:'recruit', mercId:'priest', desc:'牧师鸭入队：周期治疗血量最低的队友' },
   { id:'recruit_archer', name:'招募·箭手',   icon:'🏹', max:1, special:'recruit', mercId:'archer', desc:'百变箭手入队：火/冰/毒/雷/爆/击退箭随机' },
   { id:'recruit_mage',   name:'招募·法师',   icon:'🔮', max:1, special:'recruit', mercId:'mage',   desc:'元素法师入队：水元素/黑龙波/激光/烈焰之环' },
-  { id:'recruit_mech',   name:'招募·机兵',   icon:'🤖', max:1, special:'recruit', mercId:'mech',   desc:'重装机兵入队：双 MG3 + 周期火炮支援' },
+  { id:'recruit_mech',   name:'招募·机兵',   icon:'🤖', max:1, special:'recruit', mercId:'mech',   desc:'武器流最高形态：投资 5 次武器强化后解锁重装机兵',
+    gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split','iceshot','fireshot','zapshot'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 5 },
   { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
   { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
 ];
@@ -710,6 +711,13 @@ const TUNE_DEFS = [
   { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wSpeed',   name:'武器弹速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wKnock',   name:'武器击退倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'hero_sniper',   name:'英雄·鹰眼强度',   min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_priest',   name:'英雄·牧师强度',   min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_archer',   name:'英雄·箭手强度',   min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_mage',     name:'英雄·法师强度',   min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_mech',     name:'英雄·机兵强度',   min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_marine',   name:'英雄·星际战士强度', min:0.3, max:3, step:0.1, def:1 },
+  { id:'hero_flamerguy',name:'英雄·喷火兵强度', min:0.3, max:3, step:0.1, def:1 },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

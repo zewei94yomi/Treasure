@@ -586,3 +586,7 @@ body {
 /* 第十五轮：练习场工具条 */
 #arena-bar { position: absolute; top: 8px; left: 10px; display: flex; gap: 6px; z-index: 8; flex-wrap: wrap; max-width: 190px; }
 #arena-bar .btn { pointer-events: auto; }
+
+/* 第十六轮：练习场选择器 */
+#arena-bar select { background: rgba(20,16,38,.9); color: #efe9ff; border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px; padding: 4px 6px; font-size: 12px; max-width: 180px; pointer-events: auto; }

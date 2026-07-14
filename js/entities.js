@@ -963,7 +963,9 @@ class Mercenary {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.hurtCd = Math.max(0, this.hurtCd - dt);
     const o = this.owner;
-    const pow = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);   // 战友号令：伤害与攻速增益
+    const tier = this.tier || 1;                                          // 成长阶（玩家每 5 级全员+1，至 3）
+    const heroT = TUNE_DEFS.some(t2 => t2.id === 'hero_' + this.def.id) ? tune('hero_' + this.def.id) : 1;
+    const pow = (1 + ((game.horde && game.hordeState.mods.mercPow) || 0)) * (1 + 0.3 * (tier - 1)) * heroT;
     // —— 元素法师：四系法术轮转（水元素/黑龙波/激光束/烈焰之环） ——
     if (this.def.mage) {
       this.castT = (this.castT === undefined ? 2.2 : this.castT) - dt;
@@ -1059,8 +1061,26 @@ class Mercenary {
       unstick(this);
       return;
     }
-    // —— 牧师鸭：不打怪，周期治疗血量比例最低的队友（玩家+佣兵） ——
+    // —— 牧师：治疗 + 随机增益（经验/护甲/回血/移速/狂暴，各有 CD） ——
     if (this.def.heal) {
+      if (this.def.buffCd && o && o.active) {
+        this.buffT = (this.buffT === undefined ? 3.5 : this.buffT) - dt;
+        if (this.buffT <= 0) {
+          this.buffT = this.def.buffCd * (tier >= 2 ? 0.7 : 1) / heroT;
+          const buffs = [
+            ['📖 经验祝福', () => { game.xpBuffT = 8; }],
+            ['🛡️ 圣光护甲', () => { o.tempShield = Math.min(150, o.tempShield + 40); }],
+            ['💞 生命再生', () => { o.regenBuffT = 8; }],
+            ['🏃 神速祝福', () => { o.sodaTime = Math.max(o.sodaTime, 6); o.sodaMul = Math.max(o.sodaMul || 1, 1.3); }],
+            ['😤 狂暴祝福', () => { o.rageT = Math.max(o.rageT, 6); }],
+          ];
+          const n2 = tier >= 3 ? 2 : 1;                     // 3 阶：一次双祝福
+          const bag2 = buffs.slice().sort(() => Math.random() - 0.5).slice(0, n2);
+          for (const [bn, bf] of bag2) { bf(); game.floater(o.x, o.y - 44, bn + '！', '#ffe9a0'); }
+          game.fxP({ tex: FxTex.glow, x: o.x, y: o.y, s0: 34, s1: 70, a0: 0.6, a1: 0, life: 0.4 });
+          Sfx.heal();
+        }
+      }
       this.healT = (this.healT || 0) - dt;
       if (this.healT <= 0) {
         this.healT = this.def.healCd / pow;
@@ -1142,24 +1162,42 @@ class Mercenary {
       if (near2) this.facing = Math.atan2(near2.y - this.y, near2.x - this.x);
       this.flameT = (this.flameT || 0) - dt;
       if (near2 && nd3 < rngF && this.flameT <= 0) {
-        this.flameT = 0.18;
-        const pow2 = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);
+        this.flameT = 0.15;
+        const coneA = tier >= 2 ? 0.8 : 0.55;               // 2 阶：火舌更宽
         for (const m of game.monsters.slice()) {
           const d = Math.hypot(m.x - this.x, m.y - this.y);
           if (d > rngF) continue;
           let da = Math.atan2(m.y - this.y, m.x - this.x) - this.facing;
           da = Math.atan2(Math.sin(da), Math.cos(da));
-          if (Math.abs(da) > 0.55) continue;
-          m.burnT = Math.max(m.burnT, 1.5);
-          if (m.hurt(Math.round(this.def.dmg * pow2), game)) game.killMonster(m, o);
+          if (Math.abs(da) > coneA) continue;
+          m.burnT = Math.max(m.burnT, tier >= 3 ? 3 : 1.5);  // 3 阶：灼烧更久且蔓延
+          if (tier >= 3) m.fireSpread = true;
+          if (m.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(m, o);
         }
-        // 火舌粒子
-        for (let i = 0; i < 3; i++) {
-          const fa = this.facing + (Math.random() - 0.5) * 0.8;
-          const fv = 180 + Math.random() * 140;
-          game.fxP({ tex: FxTex.fire, x: this.x + Math.cos(this.facing) * 16, y: this.y + Math.sin(this.facing) * 16,
-                     vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv, drag: 2, s0: 14, s1: 30, a0: 0.85, a1: 0, life: 0.35 });
+        // 真实感火舌：白热核心 → 橙焰 → 火焰云贴图 → 黑烟，沿锥形高频喷射
+        const nx2 = this.x + Math.cos(this.facing) * 20, ny2 = this.y + Math.sin(this.facing) * 20;
+        for (let i = 0; i < 2; i++) {                        // 白热内芯（快、小、亮）
+          const fa = this.facing + (Math.random() - 0.5) * 0.22;
+          const fv = 300 + Math.random() * 120;
+          game.fxP({ tex: FxTex.glow, x: nx2, y: ny2, vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv,
+                     drag: 2.4, s0: 7, s1: 16, a0: 0.9, a1: 0, life: 0.22 });
         }
+        for (let i = 0; i < 3; i++) {                        // 橙焰主体（膨胀）
+          const fa = this.facing + (Math.random() - 0.5) * coneA * 0.9;
+          const fv = 220 + Math.random() * 160;
+          game.fxP({ tex: FxTex.fire, x: nx2, y: ny2, vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv - 12,
+                     drag: 2.1, s0: 10, s1: 34, a0: 0.9, a1: 0, life: 0.34 + Math.random() * 0.12, rv: (Math.random()-0.5)*6 });
+        }
+        const fimg2 = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + (Math.floor(game.time * 12) % 3)];
+        if (fimg2 && fimg2.naturalWidth) {                   // 火焰云舔舐
+          const fa = this.facing + (Math.random() - 0.5) * coneA;
+          game.fxP({ img: fimg2, x: nx2 + Math.cos(fa) * 40, y: ny2 + Math.sin(fa) * 40,
+                     vx: Math.cos(fa) * 170, vy: Math.sin(fa) * 170 - 20, drag: 1.8,
+                     s0: 16, s1: 30, a0: 1, a1: 0, life: 0.4, rv: (Math.random()-0.5)*4 });
+        }
+        if (Math.random() < 0.35)                             // 黑烟收尾
+          game.fxP({ tex: FxTex.smoke, x: nx2 + Math.cos(this.facing) * 90, y: ny2 + Math.sin(this.facing) * 90,
+                     vx: Math.cos(this.facing) * 60, vy: -28, s0: 14, s1: 40, a0: 0.35, a1: 0, life: 0.7, add: false });
         if (Math.random() < 0.3) Sfx.melee();
       }
       // 移动：贴近目标或跟随主人
@@ -1211,7 +1249,17 @@ class Mercenary {
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
         if (this.attackCd <= 0 && td <= this.def.range * rngM) {
           this.attackCd = 1 / (this.def.rate * pow);
-          if (this.def.archer) {
+          if (this.def.id === 'sniper') {
+            // 鹰眼：超高伤狙击（2 阶穿透 / 3 阶 20% 爆头三倍）
+            const head = tier >= 3 && Math.random() < 0.2;
+            const sb2 = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
+              this.facing + (Math.random() - 0.5) * 0.02,
+              { id: 'mercgun', dmg: Math.round(this.def.dmg * pow * (head ? 3 : 1)), speed: this.def.bulletSpeed,
+                range: this.def.range + 120, knock: 220, pierce: tier >= 2 ? 2 : 1, spread: 0 }, o);
+            game.bullets.push(sb2);
+            if (head) game.floater(this.x, this.y - 26, '🎯 致命一击！', '#ffd93d');
+            Sfx.sniper();
+          } else if (this.def.archer) {
             // 百变箭手：六种箭随机上弦
             const kinds = [
               { c: '#ff9a4d', burn: 2.2, n: '火' },
@@ -1221,17 +1269,29 @@ class Mercenary {
               { c: '#ff7b2d', explosive: 62, n: '爆' },
               { c: '#c9ced8', knock: 460, n: '退' },
             ];
-            const k = kinds[Math.floor(Math.random() * kinds.length)];
-            const ab = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
-              this.facing + (Math.random() - 0.5) * 0.04,
-              { id: 'arrow', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80,
-                knock: k.knock || 90, burn: k.burn, slow: k.slow, freeze: k.freeze, explosive: k.explosive, noHoming: true }, o);
-            ab.arrowC = k.c;
-            ab.zapArrow = !!k.zapArrow;
-            game.bullets.push(ab);
+            const durMul = tier >= 3 ? 1.5 : 1;               // 3 阶：箭矢附加效果更持久
+            const shots2 = tier >= 2 ? 2 : 1;                  // 2 阶：双箭齐发
+            for (let s2 = 0; s2 < shots2; s2++) {
+              const k = kinds[Math.floor(Math.random() * kinds.length)];
+              const ab = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
+                this.facing + (Math.random() - 0.5) * 0.04 + (s2 ? 0.12 : 0),
+                { id: 'arrow', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80,
+                  knock: k.knock || 90, burn: k.burn && k.burn * durMul, slow: k.slow && k.slow * durMul,
+                  freeze: k.freeze && k.freeze * durMul, explosive: k.explosive, noHoming: true }, o);
+              ab.arrowC = k.c;
+              ab.zapArrow = !!k.zapArrow;
+              game.bullets.push(ab);
+            }
             Sfx.crossbow();
           } else if (this.def.mech) {
-            // 重装机兵：双管 MG3 交替喷射 + 周期火炮支援
+            // 重装机兵：弹链有限（打空换弹），双管交替
+            if (this.mag === undefined) this.mag = (tier >= 2 ? 60 : this.def.mag) || 40;
+            if (this.mag <= 0) {
+              this.mgReloadT = (this.mgReloadT === undefined ? this.def.reload : this.mgReloadT) - dt;
+              if (this.mgReloadT <= 0) { this.mag = (tier >= 2 ? 60 : this.def.mag) || 40; this.mgReloadT = undefined; Sfx.tick(); }
+              this.attackCd = 0.2;
+            } else {
+            this.mag--;
             this.barrel = 1 - (this.barrel || 0);
             const side = this.barrel ? 1 : -1;
             const ox2 = Math.cos(this.facing + Math.PI / 2) * 10 * side, oy2 = Math.sin(this.facing + Math.PI / 2) * 10 * side;
@@ -1239,8 +1299,10 @@ class Mercenary {
               this.facing + (Math.random() - 0.5) * 0.12,
               { id: 'mercgun', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80, knock: 60, spread: 0 }, o));
             if (this.barrel) Sfx.mg();
+            }
           } else {
-            (this.def.id === 'sniper' ? Sfx.crossbow : Sfx.shoot)();
+            if (this.def.id === 'marine' && tier >= 2) this.attackCd /= 1.35;   // 2 阶：点射更密
+            Sfx.shoot();
             game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
               this.facing + (Math.random() - 0.5) * 0.06,
               { id:'mercgun', dmg:Math.round(this.def.dmg * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
@@ -1253,7 +1315,7 @@ class Mercenary {
             this.artyT = 9;
             const A = game.allyFx();
             const placed = [];
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < (tier >= 3 ? 8 : 5); i++) {
               // 落点避墙 + 彼此隔开 60px
               let sx3 = target.x, sy3 = target.y, ok3 = false;
               for (let tr = 0; tr < 12; tr++) {

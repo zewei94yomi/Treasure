@@ -43,20 +43,29 @@ const UI = (() => {
       ? '🖱️ 鼠标操控（单人）：开 — 准星瞄准/左键攻击/右键翻滚'
       : '⌨️ 鼠标操控（单人）：关 — 使用键盘朝向';
     const dv = $('btn-devmode');
-    if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 经验×10 快速测试' : '🧪 开发者模式：关';
+    if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 金钱无限/全解锁/经验加倍' : '🧪 开发者模式：关';
   }
   function startArena() {
     showScreen('screen-game');
     new Game(1, 'normal', [{}], 'manor', SAVE.settings.skins, { horde: true, arena: true });
     const bar = $('arena-bar');
     if (bar) bar.style.display = 'flex';
-    setTimeout(() => Game.current && Game.current.toast('🎯 练习场：无敌+站桩木人，用上方工具条随意折腾', '#7ef7ff'), 500);
+    // 填充武器/英雄选择器
+    const ws = $('arena-wsel');
+    if (ws) ws.innerHTML = '<option value="">🔫 选武器试用…</option>' +
+      Object.values(WEAPONS).filter(w => w.id !== 'fists').map(w => `<option value="${w.id}">${w.icon} ${w.name}</option>`).join('');
+    const rs = $('arena-rsel');
+    if (rs) rs.innerHTML = '<option value="">⚔️ 选英雄入队…</option>' +
+      Object.values(MERCS).map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
+    setTimeout(() => Game.current && Game.current.toast('🎯 练习场：无敌+站桩木人；调参面板里有每位英雄的强度滑杆', '#7ef7ff'), 500);
   }
   function toggleDevMode() {
     SAVE.settings.devMode = !SAVE.settings.devMode;
     persistSave();
     const b = $('btn-devmode');
-    if (b) b.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 经验×10 快速测试' : '🧪 开发者模式：关';
+    if (b) b.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 金钱无限/全解锁/经验加倍' : '🧪 开发者模式：关';
+    if (SAVE.settings.devMode) SAVE.gold = Math.max(SAVE.gold, 999999);
+    persistSave();
     Sfx.tick();
   }
   function toggleMouseAim() {
@@ -293,7 +302,8 @@ const UI = (() => {
         const mid = setupState.loadouts[i][key];
         if (!mid) continue;
         if (key === 'merc2' && setupState.loadouts[i].merc !== 'sniper') { setupState.loadouts[i].merc2 = null; continue; }
-        if (SAVE.mercTrials[mid] > 0) SAVE.mercTrials[mid]--;
+        if (SAVE.settings.devMode) { /* 开发者模式：招募全免费 */ }
+        else if (SAVE.mercTrials[mid] > 0) SAVE.mercTrials[mid]--;
         else if (SAVE.gold >= MERCS[mid].price) SAVE.gold -= MERCS[mid].price;
         else {
           setupState.loadouts[i][key] = null;
