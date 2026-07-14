@@ -50,7 +50,8 @@ class Game {
     Game.current = this;
     this.mode = mode;
     this.escape = !!opts.escape;             // 大逃亡模式（复用割草的升级/无限弹药体系）
-    this.horde = !!opts.horde || this.escape;
+    this.arena = !!opts.arena;               // 🎯 调试练习场：无敌+木桩+工具条
+    this.horde = !!opts.horde || this.escape || this.arena;
     this.cfg = this.escape ? ESCAPE_CFG : this.horde ? HORDE_CFG : DIFFICULTIES[diffId];
     this.diffId = this.horde ? 'normal' : diffId;
     loadMap(mapId);
@@ -73,10 +74,12 @@ class Game {
     for (let i = 0; i < mode; i++) {
       const sp = MapData.spawns[i];
       const lo = loadouts[i] || {};
-      const w1 = SAVE.weapons.find(w => w.uid === lo.w1) || null;
-      const w2 = SAVE.weapons.find(w => w.uid === lo.w2) || null;
-      const armor = SAVE.armors.find(a => a.uid === lo.armor) || null;
-      const p = new Player(i, sp.x, sp.y, [w1, w2], skinIds && skinIds[i], armor, lo.pouch, lo.acc);
+      // 割草/大逃亡：取消带入武器护甲——默认一把手枪起家，成长全靠升级与拾取
+      const w1 = this.horde ? { uid: -100 - i, id: 'pistol', dur: 99999, temp: true }
+               : (SAVE.weapons.find(w => w.uid === lo.w1) || null);
+      const w2 = this.horde ? null : (SAVE.weapons.find(w => w.uid === lo.w2) || null);
+      const armor = this.horde ? null : (SAVE.armors.find(a => a.uid === lo.armor) || null);
+      const p = new Player(i, sp.x, sp.y, [w1, w2], skinIds && skinIds[i], armor, this.horde ? false : lo.pouch, lo.acc);
       if (i === 0 && this.mouseAimRun) p.mouseAimed = true;
       p.maxHp = Math.round(p.maxHp * tune('pHp')); p.hp = p.maxHp;
       this.players.push(p);
@@ -172,7 +175,7 @@ class Game {
       this.levelupOpen = false;
       for (const p of this.players) { p.maxHp = Math.round(500 * tune('pHp')); p.hp = p.maxHp; }
       if (!this.escape) for (let i = 0; i < 8; i++) this.spawnHordeMonster();
-      if (SAVE.settings.devMode) setTimeout(() => this.toast('🧪 开发者模式：经验 ×10（设置中心可关）', '#7ef7ff'), 600);
+      if (SAVE.settings.devMode) setTimeout(() => this.toast(`🧪 开发者模式：经验 ×${tune('devXp')}（设置中心可关）`, '#7ef7ff'), 600);
     }
 
     this.mapCanvas = this.prerenderMap();
@@ -374,7 +377,7 @@ class Game {
     const H = this.hordeState;
     const t = this.time;
 
-    if (this.escape) { this.escapeUpdate(dt); } else {
+    if (this.arena) { this.arenaUpdate(dt); } else if (this.escape) { this.escapeUpdate(dt); } else {
     // —— 胜利判定：撑满时长，全场怪物化作金币雨 ——
     if (!H.victory && t >= hordeDuration()) {
       H.victory = true;
@@ -624,7 +627,7 @@ class Game {
         this.gemComboT = 1.0;
         Sfx.gem(this.gemCombo);
         // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）；开发者模式 ×10 快速验证技能
-        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300) * (SAVE.settings.devMode ? 10 : 1)));
+        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300) * (SAVE.settings.devMode ? tune('devXp') : 1)));
       }
     }
     H.gems = H.gems.filter(g => !g.taken);
@@ -672,6 +675,13 @@ class Game {
     if (u.skill) H.skills[u.skill] = (H.skills[u.skill] || 0) + 1;
     else if (u.special === 'maxhp') {
       for (const p of this.players) { p.maxHp = Math.round(p.maxHp * 1.3); p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5); }
+    } else if (u.special === 'recruit') {
+      const p0 = this.players.find(pl => pl.active) || this.players[0];
+      const mc = new Mercenary(p0.x + 34, p0.y + 26, MERCS[u.mercId], p0);
+      unstick(mc);
+      this.mercs.push(mc);
+      this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} 应招而来！（看左侧面板）`, '#7dff9a');
+      Sfx.revive();
     } else if (u.special === 'merchp') {
       H.mods.mercHp = (H.mods.mercHp || 1) * 1.3;
       for (const mc of this.mercs) if (mc.hp > 0) { mc.maxHp = Math.round(mc.maxHp * 1.3); mc.hp = mc.maxHp; }
@@ -971,7 +981,7 @@ class Game {
     const def = p.weaponDef();
     const inst = p.weaponInst();
     if (def.melee) {
-      p.shootCd = 1 / (def.rate * (this.horde ? this.hordeState.mods.rate : 1));
+      p.shootCd = 1 / (def.rate * (this.horde ? this.hordeState.mods.rate : 1) * tune('wRate'));
       p.swing = 0.22;
       Sfx.melee();
       if (!def.silent) this.emitNoise(p.x, p.y, 140);
@@ -1030,7 +1040,7 @@ class Game {
     if (def.mag) {
       if (p.magLeft() <= 0) { p.startReload(); Sfx.tick(); return; }
     }
-    p.shootCd = 1 / (def.rate * (H ? H.rate : 1));
+    p.shootCd = 1 / (def.rate * (H ? H.rate : 1) * tune('wRate'));
     if (def.mag) {
       p.mags[p.activeSlot]--;
       if (p.mags[p.activeSlot] <= 0) p.startReload();
@@ -1056,10 +1066,11 @@ class Game {
       bdef = Object.assign({}, def, {
         pierce: (def.pierce || 1) + H.pierce,
         range: (def.range || 500) * H.range,
-        knock: (def.knock || 80) * H.knock * 1.15,   // 武器流爽感：基础击退 +15%
-        speed: (def.speed || 500) * (H.bSpeed || 1),
+        knock: (def.knock || 80) * H.knock * 1.15 * tune('wKnock'),
+        speed: (def.speed || 500) * (H.bSpeed || 1) * tune('wSpeed'),
       });
     }
+    if (!H) bdef = Object.assign({}, def, { knock: (def.knock || 80) * tune('wKnock'), speed: (def.speed || 500) * tune('wSpeed') });
     const critC = H ? (H.crit || 0) : 0;
     for (let i = 0; i < n; i++) {
       const fan = def.pellets ? 0 : (i - (n - 1) / 2) * 0.13;   // 非霰弹的分裂弹道呈扇形
@@ -1212,6 +1223,7 @@ class Game {
 
   damagePlayer(p, dmg, src) {
     if (!p.active) return;
+    if (this.arena) { this.dmgNum(p.x, p.y - 26, dmg, false, '#9aa2b4'); return; }   // 练习场：无敌（只显示本应受到的伤害）
     if (src && src.type) dmg = Math.round(dmg * tune('mDmg'));   // 怪物伤害调参
     // 怪物图鉴：被它打过也算见过
     if (src && src.type && src.type.id) { if (!SAVE.monsterSeen) SAVE.monsterSeen = {}; SAVE.monsterSeen[src.type.id] = true; }
@@ -1489,6 +1501,53 @@ class Game {
       time: this.time, kills: this.runKills, chests: this.runChests,
       goldGained, cash: this.runCash, players: results, rewards, newTrophies,
     });
+  }
+
+  // ================= 调试练习场 =================
+  arenaUpdate(dt) {
+    // 木桩：不动、打空自动重生
+    this.arenaRespawnT = (this.arenaRespawnT || 0) - dt;
+    const dummies = this.monsters.filter(m => m.isDummy);
+    if (dummies.length < 6 && this.arenaRespawnT <= 0) {
+      this.arenaRespawnT = 0.8;
+      const p = this.players[0];
+      const i = dummies.length;
+      const m = new Monster(p.x + 180 + (i % 3) * 90, p.y - 90 + Math.floor(i / 3) * 180, this.cfg, ['stoneling', 'brute', 'shade'][i % 3]);
+      m.isDummy = true;
+      m.hp = m.maxHp = 3000;
+      m.stunT = 1e9;                     // 永远站桩
+      unstick(m);
+      this.monsters.push(m);
+    }
+  }
+  arenaNextWeapon() {
+    const p = this.players[0];
+    const ids = Object.keys(WEAPONS).filter(k => k !== 'fists');
+    this._arenaW = ((this._arenaW === undefined ? -1 : this._arenaW) + 1) % ids.length;
+    const id = ids[this._arenaW];
+    p.weapons[0] = { uid: -200, id, dur: 99999, temp: true };
+    p.activeSlot = 0;
+    p.mags[0] = null;
+    p.reloadT = 0;
+    this.toast(`🔫 试用：${WEAPONS[id].icon}【${WEAPONS[id].name}】`, '#ffd93d');
+  }
+  arenaFreeLevel() {
+    this.hordeState.freeChoices++;
+    if (!this.levelupOpen) this.openLevelup();
+  }
+  arenaRecruit() {
+    const pool = ['sniper', 'priest', 'archer', 'mage', 'mech', 'marine', 'flamerguy'];
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    const p = this.players[0];
+    const mc = new Mercenary(p.x + 40, p.y + 30, MERCS[id], p);
+    unstick(mc);
+    this.mercs.push(mc);
+    this.toast(`${MERCS[id].icon} ${MERCS[id].name} 入队试用！`, '#7dff9a');
+  }
+  arenaReset() {
+    this.monsters = [];
+    this.arenaRespawnT = 0;
+    this.toast('🎯 木桩已重置', '#9fd8ff');
   }
 
   // ================= 大逃亡核心 =================
@@ -2344,8 +2403,24 @@ class Game {
           ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI*2); ctx.fill();
         }
       } else {
-        ctx.fillStyle = '#ffe28a';
-        ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI*2); ctx.fill();
+        // 曳光弹：辉光 + 拖尾渐变胶囊 + 白炽弹头
+        ctx.save();
+        ctx.translate(sx, sy); ctx.rotate(b.angle);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(FxTex.glow, -9, -9, 18, 18);
+        ctx.globalAlpha = 1;
+        const tg2 = ctx.createLinearGradient(-16, 0, 5, 0);
+        tg2.addColorStop(0, 'rgba(255,170,60,0)');
+        tg2.addColorStop(0.7, 'rgba(255,210,110,.85)');
+        tg2.addColorStop(1, '#fff6d8');
+        ctx.fillStyle = tg2;
+        ctx.beginPath();
+        ctx.moveTo(-16, -1.1); ctx.lineTo(3, -1.6); ctx.arc(3, 0, 1.8, -Math.PI / 2, Math.PI / 2); ctx.lineTo(-16, 1.1);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(3.5, 0, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       }
     }
     for (const s of this.sparks) {

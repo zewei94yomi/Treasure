@@ -496,6 +496,10 @@ const MERCS = {
            color:'#8e9bff', sprite:'m_mage', mage:true, desc:'水元素、黑龙波、激光束、烈焰之环轮番施法。' },
   mech:  { id:'mech',  name:'重装机兵·GD鸭', icon:'🤖', hp:430, dmg:10, rate:13, range:520, bulletSpeed:820, speed:118, price:5200,
            color:'#9aa4b8', sprite:'m_mech', mech:true, desc:'双持 MG3 泼弹幕，周期呼叫火炮覆盖。' },
+  marine:{ id:'marine', name:'星际战士·铁誓', icon:'🛡️', hp:320, dmg:15, rate:4.5, range:560, bulletSpeed:900, speed:135, price:3000,
+           color:'#7a9cc9', sprite:'m_marine', desc:'动力甲加步枪，三连点射从不停火。为了鸭皇！' },
+  flamerguy:{ id:'flamerguy', name:'喷火兵·燎原', icon:'🔥', hp:280, dmg:6, rate:0, range:200, speed:140, price:2600,
+           color:'#e07030', sprite:'m_flamer', flamerCone:true, desc:'一条火舌横扫身前，怪物排着队变烤串。' },
 };
 
 // ============ 奖杯 ============
@@ -619,6 +623,14 @@ const HORDE_UPGRADES = [
   // —— 第十一轮：招募流（场上有雇佣兵才会刷出） ——
   { id:'merc_dmg', name:'战友号令', icon:'📯', max:3, mercOnly:true, desc:'雇佣兵伤害与攻速 +25%', mod:m => m.mercPow = (m.mercPow || 0) + 0.25 },
   { id:'merc_hp',  name:'铁血军团', icon:'🎖️', max:3, mercOnly:true, desc:'雇佣兵最大生命 +30% 并回满', special:'merchp' },
+  // —— 招募卡：直接从升级三选一里招募英雄（各限 1 次，阵亡不退场费） ——
+  { id:'recruit_sniper', name:'招募·鹰眼',   icon:'🎯', max:1, special:'recruit', mercId:'sniper', desc:'退役传奇狙击手入队：920 射程一枪一个' },
+  { id:'recruit_priest', name:'招募·牧师',   icon:'✨', max:1, special:'recruit', mercId:'priest', desc:'牧师鸭入队：周期治疗血量最低的队友' },
+  { id:'recruit_archer', name:'招募·箭手',   icon:'🏹', max:1, special:'recruit', mercId:'archer', desc:'百变箭手入队：火/冰/毒/雷/爆/击退箭随机' },
+  { id:'recruit_mage',   name:'招募·法师',   icon:'🔮', max:1, special:'recruit', mercId:'mage',   desc:'元素法师入队：水元素/黑龙波/激光/烈焰之环' },
+  { id:'recruit_mech',   name:'招募·机兵',   icon:'🤖', max:1, special:'recruit', mercId:'mech',   desc:'重装机兵入队：双 MG3 + 周期火炮支援' },
+  { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
+  { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -693,6 +705,11 @@ const TUNE_DEFS = [
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
   { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:15, abs:true },
   { id:'zapHop',   name:'闪电传导间隔(秒)', min:0.05, max:0.5,  step:0.05, def:0.2, abs:true },
+  { id:'mercRange',name:'佣兵攻击范围',    min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'devXp',    name:'开发者经验倍率',  min:1,    max:50,   step:1,    def:20, abs:true },
+  { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'wSpeed',   name:'武器弹速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
+  { id:'wKnock',   name:'武器击退倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

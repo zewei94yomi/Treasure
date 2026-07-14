@@ -582,3 +582,7 @@ body {
 
 /* 第十三轮：升级卡数值预览行 */
 .lv-fx { display: block; font-size: 11px; color: #7ef7c8; margin-top: 4px; line-height: 1.4; }
+
+/* 第十五轮：练习场工具条 */
+#arena-bar { position: absolute; top: 8px; left: 10px; display: flex; gap: 6px; z-index: 8; flex-wrap: wrap; max-width: 190px; }
+#arena-bar .btn { pointer-events: auto; }

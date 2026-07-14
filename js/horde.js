@@ -28,6 +28,7 @@ Object.assign(Game.prototype, {
       if (u.skill && !anySkill) w *= 1.7;                    // 还没技能时鼓励开技能
       if (u.requires) w *= 1.6;                              // 变体强化贴合已有 build
       if (lowHp && (u.id === 'maxhp' || u.id === 'steal' || u.id === 'regen' || u.id === 'barrier')) w *= 2.2;  // 残血时供生存牌
+      if (u.special === 'recruit') w *= this.mercs.some(mc => mc.hp > 0) ? 1.2 : 1.8;   // 招募卡：无佣兵时更常见
       // 近战流没有弹道类需求
       const def = this.players[0].weaponDef();
       if (def.melee && (u.id === 'multi' || u.id === 'pierce' || u.id === 'range')) w *= 0.35;

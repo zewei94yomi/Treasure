@@ -1130,9 +1130,53 @@ class Mercenary {
       return;
     }
     // 找射程内最近的可见怪（潜伏中的不打，免得帮倒忙）
+    // 喷火兵：火舌持续横扫身前扇形
+    if (this.def.flamerCone) {
+      const rngF = (this.def.range || 200) * tune('mercRange');
+      let near2 = null, nd3 = rngF + 160;
+      for (const m of game.monsters) {
+        if (m.state === 'ambush') continue;
+        const d = Math.hypot(m.x - this.x, m.y - this.y);
+        if (d < nd3) { near2 = m; nd3 = d; }
+      }
+      if (near2) this.facing = Math.atan2(near2.y - this.y, near2.x - this.x);
+      this.flameT = (this.flameT || 0) - dt;
+      if (near2 && nd3 < rngF && this.flameT <= 0) {
+        this.flameT = 0.18;
+        const pow2 = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);
+        for (const m of game.monsters.slice()) {
+          const d = Math.hypot(m.x - this.x, m.y - this.y);
+          if (d > rngF) continue;
+          let da = Math.atan2(m.y - this.y, m.x - this.x) - this.facing;
+          da = Math.atan2(Math.sin(da), Math.cos(da));
+          if (Math.abs(da) > 0.55) continue;
+          m.burnT = Math.max(m.burnT, 1.5);
+          if (m.hurt(Math.round(this.def.dmg * pow2), game)) game.killMonster(m, o);
+        }
+        // 火舌粒子
+        for (let i = 0; i < 3; i++) {
+          const fa = this.facing + (Math.random() - 0.5) * 0.8;
+          const fv = 180 + Math.random() * 140;
+          game.fxP({ tex: FxTex.fire, x: this.x + Math.cos(this.facing) * 16, y: this.y + Math.sin(this.facing) * 16,
+                     vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv, drag: 2, s0: 14, s1: 30, a0: 0.85, a1: 0, life: 0.35 });
+        }
+        if (Math.random() < 0.3) Sfx.melee();
+      }
+      // 移动：贴近目标或跟随主人
+      const goal3 = (near2 && nd3 > rngF * 0.7) ? near2 : (o && o.alive && Math.hypot(o.x - this.x, o.y - this.y) > 90 ? o : null);
+      if (goal3) {
+        const a = Math.atan2(goal3.y - this.y, goal3.x - this.x);
+        const r = resolveCircle(this.x + Math.cos(a) * this.def.speed * dt, this.y + Math.sin(a) * this.def.speed * dt, 13);
+        this.x = r.x; this.y = r.y;
+        this.moving = true;
+      } else this.moving = false;
+      unstick(this);
+      return;
+    }
     // 牵引绳：离主人超过 300 就放下一切归队；只打主人 380 范围内的怪（紧跟主角作战）
     const leashD = o && o.alive ? Math.hypot(o.x - this.x, o.y - this.y) : 0;
-    let target = null, td = (this.def.range || 58) + 200;
+    const rngM = tune('mercRange');   // 佣兵攻击范围倍率（面板）
+    let target = null, td = ((this.def.range || 58) * rngM) + 200;
     if (leashD <= 300) {
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
@@ -1146,7 +1190,7 @@ class Mercenary {
     if (target) {
       this.facing = Math.atan2(target.y - this.y, target.x - this.x);
       if (this.def.melee) {
-        if (td > this.def.range + target.r - 6) goal = target;
+        if (td > this.def.range * rngM + target.r - 6) goal = target;
         else if (this.attackCd <= 0) {
           this.attackCd = 1 / (this.def.rate * pow);
           Sfx.melee();
@@ -1163,9 +1207,9 @@ class Mercenary {
           }
         }
       } else {
-        if (td > this.def.range) goal = target;
+        if (td > this.def.range * rngM) goal = target;
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
-        if (this.attackCd <= 0 && td <= this.def.range) {
+        if (this.attackCd <= 0 && td <= this.def.range * rngM) {
           this.attackCd = 1 / (this.def.rate * pow);
           if (this.def.archer) {
             // 百变箭手：六种箭随机上弦

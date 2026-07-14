@@ -13,6 +13,7 @@ const UI = (() => {
   function showScreen(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.remove('active');
     $(id).classList.add('active');
+    if (id !== 'screen-game') { const ab = $('arena-bar'); if (ab) ab.style.display = 'none'; }   // 离开对局收起练习场工具条
   }
 
   // ---------- 主菜单 ----------
@@ -43,6 +44,13 @@ const UI = (() => {
       : '⌨️ 鼠标操控（单人）：关 — 使用键盘朝向';
     const dv = $('btn-devmode');
     if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 经验×10 快速测试' : '🧪 开发者模式：关';
+  }
+  function startArena() {
+    showScreen('screen-game');
+    new Game(1, 'normal', [{}], 'manor', SAVE.settings.skins, { horde: true, arena: true });
+    const bar = $('arena-bar');
+    if (bar) bar.style.display = 'flex';
+    setTimeout(() => Game.current && Game.current.toast('🎯 练习场：无敌+站桩木人，用上方工具条随意折腾', '#7ef7ff'), 500);
   }
   function toggleDevMode() {
     SAVE.settings.devMode = !SAVE.settings.devMode;
@@ -181,6 +189,7 @@ const UI = (() => {
     }
     let pouchesLeft = SAVE.pouches;
     for (let i = 0; i < setupState.mode; i++) if (setupState.loadouts[i].pouch) pouchesLeft--;
+    const noGear = setupState.gameplay !== 'classic';   // 割草/大逃亡：不带装备入场
     for (let i = 0; i < setupState.mode; i++) {
       const lo = setupState.loadouts[i];
       const wOpts = slotKey => ['<option value="">🐤 空手</option>'].concat(
@@ -225,16 +234,18 @@ const UI = (() => {
         <div class="loadout-player">
           <div class="loadout-row">
             <span class="loadout-label" style="color:${i === 0 ? '#ffd93d' : '#9fd8ff'}">${i + 1}P</span>
-            <select onchange="UI.setGear(${i},'w1',this.value)" title="主武器">${wOpts('w1')}</select>
-            <select onchange="UI.setGear(${i},'w2',this.value)" title="副武器">${wOpts('w2')}</select>
+            ${noGear
+              ? '<span class="loadout-hint">🔫 空手入场·一把手枪起家——武器/护甲全靠局内升级、招募卡与商人成长</span>'
+              : `<select onchange="UI.setGear(${i},'w1',this.value)" title="主武器">${wOpts('w1')}</select>
+            <select onchange="UI.setGear(${i},'w2',this.value)" title="副武器">${wOpts('w2')}</select>`}
           </div>
           <div class="loadout-row sub">
             <span class="loadout-label"></span>
-            <select onchange="UI.setGear(${i},'armor',this.value)" title="护甲">${aOpts}</select>
+            ${noGear ? '' : `<select onchange="UI.setGear(${i},'armor',this.value)" title="护甲">${aOpts}</select>
             <label class="pouch-check ${pouchOk ? '' : 'disabled'}">
               <input type="checkbox" ${lo.pouch ? 'checked' : ''} ${pouchOk ? '' : 'disabled'} onchange="UI.setPouch(${i}, this.checked)">
               👝腰包${SAVE.pouches ? `(持有${SAVE.pouches})` : '(未持有)'}
-            </label>
+            </label>`}
             <select onchange="UI.setMerc(${i}, this.value)" title="雇佣兵">${mercOpts}</select>
             ${dogSelect}
           </div>
@@ -962,7 +973,7 @@ const UI = (() => {
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setMerc2, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
-           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim,
+           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive };

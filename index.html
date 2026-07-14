@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=20">
+<link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
 
@@ -144,6 +144,13 @@
         </div>
       </div>
       <div id="ally-panel"></div>
+      <div id="arena-bar" style="display:none">
+        <button class="btn small" onclick="Game.current&&Game.current.arenaNextWeapon()">🔫 换武器</button>
+        <button class="btn small" onclick="Game.current&&Game.current.arenaFreeLevel()">⬆️ 免费升级</button>
+        <button class="btn small" onclick="Game.current&&Game.current.arenaRecruit()">⚔️ 招募英雄</button>
+        <button class="btn small" onclick="Game.current&&Game.current.arenaReset()">🎯 重置木桩</button>
+        <button class="btn small" onclick="UI.showTuning()">🎛️ 调参</button>
+      </div>
       <div id="hud-supplies"></div>
       <div id="hud-toasts"></div>
       <div id="vignette"></div>
@@ -257,6 +264,7 @@
       <button class="btn big" id="btn-mouseaim" onclick="UI.toggleMouseAim()">🖱️ 鼠标操控（单人）：开</button>
       <button class="btn big" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
       <button class="btn big" id="btn-devmode" onclick="UI.toggleDevMode()">🧪 开发者模式：关</button>
+      <button class="btn big" onclick="UI.hideSettingsHub();UI.startArena()">🎯 调试练习场（武器/技能试验田）</button>
     </div>
     <div style="display:flex; justify-content:center; margin-top:12px">
       <button class="btn small primary" onclick="UI.hideSettingsHub()">返回</button>
@@ -335,24 +343,24 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=20"></script>
-<script src="js/music.js?v=20"></script>
-<script src="js/skins-data.js?v=20"></script>
-<script src="js/monsters-data.js?v=20"></script>
-<script src="js/tiles-data.js?v=20"></script>
-<script src="js/data.js?v=20"></script>
-<script src="js/save.js?v=20"></script>
-<script src="js/map.js?v=20"></script>
-<script src="js/vision.js?v=20"></script>
-<script src="js/entities.js?v=20"></script>
-<script src="js/game.js?v=20"></script>
-<script src="js/fx.js?v=20"></script>
-<script src="js/dex.js?v=20"></script>
-<script src="js/horde.js?v=20"></script>
-<script src="js/weather.js?v=20"></script>
-<script src="js/powerups.js?v=20"></script>
-<script src="js/ui.js?v=20"></script>
-<script src="js/trainer.js?v=20"></script>
-<script src="js/main.js?v=20"></script>
+<script src="js/sfx.js?v=21"></script>
+<script src="js/music.js?v=21"></script>
+<script src="js/skins-data.js?v=21"></script>
+<script src="js/monsters-data.js?v=21"></script>
+<script src="js/tiles-data.js?v=21"></script>
+<script src="js/data.js?v=21"></script>
+<script src="js/save.js?v=21"></script>
+<script src="js/map.js?v=21"></script>
+<script src="js/vision.js?v=21"></script>
+<script src="js/entities.js?v=21"></script>
+<script src="js/game.js?v=21"></script>
+<script src="js/fx.js?v=21"></script>
+<script src="js/dex.js?v=21"></script>
+<script src="js/horde.js?v=21"></script>
+<script src="js/weather.js?v=21"></script>
+<script src="js/powerups.js?v=21"></script>
+<script src="js/ui.js?v=21"></script>
+<script src="js/trainer.js?v=21"></script>
+<script src="js/main.js?v=21"></script>
 </body>
 </html>
