@@ -245,7 +245,7 @@ check('升级池扩至 52 项（+呼叫支援）', run(`HORDE_UPGRADES.length ==
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=19') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=19') && !html.includes('?v=18'));
+    html.includes('js/fx.js?v=20') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=20') && !html.includes('?v=19'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -403,6 +403,17 @@ check('呼叫支援带武器投资门槛', run(`
   check('商人招募购买 + 升级卡数值预览', uiSrc.includes("item.kind === 'merc'") && uiSrc.includes('Dex.skillInfo'));
   const sfxSrc = fs.readFileSync(base + 'sfx.js', 'utf8');
   check('AK 音效 CS 化 + 闪电 zap 音效', sfxSrc.includes('6000') && sfxSrc.includes('zap()'));
+}
+
+// ==================== 第十四轮：弹夹修复/开发者模式/佣兵跟随 ====================
+{
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('弹夹容量统一 magCap + 快手换弹生效', entSrc.includes('magCap(slot') && entSrc.includes('mods.reloadMul) || 1'));
+  check('佣兵牵引绳（紧跟主角）', entSrc.includes('牵引绳') && entSrc.includes('leashD > 300'));
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('HUD 弹夹分母用扩容值 + 开发者模式经验×10', gameSrc.includes('p.magCap(s)') && gameSrc.includes('devMode ? 10 : 1'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('佣兵随行播报 + 付不起警告 + 开发者开关', uiSrc.includes('随行佣兵') && uiSrc.includes('未能随行') && uiSrc.includes('toggleDevMode'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

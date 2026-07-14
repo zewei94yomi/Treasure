@@ -64,17 +64,28 @@ class Player {
     const other = 1 - this.activeSlot;
     if (this.weapons[other] || this.weapons[this.activeSlot]) { this.activeSlot = other; this.reloadT = 0; }
   }
+  // 弹夹容量（扩容弹夹加成后）——HUD/换弹/初始化统一走这里
+  magCap(slot = this.activeSlot) {
+    const inst = this.weapons[slot];
+    const def = inst && inst.dur > 0 ? WEAPONS[inst.id] : WEAPONS.fists;
+    if (def.melee || !def.mag) return 0;
+    const g2 = Game.current;
+    const mul = (g2 && g2.horde && g2.hordeState.mods.magMul) || 1;
+    return Math.ceil(def.mag * mul);
+  }
   // 当前弹夹余弹（近战返回 -1）
   magLeft() {
     const def = this.weaponDef();
     if (def.melee || !def.mag) return -1;
-    if (this.mags[this.activeSlot] === null) this.mags[this.activeSlot] = def.mag;
+    if (this.mags[this.activeSlot] === null) this.mags[this.activeSlot] = this.magCap();
     return this.mags[this.activeSlot];
   }
   startReload() {
     const def = this.weaponDef();
     if (def.melee || this.reloadT > 0) return;
-    this.reloadT = def.reload || 1.2;
+    const g2 = Game.current;
+    const mul = (g2 && g2.horde && g2.hordeState.mods.reloadMul) || 1;   // 快手换弹
+    this.reloadT = (def.reload || 1.2) * mul;
   }
   get carriedValue() { return this.bag.reduce((s, t) => s + t.value, 0); }
 
@@ -1119,13 +1130,19 @@ class Mercenary {
       return;
     }
     // 找射程内最近的可见怪（潜伏中的不打，免得帮倒忙）
+    // 牵引绳：离主人超过 300 就放下一切归队；只打主人 380 范围内的怪（紧跟主角作战）
+    const leashD = o && o.alive ? Math.hypot(o.x - this.x, o.y - this.y) : 0;
     let target = null, td = (this.def.range || 58) + 200;
-    for (const m of game.monsters) {
-      if (m.state === 'ambush') continue;
-      const d = Math.hypot(m.x - this.x, m.y - this.y);
-      if (d < td && losClear(this.x, this.y, m.x, m.y)) { target = m; td = d; }
+    if (leashD <= 300) {
+      for (const m of game.monsters) {
+        if (m.state === 'ambush') continue;
+        if (o && o.alive && Math.hypot(m.x - o.x, m.y - o.y) > 380) continue;
+        const d = Math.hypot(m.x - this.x, m.y - this.y);
+        if (d < td && losClear(this.x, this.y, m.x, m.y)) { target = m; td = d; }
+      }
     }
     let goal = null, spd = this.def.speed;
+    if (leashD > 300) spd *= 1.35;   // 归队小跑
     if (target) {
       this.facing = Math.atan2(target.y - this.y, target.x - this.x);
       if (this.def.melee) {

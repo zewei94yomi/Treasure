@@ -172,6 +172,7 @@ class Game {
       this.levelupOpen = false;
       for (const p of this.players) { p.maxHp = Math.round(500 * tune('pHp')); p.hp = p.maxHp; }
       if (!this.escape) for (let i = 0; i < 8; i++) this.spawnHordeMonster();
+      if (SAVE.settings.devMode) setTimeout(() => this.toast('🧪 开发者模式：经验 ×10（设置中心可关）', '#7ef7ff'), 600);
     }
 
     this.mapCanvas = this.prerenderMap();
@@ -211,7 +212,7 @@ class Game {
       }
       else if (code === km.reload) {
         const def = p.weaponDef();
-        if (!def.melee && def.mag && p.magLeft() < Math.ceil(def.mag * (this.horde ? (this.hordeState.mods.magMul || 1) : 1)) && p.reloadT <= 0 &&
+        if (!def.melee && def.mag && p.magLeft() < p.magCap() && p.reloadT <= 0 &&
             (this.horde || SAVE.ammo[def.ammo] > 0)) { p.startReload(); Sfx.tick(); }
       }
       else if (code === km.use) this.useConsumable(p);
@@ -622,8 +623,8 @@ class Game {
         this.gemCombo = (this.gemComboT > 0 ? this.gemCombo : 0) + 1;
         this.gemComboT = 1.0;
         Sfx.gem(this.gemCombo);
-        // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）
-        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300)));
+        // 经验随游戏时长上涨（后期每颗宝石更值钱，升级不断档）；开发者模式 ×10 快速验证技能
+        this.hordeAddXp(Math.round(g.v * (H.mods.gemMul || 1) * tune('xpRate') * (1 + this.time / 300) * (SAVE.settings.devMode ? 10 : 1)));
       }
     }
     H.gems = H.gems.filter(g => !g.taken);
@@ -769,7 +770,7 @@ class Game {
       if (p.reloadT <= 0) {
         p.reloadT = 0;
         const def = p.weaponDef();
-        if (!def.melee && def.mag) { p.mags[p.activeSlot] = Math.ceil((p.weaponDef().mag || 0) * (this.horde ? (this.hordeState.mods.magMul || 1) : 1)); Sfx.tick(); }
+        if (!def.melee && def.mag) { p.mags[p.activeSlot] = p.magCap(); Sfx.tick(); }
       }
     }
     p.hurtCd = Math.max(0, p.hurtCd - dt);
@@ -3496,9 +3497,10 @@ class Game {
           if (wd.melee) {
             text = this.horde ? `${wd.icon} ∞` : `${wd.icon}${inst.dur <= 0 ? '✖' : Math.ceil(inst.dur)}`;
           } else {
-            const magNow = s === p.activeSlot && p.reloadT > 0 ? '…' : (p.mags[s] === null ? wd.mag : p.mags[s]);
+            const cap = p.magCap(s) || wd.mag;
+            const magNow = s === p.activeSlot && p.reloadT > 0 ? '…' : (p.mags[s] === null ? cap : p.mags[s]);
             const reserve = this.horde ? '∞' : `${AMMO_TYPES[wd.ammo].icon}${SAVE.ammo[wd.ammo]}`;
-            text = `${wd.icon}${magNow}/${wd.mag}·${reserve}`;
+            text = `${wd.icon}${magNow}/${cap}·${reserve}`;
           }
         }
         slots[s].textContent = text;

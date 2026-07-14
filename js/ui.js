@@ -41,6 +41,15 @@ const UI = (() => {
     if (ma) ma.textContent = SAVE.settings.mouseAim !== false
       ? '🖱️ 鼠标操控（单人）：开 — 准星瞄准/左键攻击/右键翻滚'
       : '⌨️ 鼠标操控（单人）：关 — 使用键盘朝向';
+    const dv = $('btn-devmode');
+    if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 经验×10 快速测试' : '🧪 开发者模式：关';
+  }
+  function toggleDevMode() {
+    SAVE.settings.devMode = !SAVE.settings.devMode;
+    persistSave();
+    const b = $('btn-devmode');
+    if (b) b.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 经验×10 快速测试' : '🧪 开发者模式：关';
+    Sfx.tick();
   }
   function toggleMouseAim() {
     SAVE.settings.mouseAim = SAVE.settings.mouseAim === false;
@@ -275,9 +284,21 @@ const UI = (() => {
         if (key === 'merc2' && setupState.loadouts[i].merc !== 'sniper') { setupState.loadouts[i].merc2 = null; continue; }
         if (SAVE.mercTrials[mid] > 0) SAVE.mercTrials[mid]--;
         else if (SAVE.gold >= MERCS[mid].price) SAVE.gold -= MERCS[mid].price;
-        else setupState.loadouts[i][key] = null;   // 付不起就不带
+        else {
+          setupState.loadouts[i][key] = null;
+          setTimeout(() => Game.current && Game.current.toast(`⚠️ 金币不足，${MERCS[mid].name} 未能随行`, '#ff8f8f'), 800);
+        }
       }
     }
+    // 出发播报：佣兵随行确认（避免"以为没出现"）
+    const hired = [];
+    for (let i = 0; i < setupState.mode; i++) {
+      for (const key of ['merc', 'merc2']) {
+        const mid = setupState.loadouts[i][key];
+        if (mid && MERCS[mid]) hired.push(MERCS[mid].icon + MERCS[mid].name.split('·')[0]);
+      }
+    }
+    if (hired.length) setTimeout(() => Game.current && Game.current.toast(`⚔️ 随行佣兵：${hired.join('、')}已就位（看左侧面板）`, '#7dff9a'), 400);
     SAVE.settings.lastMode = setupState.mode;
     SAVE.settings.lastDiff = setupState.diff;
     SAVE.settings.lastMap = setupState.map;
@@ -941,7 +962,7 @@ const UI = (() => {
            setMode, setDiff, setMap, setGear, setPouch, setSkin, setAcc, setMerc, setMerc2, setGameplay, startRun, retry, toggleMusic,
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
-           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleMouseAim,
+           showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive };
