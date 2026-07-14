@@ -649,6 +649,88 @@ const UI = (() => {
     Sfx.buy();
   }
 
+  // ---------- 英雄调参面板 ----------
+  function showHeroTune() {
+    $('herotune-overlay').style.display = 'flex';
+    renderHeroTune();
+  }
+  function closeHeroTune() { $('herotune-overlay').style.display = 'none'; }
+  function renderHeroTune() {
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+    let html = '';
+    for (const [hid, h] of Object.entries(HERO_TUNE)) {
+      html += `<h4 class="section-label">${h.name}</h4><div class="tuning-grid">`;
+      for (const [key, p] of Object.entries(h.params)) {
+        const v = heroVal(hid, key);
+        const changed = v !== p.def;
+        html += `
+        <div class="tuning-row ${changed ? 'changed' : ''}">
+          <span class="tuning-name">${p.n}</span>
+          <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}"
+                 oninput="UI.setHeroTune('${hid}','${key}',this.value)">
+          <span class="tuning-val" id="ht-val-${hid}-${key}">${changed ? `<span class="dim">${fmt(p.def)}</span>→` : ''}<span class="cur">${fmt(v)}</span></span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    $('herotune-body').innerHTML = html;
+  }
+  function setHeroTune(hid, key, v) {
+    if (!SAVE.heroTuning) SAVE.heroTuning = {};
+    if (!SAVE.heroTuning[hid]) SAVE.heroTuning[hid] = {};
+    SAVE.heroTuning[hid][key] = parseFloat(v);
+    persistSave();
+    const p = HERO_TUNE[hid].params[key];
+    const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
+    const el = $(`ht-val-${hid}-${key}`);
+    const changed = parseFloat(v) !== p.def;
+    if (el) el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+  }
+  function resetHeroTune() {
+    SAVE.heroTuning = {};
+    persistSave();
+    renderHeroTune();
+    Sfx.buy();
+  }
+
+  // ---------- 英雄图鉴 ----------
+  function heroAvatarUri(def) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d');
+    if (def.sprite && typeof MonsterImages !== 'undefined' && MonsterImages[def.sprite] && MonsterImages[def.sprite].naturalWidth) {
+      x.imageSmoothingEnabled = false;
+      x.drawImage(MonsterImages[def.sprite], 4, 4, 56, 56);
+    } else {
+      x.fillStyle = '#e8ddc8'; x.strokeStyle = '#100e1d'; x.lineWidth = 3;
+      x.beginPath(); x.ellipse(32, 36, 19, 21, 0, 0, Math.PI * 2); x.fill(); x.stroke();
+      x.fillStyle = '#ff9f1c';
+      x.beginPath(); x.ellipse(46, 36, 8, 6, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = def.color || '#888';
+      x.beginPath(); x.ellipse(28, 16, 15, 8, -0.15, 0, Math.PI * 2); x.fill(); x.stroke();
+    }
+    return c.toDataURL();
+  }
+  function showHeroDex() {
+    $('herodex-overlay').style.display = 'flex';
+    $('herodex-body').innerHTML = '<div class="mdex-grid">' + Object.values(MERCS).map(m => {
+      const ups = HORDE_UPGRADES.filter(u => u.heroUp === m.id || (u.special === 'marinehp' && m.id === 'marine'));
+      const stats = [m.dmg ? `⚔️伤害 ${m.dmg}` : '', m.rate ? `射速 ${m.rate}/s` : '', m.heal ? `💚治疗 ${m.heal}` : '',
+        m.mag ? `🔋弹夹 ${m.mag}` : '', m.fetch ? `🐾拾取 ${m.fetch}` : '', `❤️${m.hp}`, `💰${m.price}`].filter(Boolean).join('　');
+      return `
+      <div class="mdex-card">
+        <img src="${heroAvatarUri(m)}" style="width:56px;height:56px;border-radius:10px;image-rendering:pixelated;background:rgba(255,255,255,.05)">
+        <div class="mdex-info">
+          <div class="mdex-name">${m.icon} ${m.name}${m.requiresMerc ? `<span class="mdex-kills">需先雇 ${MERCS[m.requiresMerc].icon}</span>` : ''}</div>
+          <div class="mdex-stats">${stats}</div>
+          <div class="mdex-lore">${m.desc || ''}</div>
+          ${ups.length ? `<div class="mdex-hint">📈 专属升级：${ups.map(u => `${u.icon}${u.name.split('·')[1] || u.name}`).join('、')}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  function closeHeroDex() { $('herodex-overlay').style.display = 'none'; }
+
   // ---------- 怪物图鉴（活体动画卡片） ----------
   let mdexRaf = null, mdexT = 0, mdexLast = 0, mdexCards = [];
   const MDEX_TAGS = t => {
@@ -984,6 +1066,7 @@ const UI = (() => {
            renderLevelup, chooseLevelup, showKeybinds, closeKeybinds, startBind, resetKeybinds, showHelp,
            showTuning, closeTuning, setTune, resetTuning,
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
+           showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,
            renderMerchant, merchantBuy, merchantSell, merchantRevive };

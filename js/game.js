@@ -47,6 +47,11 @@ class Game {
 
   // loadouts: [{ w1, w2, armor, pouch }] 均为 uid / boolean
   constructor(mode, diffId, loadouts, mapId, skinIds, opts = {}) {
+    // 销毁旧局：停掉旧 rAF 循环（否则两局并跑，表现为"重置后旧场景没销毁"）
+    if (Game.current && Game.current !== this) {
+      Game.current.over = true;
+      if (Game.current.raf) cancelAnimationFrame(Game.current.raf);
+    }
     Game.current = this;
     this.mode = mode;
     this.escape = !!opts.escape;             // 大逃亡模式（复用割草的升级/无限弹药体系）
@@ -647,17 +652,6 @@ class Game {
       H.xpNeed = Math.round((8 + H.level * 4 + H.level * H.level * 0.15) * (this.mode === 2 ? 1.25 : 1));
       // 升级回血：每级回复 6% 最大生命
       for (const p of this.players) if (p.active) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.06);
-      // 随行英雄成长阶梯：玩家每 5 级，全体佣兵晋 1 阶（至 3 阶，解锁新能力）
-      if (H.level % 5 === 0) {
-        let promoted = false;
-        for (const mc of this.mercs) {
-          if (mc.hp <= 0 || (mc.tier || 1) >= 3) continue;
-          mc.tier = (mc.tier || 1) + 1;
-          promoted = true;
-          if (mc.def.id === 'marine' && mc.tier >= 3) { mc.maxHp = Math.round(mc.maxHp * 1.5); mc.hp = mc.maxHp; }  // 3阶战士：体魄强化
-        }
-        if (promoted) { this.toast(`⭐ 随行英雄晋阶！强度提升并解锁新能力`, '#ffd93d'); Sfx.revive(); }
-      }
       H.freeChoices++;
       Sfx.extract();
       this.floater(this.players[0].x, this.players[0].y - 40, `⬆ 升级 Lv.${H.level}！`, '#ffd93d');
@@ -691,12 +685,20 @@ class Game {
     else if (u.special === 'maxhp') {
       for (const p of this.players) { p.maxHp = Math.round(p.maxHp * 1.3); p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5); }
     } else if (u.special === 'recruit') {
-      const p0 = this.players.find(pl => pl.active) || this.players[0];
-      const mc = new Mercenary(p0.x + 34, p0.y + 26, MERCS[u.mercId], p0);
-      unstick(mc);
-      this.mercs.push(mc);
-      this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} 应招而来！（看左侧面板）`, '#7dff9a');
-      Sfx.revive();
+      if (!this.canRecruitHero()) { this.toast('⚠️ 随行英雄已满 5 位', '#ff8f8f'); }
+      else {
+        const p0 = this.players.find(pl => pl.active) || this.players[0];
+        const mc = new Mercenary(p0.x + 34, p0.y + 26, MERCS[u.mercId], p0);
+        unstick(mc);
+        this.mercs.push(mc);
+        this.toast(`${MERCS[u.mercId].icon} ${MERCS[u.mercId].name} 应招而来！（看左侧面板）`, '#7dff9a');
+        Sfx.revive();
+      }
+    } else if (u.special === 'marinehp') {
+      for (const mc of this.mercs) if (mc.hp > 0 && mc.def.id === 'marine') { mc.maxHp = Math.round(mc.maxHp * 1.4); mc.hp = mc.maxHp; }
+    } else if (u.hmod) {
+      H.mods.hero = H.mods.hero || {};
+      H.mods.hero[u.hmod] = (H.mods.hero[u.hmod] || 0) + 1;
     } else if (u.special === 'merchp') {
       H.mods.mercHp = (H.mods.mercHp || 1) * 1.3;
       for (const mc of this.mercs) if (mc.hp > 0) { mc.maxHp = Math.round(mc.maxHp * 1.3); mc.hp = mc.maxHp; }
@@ -1548,6 +1550,7 @@ class Game {
   }
   arenaPickHero(id) {
     if (!MERCS[id]) return;
+    if (!this.canRecruitHero() && !MERCS[id].fetch) { this.toast('⚠️ 随行英雄已满 5 位', '#ff8f8f'); return; }
     const p = this.players[0];
     const mc = new Mercenary(p.x + 40, p.y + 30, MERCS[id], p);
     unstick(mc);
@@ -1882,6 +1885,11 @@ class Game {
     }
   }
 
+  // 随行英雄上限：5 位（鸭灵与召唤的水元素不计）
+  canRecruitHero() {
+    return this.mercs.filter(mc => mc.hp > 0 && !mc.isPet && mc.def.id !== 'waterele').length < 5;
+  }
+
   // ---------- 盟友技能特效层（法师黑龙波/激光/火环 + 机兵火炮） ----------
   allyFx() {
     if (!this._allyFx) this._allyFx = { waves: [], beams: [], fires: [], strikes: [] };
@@ -1900,8 +1908,8 @@ class Game {
         if (Math.hypot(m.x - w.x, m.y - w.y) < m.r + 26) {
           w.hit.add(m);
           m.stunT = Math.max(m.stunT, 0.9);
-          m.knock(w.a, 320);
-          if (m.hurt(32, this)) this.killMonster(m, this.players[0]);
+          m.knock(w.a, heroVal('mage', 'dragonKnock') || 700);   // 黑龙波：强击退（面板可调）
+          if (m.hurt(heroVal('mage', 'dragonDmg') || 24, this)) this.killMonster(m, this.players[0]);
         }
       }
     }
@@ -1916,7 +1924,7 @@ class Game {
         for (const m of this.monsters.slice()) {
           if (Math.hypot(m.x - f.x, m.y - f.y) > f.r + m.r) continue;
           m.burnT = Math.max(m.burnT, 1);
-          if (m.hurt(9, this)) this.killMonster(m, this.players[0]);
+          if (m.hurt(f.dmg || 9, this)) this.killMonster(m, this.players[0]);
         }
       }
     }
@@ -1930,7 +1938,7 @@ class Game {
         for (const m of this.monsters.slice()) {
           if (Math.hypot(m.x - s.x, m.y - s.y) > 66 + m.r) continue;
           m.knock(Math.atan2(m.y - s.y, m.x - s.x), 500);
-          if (m.hurt(30, this)) this.killMonster(m, this.players[0]);
+          if (m.hurt(heroVal('mech', 'artyDmg') || 30, this)) this.killMonster(m, this.players[0]);
         }
       }
     }
@@ -3258,10 +3266,25 @@ class Game {
         ctx.restore();
         ctx.restore();
       }
-      const tierStars = '⭐'.repeat(Math.max(0, (mc.tier || 1) - 1));
+      // 弓箭手：手持长弓（贴图上叠加，攻击时拉弦）
+      if (mc.def.archer) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(mc.facing);
+        ctx.strokeStyle = '#8a6a3b'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(14, 0, 13, -1.15, 1.15); ctx.stroke();
+        ctx.strokeStyle = '#e8e2d0'; ctx.lineWidth = 1.2;
+        const drawn = mc.attackCd > 0.12 ? 0 : 5;
+        ctx.beginPath();
+        ctx.moveTo(14 + Math.cos(-1.15) * 13, Math.sin(-1.15) * 13);
+        ctx.lineTo(9 - drawn, 0);
+        ctx.lineTo(14 + Math.cos(1.15) * 13, Math.sin(1.15) * 13);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.font = 'bold 10px "PingFang SC",sans-serif'; ctx.textAlign = 'center';
       ctx.fillStyle = mc.def.color;
-      ctx.fillText((mc.def.name.split('·')[1] || mc.def.name) + tierStars, sx, sy - size / 2 - 6);
+      ctx.fillText(mc.def.name.split('·')[1] || mc.def.name, sx, sy - size / 2 - 6);
       const w2 = 28;
       ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(sx - w2/2, sy - size / 2 - 2, w2, 3.5);
       ctx.fillStyle = '#7dff9a'; ctx.fillRect(sx - w2/2, sy - size / 2 - 2, w2 * Math.max(0, mc.hp / mc.maxHp), 3.5);
@@ -3585,9 +3608,11 @@ class Game {
     for (const mc of this.mercs) {
       if (mc.hp <= 0) continue;
       const frac = Math.max(0, mc.hp / mc.maxHp);
-      const stat = (mc.def.heal ? `💚${mc.def.heal}/次` : mc.def.fetch ? '🐾拾取' : mc.def.mage ? '🔮法术' : `⚔️${mc.def.dmg}`)
-        + ('⭐'.repeat(Math.max(0, (mc.tier || 1) - 1)))
-        + (mc.mgReloadT !== undefined ? ' · 装填…' : '');
+      const ail2 = [mc.stunT > 0 && '💫', mc.poisonT > 0 && '🤢', mc.burnT > 0 && '🔥', mc.slowT > 0 && '🐌'].filter(Boolean).join('');
+      const stat = `❤${Math.ceil(mc.hp)}/${mc.maxHp} ` +
+        (mc.def.heal ? `💚${mc.def.heal}` : mc.def.fetch ? '🐾' : mc.def.mage ? '🔮' : `⚔️${mc.def.dmg}`) +
+        (mc.def.mag ? ` 🔋${Math.max(0, mc.mag === undefined ? mc.def.mag : mc.mag)}` : '') +
+        (mc.mgReloadT !== undefined ? ' 装填…' : '') + (ail2 ? ' ' + ail2 : '');
       rows.push(`<div class="ally-row">
         <img src="${this.allyAvatar(mc.def)}" class="ally-av">
         <div class="ally-info">

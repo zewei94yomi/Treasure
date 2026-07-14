@@ -151,7 +151,7 @@ check('奖杯授予幂等', run(`
 // ==================== 无双割草 ====================
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
 check('割草基准 900s/上限80/4个Boss波/时长可调', run(`HORDE_DURATION === 900 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 4 && tune('hordeTime') === 15`));
-check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || typeof u.mod === 'function'))`));
+check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || u.hmod || typeof u.mod === 'function'))`));
 check('19 个技能项 id 合法（+呼叫支援）', run(`HORDE_UPGRADES.filter(u => u.skill).length === 19 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge','arty'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
 
@@ -213,8 +213,8 @@ check('攻击%升级已削弱为加算', run(`
 check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
-check('调参面板 33 项（+七英雄强度滑杆）', run(`
-  TUNE_DEFS.length === 33 && TUNE_DEFS.every(t => t.name && t.min < t.max) && tune('zapHop') === 0.2 &&
+check('调参面板 27 项（英雄改专属详细面板）', run(`
+  TUNE_DEFS.length === 27 && TUNE_DEFS.every(t => t.name && t.min < t.max) && tune('zapHop') === 0.2 &&
   tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05 && tune('rollCd') === 1 && tune('thorns') === 1`));
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
@@ -228,8 +228,8 @@ check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
   typeof SAVE.monsterSeen === 'object' && typeof SAVE.stats.mKills === 'object'`));
 check('鸭灵变体（成群/战意）带 requires', run(`
   HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
-  (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petN === 1 && m.petPow === 1; })()`));
-check('升级池扩至 59 项（+7 张招募卡）', run(`HORDE_UPGRADES.length === 59 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
+  (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petRate === 1.3 && m.petPow === 1; })()`));
+check('升级池扩至 74 项（+15 张英雄专属升级卡）', run(`HORDE_UPGRADES.length === 74 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
 {
   const fx = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：烘焙纹理 + 五类预设齐全',
@@ -245,7 +245,7 @@ check('升级池扩至 59 项（+7 张招募卡）', run(`HORDE_UPGRADES.length 
     hordeSrc.includes('petCap') && hordeSrc.includes('fxExplosion'));
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   check('index.html：fx.js 脚本 + 怪物图鉴入口 + v=11 缓存版本',
-    html.includes('js/fx.js?v=22') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=22') && !html.includes('?v=21'));
+    html.includes('js/fx.js?v=23') && html.includes('monsterdex-overlay') && html.includes('js/dex.js?v=23') && !html.includes('?v=22'));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('ui.js：怪物图鉴界面（活体卡片渲染）',
     uiSrc.includes('showMonsterDex') && uiSrc.includes('drawMonster(ctx, c.m'));
@@ -432,8 +432,8 @@ check('新调参默认值', run(`tune('mercRange') === 1 && tune('devXp') === 20
 }
 
 // ==================== 第十六轮：英雄晋阶/形象重做/练习场增强 ====================
-check('英雄强度滑杆×7 + 鹰眼超高伤 + 机兵弹夹', run(`
-  TUNE_DEFS.filter(t => t.id.startsWith('hero_')).length === 7 && MERCS.sniper.dmg === 150 && MERCS.mech.mag === 40`));
+check('英雄详细调参体系 + 鹰眼超高伤 + 机兵弹夹', run(`
+  Object.keys(HERO_TUNE).length === 8 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 150 && MERCS.mech.mag === 40`));
 check('机兵=武器流最高形态（gate 5 次武器强化）', run(`
   typeof HORDE_UPGRADE_BY_ID.recruit_mech.gate === 'function' && !HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: {} }) &&
   HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: { dmg: 3, rate: 2 } })`));
@@ -443,12 +443,31 @@ check('devMode 全解锁（皮肤/装饰）', run(`
   (() => { SAVE.settings.devMode = true; const ok = SKINS.every(s => skinUnlocked(s, SAVE)) && Object.values(ACCESSORIES).every(a => accUnlocked(a, SAVE)); SAVE.settings.devMode = false; return ok; })()`));
 {
   const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
-  check('英雄成长阶梯（tier 强度+新能力）', ['this.tier || 1', '致命一击', '双祝福', 'coneA', 'shots2'].every(k => entSrc.includes(k)));
+  check('英雄专属能力接线（升级卡驱动）', ['致命一击', '双重祝福', 'coneA', 'shots2', 'HM.mageLaser'].every(k => entSrc.includes(k)));
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
-  check('每5级晋阶 + 模型放大 + 火圈填满 + 激光加粗 + devMode金币', 
-    ['随行英雄晋阶', 'mc.def.mech ? 52', '整圈火海', 'lineWidth = 22', 'SAVE.gold = 999999'].every(k => gameSrc.includes(k)));
+  check('模型放大 + 火圈填满 + 激光加粗 + devMode金币', 
+    ['mc.def.mech ? 52', '整圈火海', 'lineWidth = 22', 'SAVE.gold = 999999'].every(k => gameSrc.includes(k)));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('练习场武器/英雄选择器 + 全部重置', uiSrc.includes('arena-wsel') && fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').includes('全部重置'));
+}
+
+// ==================== 第十七轮：英雄专属升级/详细调参/状态系统 ====================
+check('英雄专属升级卡（15 张，需在场）', run(`
+  HORDE_UPGRADES.filter(u => u.heroUp).length === 15 && HORDE_UPGRADES.filter(u => u.hmod).every(u => u.heroUp)`));
+check('远程佣兵全配弹夹', run(`['vet','ace','sniper','archer','marine','mech'].every(id => MERCS[id].mag > 0 && MERCS[id].reload > 0)`));
+check('旺财拾取范围大幅提升且可调', run(`MERCS.dog.fetch === 560 && HERO_TUNE.dog.params.fetch.def === 560`));
+check('佣兵进攻欲望入面板', run(`TUNE_DEFS.some(t => t.id === 'mercDesire' && t.def === 380)`));
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  check('旧局销毁（重置双循环修复）+ 英雄上限5 + 黑龙击退可调',
+    ['cancelAnimationFrame(Game.current.raf)', 'canRecruitHero', "heroVal('mage', 'dragonKnock')"].every(k => gameSrc.includes(k)));
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('通用弹夹（修机兵装填卡死）+ 佣兵状态系统 + 怪物欲望',
+    ['通用弹夹', 'this.stunT > 0) { this.moving = false; return; }', '顺势撕咬佣兵', '💫晕眩！'].every(k => entSrc.includes(k)));
+  check('晋阶体系已退役', !gameSrc.includes('随行英雄晋阶') && !entSrc.includes('this.tier || 1'));
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  check('英雄调参面板 + 英雄图鉴页 + 面板血量状态',
+    ['showHeroTune', 'setHeroTune', 'showHeroDex'].every(k => uiSrc.includes(k)) && gameSrc.includes('❤${Math.ceil(mc.hp)}'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

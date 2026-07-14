@@ -455,7 +455,7 @@ function merchantStock(isHorde) {
   push('ammo', ak, Math.ceil(AMMO_TYPES[ak].price * 1.1), `${AMMO_TYPES[ak].name} ×${AMMO_TYPES[ak].pack}`, AMMO_TYPES[ak].icon);
   // ⑤ 割草/大逃亡：现场招募佣兵（招募流的局内入口！随机两位上架）
   if (isHorde) {
-    const heroes = ['guard', 'vet', 'ace', 'sniper', 'priest', 'archer', 'mage', 'mech'].sort(() => Math.random() - 0.5).slice(0, 2);
+    const heroes = ['guard', 'vet', 'ace', 'sniper', 'priest', 'archer', 'mage', 'marine', 'flamerguy'].sort(() => Math.random() - 0.5).slice(0, 2);
     for (const hid of heroes) {
       const h = MERCS[hid];
       push('merc', h.id, Math.ceil(h.price * 0.9), `招募 ${h.name}`, h.icon, '当场入队·9折');
@@ -481,23 +481,23 @@ const MERCS = {
   guard: { id:'guard', name:'铁嘴保镖',   icon:'🪖', hp:150, dmg:17, rate:1.5, melee:true, range:58, speed:142, price:600,
            color:'#c9853a', desc:'一把铁平底锅走天下，帮你挡刀。' },
   vet:   { id:'vet',   name:'独眼老兵',   icon:'🎖️', hp:200, dmg:15, rate:2.2, range:420, bulletSpeed:560, speed:148, price:1500,
-           color:'#7a9c5a', desc:'手枪点射，弹无虚发。' },
+           color:'#7a9c5a', mag:12, reload:1.6, desc:'手枪点射，弹无虚发。' },
   ace:   { id:'ace',   name:'佣兵王·灰羽', icon:'🦅', hp:270, dmg:34, rate:1.1, range:560, bulletSpeed:780, speed:158, price:3200,
-           color:'#8a7ab8', desc:'战场传说，收费也传说。' },
+           color:'#8a7ab8', mag:18, reload:1.8, desc:'战场传说，收费也传说。' },
   sniper:{ id:'sniper', name:'退役传奇·鹰眼', icon:'🎯', hp:190, dmg:150, rate:0.45, range:980, bulletSpeed:1350, speed:150, price:2600,
-           color:'#5a7a9c', desc:'超高伤狙击：一枪带走精英。雇佣他，才能唤来爱犬「汪财」。' },
+           color:'#5a7a9c', mag:5, reload:2.2, desc:'超高伤狙击：一枪带走精英。雇佣他，才能唤来爱犬「汪财」。' },
   priest:{ id:'priest', name:'圣光牧师·晨祷', icon:'✨', hp:170, dmg:0, rate:0, heal:15, healCd:2.4, buffCd:7, range:0, speed:152, price:2000,
            color:'#e8d8a0', sprite:'m_priest2', desc:'持杖治疗，并随机施放增益：经验/护甲/回血/移速/狂暴（各有 CD）。' },
-  dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:280, range:0, speed:195, price:1200, requiresMerc:'sniper',
+  dog:   { id:'dog',   name:'金币嗅探犬·汪财', icon:'🐕', hp:130, dmg:0, rate:0, fetch:560, range:0, speed:210, price:1200, requiresMerc:'sniper',
            color:'#c9a06a', sprite:'fx_dog', desc:'自动叼回经验宝石与金币。只认鹰眼当主人。' },
   archer:{ id:'archer', name:'百变箭手·翎', icon:'🏹', hp:210, dmg:24, rate:1.5, range:640, bulletSpeed:780, speed:150, price:2800,
-           color:'#7ac74f', sprite:'m_archer', archer:true, desc:'箭无定式：火/冰/毒/雷/爆/击退箭随机上弦。' },
+           color:'#7ac74f', sprite:'m_archer', archer:true, mag:14, reload:1.8, desc:'箭无定式：火/冰/毒/雷/爆/击退箭随机上弦。' },
   mage:  { id:'mage',  name:'元素法师·蓝袍', icon:'🔮', hp:190, dmg:0, rate:0, range:560, speed:145, price:3600,
            color:'#8e9bff', sprite:'m_mage', mage:true, desc:'水元素、黑龙波、激光束、烈焰之环轮番施法。' },
   mech:  { id:'mech',  name:'重装机兵·GD鸭', icon:'🤖', hp:380, dmg:8, rate:10, range:500, bulletSpeed:820, speed:112, price:5200,
            color:'#9aa4b8', sprite:'m_mech', mech:true, mag:40, reload:2.2, desc:'双持 MG3 泼弹幕（40 发弹链需换弹），周期呼叫火炮。' },
-  marine:{ id:'marine', name:'星际战士·铁誓', icon:'🛡️', hp:320, dmg:15, rate:4.5, range:560, bulletSpeed:900, speed:135, price:3000,
-           color:'#7a9cc9', sprite:'m_marine', desc:'动力甲加步枪，三连点射从不停火。为了鸭皇！' },
+  marine:{ id:'marine', name:'星际战士·铁誓', icon:'🛡️', hp:290, dmg:13, rate:3.8, range:560, bulletSpeed:900, speed:135, price:3000,
+           color:'#7a9cc9', sprite:'m_marine', mag:30, reload:2.0, desc:'动力甲加步枪，点射稳定。为了鸭皇！' },
   flamerguy:{ id:'flamerguy', name:'喷火兵·燎原', icon:'🔥', hp:280, dmg:7, rate:0, range:210, speed:140, price:2600,
            color:'#e07030', sprite:'m_flamer2', flamerCone:true, desc:'肩扛喷火器的步兵，火舌横扫身前，怪物排队变烤串。' },
 };
@@ -611,7 +611,7 @@ const HORDE_UPGRADES = [
   { id:'meteor_freq', name:'陨石·天怒', icon:'🌋', max:2, requires:'meteor', desc:'陨石冷却 -22%', mod:m => m.meteorCd = (m.meteorCd || 1) * 0.78 },
   { id:'drone_strike',name:'无人机·空袭', icon:'🛰️', max:2, requires:'drone', desc:'无人机不时呼叫天降正义轰炸', mod:m => m.droneStrike = (m.droneStrike || 0) + 1 },
   { id:'drone_wing',  name:'无人机·僚机', icon:'🛩️', max:2, requires:'drone', desc:'再起飞一架无人机协同点射', mod:m => m.droneN = (m.droneN || 0) + 1 },
-  { id:'summon_flock',name:'鸭灵·成群',   icon:'🐣', max:2, requires:'summon', desc:'同时在场的鸭灵 +1 只', mod:m => m.petN = (m.petN || 0) + 1 },
+  { id:'summon_flock',name:'鸭灵·锐爪',   icon:'🐣', max:2, requires:'summon', desc:'鸭灵攻速 +30%（鸭灵至多 3 只，此后走强化）', mod:m => m.petRate = (m.petRate || 1) * 1.3 },
   { id:'summon_war',  name:'鸭灵·战意',   icon:'🔥', max:2, requires:'summon', desc:'鸭灵生命与伤害 +40%（对之后复活/新召的生效）', mod:m => m.petPow = (m.petPow || 0) + 1 },
   // —— 第十一轮：攻击流派 ——
   { id:'scatter',  name:'散射枪管', icon:'💠', max:3, desc:'每次射击额外 +2 发散射弹（60% 伤害）', mod:m => m.scatter = (m.scatter || 0) + 2 },
@@ -632,6 +632,22 @@ const HORDE_UPGRADES = [
     gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split','iceshot','fireshot','zapshot'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 5 },
   { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
   { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
+  // —— 英雄专属升级卡（该英雄在场才出现；替代旧的统一晋阶） ——
+  { id:'up_mage_water',  name:'法师·双子元素', icon:'💧', max:1, heroUp:'mage', desc:'可同时召唤 2 只水元素', hmod:'mageWater' },
+  { id:'up_mage_laser',  name:'法师·激光折射', icon:'⚡', max:2, heroUp:'mage', desc:'施放激光时额外向随机方向再射 1 道', hmod:'mageLaser' },
+  { id:'up_mage_dragon', name:'法师·龙群怒啸', icon:'🐉', max:2, heroUp:'mage', desc:'黑龙波每次多 2 条黑龙', hmod:'mageDragon' },
+  { id:'up_sniper_pierce', name:'鹰眼·钨芯弹', icon:'📌', max:2, heroUp:'sniper', desc:'狙击弹穿透 +1 个目标', hmod:'sniperPierce' },
+  { id:'up_sniper_crit',   name:'鹰眼·致命一击', icon:'💥', max:2, heroUp:'sniper', desc:'15%/级 概率造成三倍伤害', hmod:'sniperCrit' },
+  { id:'up_archer_double', name:'箭手·双弦',   icon:'🏹', max:1, heroUp:'archer', desc:'每次拉弓齐射两箭', hmod:'archerDouble' },
+  { id:'up_archer_dur',    name:'箭手·淬毒工艺', icon:'🧪', max:2, heroUp:'archer', desc:'箭矢附加效果时长 +50%/级', hmod:'archerDur' },
+  { id:'up_priest_cd',   name:'牧师·虔诚祷言', icon:'📿', max:2, heroUp:'priest', desc:'祝福间隔 -25%/级', hmod:'priestCd' },
+  { id:'up_priest_dual', name:'牧师·双重祝福', icon:'🌟', max:1, heroUp:'priest', desc:'每次祝福同时施放两种', hmod:'priestDual' },
+  { id:'up_mech_mag',   name:'机兵·扩容弹链', icon:'⛓️', max:2, heroUp:'mech', desc:'弹链 +30 发/级', hmod:'mechMag' },
+  { id:'up_mech_arty',  name:'机兵·饱和轰炸', icon:'📡', max:2, heroUp:'mech', desc:'火炮支援每轮 +3 发', hmod:'mechArty' },
+  { id:'up_marine_rate', name:'战士·风暴点射', icon:'🌀', max:2, heroUp:'marine', desc:'点射速度 +25%/级', hmod:'marineRate' },
+  { id:'up_marine_hp',   name:'战士·强化装甲', icon:'🛡️', max:2, heroUp:'marine', desc:'星际战士生命 +40% 并回满', special:'marinehp' },
+  { id:'up_flamer_wide', name:'喷火·广角喷嘴', icon:'🔥', max:1, heroUp:'flamerguy', desc:'火舌锥角大幅加宽', hmod:'flamerWide' },
+  { id:'up_flamer_burn', name:'喷火·凝固汽油', icon:'🛢️', max:1, heroUp:'flamerguy', desc:'灼烧 +1.5s 且火焰会蔓延', hmod:'flamerBurn' },
 ];
 // 弹道追踪（全局强化版）：锁定锥角/搜索距离/转向速率
 const HOMING = { cone: 0.8, dist: 420, turn: 5.2 };
@@ -673,6 +689,62 @@ const STAMINA = { max:100, regen:22, rollCost:35, rollDur:0.34, rollSpeed:430, r
 
 const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]));
 
+// ============ 英雄详细调参（每位招募英雄的具体数值，SAVE.heroTuning 持久化） ============
+const HERO_TUNE = {
+  sniper: { name: '🎯 鹰眼', params: {
+    dmg:   { n: '单发伤害',   min: 30,  max: 500, step: 10,   def: 150 },
+    rate:  { n: '射速(发/秒)', min: 0.2, max: 2,   step: 0.05, def: 0.45 },
+    range: { n: '射程',       min: 400, max: 1500, step: 20,  def: 980 },
+  } },
+  priest: { name: '✨ 牧师', params: {
+    heal:   { n: '单次治疗量', min: 5,  max: 60, step: 1,   def: 15 },
+    healCd: { n: '治疗间隔(秒)', min: 0.5, max: 8, step: 0.1, def: 2.4 },
+    buffCd: { n: '祝福间隔(秒)', min: 2,  max: 20, step: 0.5, def: 7 },
+  } },
+  archer: { name: '🏹 箭手', params: {
+    dmg:   { n: '箭矢伤害',   min: 8,  max: 120, step: 2,    def: 24 },
+    rate:  { n: '射速(发/秒)', min: 0.5, max: 4,  step: 0.1,  def: 1.5 },
+    range: { n: '射程',       min: 300, max: 1000, step: 20, def: 640 },
+  } },
+  mage: { name: '🔮 法师', params: {
+    castCd:      { n: '施法间隔(秒)',   min: 1,  max: 8,   step: 0.2, def: 3.6 },
+    dragonDmg:   { n: '黑龙波伤害',     min: 5,  max: 120, step: 5,   def: 24 },
+    dragonKnock: { n: '黑龙波击退',     min: 0,  max: 1500, step: 50, def: 700 },
+    laserDmg:    { n: '激光伤害',       min: 10, max: 200, step: 5,   def: 42 },
+    fireDmg:     { n: '火环每跳伤害',   min: 3,  max: 40,  step: 1,   def: 9 },
+    fireR:       { n: '火环半径',       min: 50, max: 220, step: 5,   def: 95 },
+    waterDmg:    { n: '水元素水波伤害', min: 5,  max: 80,  step: 1,   def: 22 },
+    waterHp:     { n: '水元素生命',     min: 80, max: 800, step: 20,  def: 240 },
+  } },
+  mech: { name: '🤖 机兵', params: {
+    dmg:    { n: '单发伤害',   min: 3,  max: 40,  step: 1,   def: 8 },
+    rate:   { n: '射速(发/秒)', min: 3,  max: 20,  step: 0.5, def: 10 },
+    mag:    { n: '弹链容量',   min: 15, max: 150, step: 5,   def: 40 },
+    reload: { n: '换弹时间(秒)', min: 0.5, max: 5, step: 0.1, def: 2.2 },
+    artyDmg:{ n: '火炮伤害',   min: 10, max: 120, step: 5,   def: 30 },
+  } },
+  marine: { name: '🛡️ 星际战士', params: {
+    dmg:  { n: '单发伤害',   min: 5,  max: 60, step: 1,   def: 13 },
+    rate: { n: '射速(发/秒)', min: 1,  max: 10, step: 0.2, def: 3.8 },
+    mag:  { n: '弹夹容量',   min: 10, max: 90, step: 5,   def: 30 },
+  } },
+  flamerguy: { name: '🔥 喷火兵', params: {
+    dmg:   { n: '火舌每跳伤害', min: 2,  max: 30,  step: 1,  def: 7 },
+    range: { n: '火舌射程',    min: 120, max: 420, step: 10, def: 210 },
+    burn:  { n: '灼烧时长(秒)', min: 0.5, max: 6,  step: 0.5, def: 1.5 },
+  } },
+  dog: { name: '🐕 汪财', params: {
+    fetch: { n: '拾取范围', min: 200, max: 1400, step: 40, def: 560 },
+    speed: { n: '奔跑速度', min: 120, max: 360, step: 10,  def: 210 },
+  } },
+};
+function heroVal(hid, key) {
+  const h = HERO_TUNE[hid];
+  if (!h || !h.params[key]) return undefined;
+  const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.heroTuning && SAVE.heroTuning[hid]) || {};
+  return saved[key] !== undefined ? saved[key] : h.params[key].def;
+}
+
 // ============ 第十一轮经济再平衡：抑制通胀 ============
 // 商品适度涨价（×1.4），摸金收益按稀有度大幅上调（普通×1.5 → 神话×3.5）
 for (const w of Object.values(WEAPONS)) if (w.price) w.price = Math.round(w.price * 1.4 / 10) * 10;
@@ -711,13 +783,7 @@ const TUNE_DEFS = [
   { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wSpeed',   name:'武器弹速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wKnock',   name:'武器击退倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
-  { id:'hero_sniper',   name:'英雄·鹰眼强度',   min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_priest',   name:'英雄·牧师强度',   min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_archer',   name:'英雄·箭手强度',   min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_mage',     name:'英雄·法师强度',   min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_mech',     name:'英雄·机兵强度',   min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_marine',   name:'英雄·星际战士强度', min:0.3, max:3, step:0.1, def:1 },
-  { id:'hero_flamerguy',name:'英雄·喷火兵强度', min:0.3, max:3, step:0.1, def:1 },
+  { id:'mercDesire',name:'佣兵进攻欲望(锁敌距离)', min:150, max:800, step:10, def:380 },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

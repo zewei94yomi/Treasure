@@ -391,6 +391,19 @@ class Monster {
     if (this.state === 'chase' && this.target) {
       spd = cfg.chaseSpeed * baseSpd * (this.enraged ? HORDE_ENRAGE.speedMul : 1) * (typeof tune === 'function' ? tune('mSpeed') : 1);
       goal = this.lastKnown;
+      // 目标欲望：玩家在远处而佣兵在近旁时，顺势撕咬佣兵（怪物也会杀佣兵）
+      if (this.target.active && game.mercs.length) {
+        const pd2 = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+        if (pd2 > 340) {
+          let nm = null, nmd = 240;
+          for (const mc of game.mercs) {
+            if (mc.hp <= 0) continue;
+            const d = Math.hypot(mc.x - this.x, mc.y - this.y);
+            if (d < nmd) { nm = mc; nmd = d; }
+          }
+          if (nm) goal = { x: nm.x, y: nm.y };
+        }
+      }
       // 尖啸者逃离玩家；幽火保持距离放风筝
       if (this.type.screamer && this.fleeT > 0) {
         this.fleeT -= dt;
@@ -646,13 +659,26 @@ class Monster {
     if (!victim) return;
     if (vd < PLAYER_R + this.r + 16) {
       const hitDmg = Math.round(this.cfg.mDmg * this.type.dmgMul * (this.hordeDmgMul || 1) * (game.weatherMDmg ? game.weatherMDmg() : 1));
-      if (victim.isMerc) victim.hurt(hitDmg, game);
+      if (victim.isMerc) {
+        victim.hurt(hitDmg, game);
+        // 怪物技能对佣兵施加状态：中毒/减速/晕眩
+        if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT || 0, this.type.poison); game.floater(victim.x, victim.y - 24, '🟢中毒', '#7ac74f'); }
+        if (this.type.paralyze) { victim.slowT = Math.max(victim.slowT || 0, this.type.paralyze); game.floater(victim.x, victim.y - 24, '🐌减速', '#ffd93d'); }
+        if ((this.type.id === 'brute' || this.type.id === 'stoneling') && Math.random() < 0.35) {
+          victim.stunT = Math.max(victim.stunT || 0, 0.9);
+          game.floater(victim.x, victim.y - 24, '💫晕眩！', '#ffd93d');
+        }
+      }
       else {
         game.damagePlayer(victim, hitDmg, this);
         // 附加效果：毒蛇→中毒 / 巨蝎→麻痹
         if (!victim.isMerc && victim.active) {
           if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT, this.type.poison); game.floater(victim.x, victim.y - 40, '🟢 中毒！', '#7ac74f'); }
           if (this.type.paralyze) { victim.paraT = Math.max(victim.paraT, this.type.paralyze); game.floater(victim.x, victim.y - 40, '🦂 麻痹！', '#ffd93d'); }
+          if ((this.type.id === 'brute' || this.type.id === 'stoneling') && Math.random() < 0.3) {
+            victim.paraT = Math.max(victim.paraT, 0.8);
+            game.floater(victim.x, victim.y - 40, '💫 被震慑！', '#ffd93d');
+          }
         }
       }
       // 石巨魁震地：命中时溅射周围其他目标
@@ -963,9 +989,30 @@ class Mercenary {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.hurtCd = Math.max(0, this.hurtCd - dt);
     const o = this.owner;
-    const tier = this.tier || 1;                                          // 成长阶（玩家每 5 级全员+1，至 3）
-    const heroT = TUNE_DEFS.some(t2 => t2.id === 'hero_' + this.def.id) ? tune('hero_' + this.def.id) : 1;
-    const pow = (1 + ((game.horde && game.hordeState.mods.mercPow) || 0)) * (1 + 0.3 * (tier - 1)) * heroT;
+    const HM = (game.horde && game.hordeState && game.hordeState.mods.hero) || {};   // 英雄专属升级卡计数
+    const hv = (k, d) => { const v = heroVal(this.def.id, k); return v === undefined ? d : v; };   // 英雄详细调参
+    const pow = 1 + ((game.horde && game.hordeState.mods.mercPow) || 0);
+    // —— 通用状态：晕眩/减速/中毒/灼烧（怪物技能可施加，左侧面板显示） ——
+    this.stunT = Math.max(0, (this.stunT || 0) - dt);
+    this.slowT = Math.max(0, (this.slowT || 0) - dt);
+    this.poisonT = Math.max(0, (this.poisonT || 0) - dt);
+    this.burnT = Math.max(0, (this.burnT || 0) - dt);
+    if (this.poisonT > 0) { this.hp -= 4 * dt; if (Math.random() < dt * 4) game.spark(this.x, this.y - 8, '#7ac74f'); }
+    if (this.burnT > 0) { this.hp -= 4 * dt; if (Math.random() < dt * 5) game.spark(this.x, this.y - 8, '#ff8f3d'); }
+    if (this.hp <= 0) { this.hurt(0, game); return; }
+    if (this.stunT > 0) { this.moving = false; return; }   // 晕眩：原地失能
+    // —— 通用弹夹：换弹独立计时（修复：机兵没目标时装填卡死） ——
+    if (this.def.mag) {
+      if (this.mag === undefined) this.mag = this.def.mag + (this.def.mech ? 30 * (HM.mechMag || 0) : 0);
+      if (this.mgReloadT !== undefined) {
+        this.mgReloadT -= dt;
+        if (this.mgReloadT <= 0) {
+          this.mag = hv('mag', this.def.mag) + (this.def.mech ? 30 * (HM.mechMag || 0) : 0);
+          this.mgReloadT = undefined;
+          Sfx.tick();
+        }
+      } else if (this.mag <= 0) this.mgReloadT = hv('reload', this.def.reload || 1.8);
+    }
     // —— 元素法师：四系法术轮转（水元素/黑龙波/激光束/烈焰之环） ——
     if (this.def.mage) {
       this.castT = (this.castT === undefined ? 2.2 : this.castT) - dt;
@@ -976,15 +1023,16 @@ class Mercenary {
         if (d < td2) { tgt = m; td2 = d; }
       }
       if (tgt && this.castT <= 0) {
-        this.castT = 3.6 / pow;
+        this.castT = hv('castCd', 3.6) / pow;
         this.spellIdx = ((this.spellIdx || 0) % 4) + 1;
         this.facing = Math.atan2(tgt.y - this.y, tgt.x - this.x);
         const A = game.allyFx();
         if (this.spellIdx === 1) {
-          // 💧 召唤水元素（同场限一只，存在则快速跳下一法术）
-          if (!game.mercs.some(mc => mc.def.id === 'waterele' && mc.hp > 0)) {
+          // 💧 召唤水元素（双子元素卡可同场 2 只）
+          const waterCap = 1 + (HM.mageWater || 0);
+          if (game.mercs.filter(mc => mc.def.id === 'waterele' && mc.hp > 0).length < waterCap) {
             const we = new Mercenary(this.x + 26, this.y, { id: 'waterele', name: '水元素', icon: '💧',
-              hp: 240, dmg: 0, rate: 0, range: 0, speed: 150, color: '#6fc8ff', sprite: 'm_waterele', waterele: true }, this.owner);
+              hp: hv('waterHp', 240), dmg: 0, rate: 0, range: 0, speed: 150, color: '#6fc8ff', sprite: 'm_waterele', waterele: true }, this.owner);
             we.despawnT = 22;
             unstick(we);
             game.mercs.push(we);
@@ -992,27 +1040,33 @@ class Mercenary {
             Sfx.wisp();
           } else this.castT = 0.4;
         } else if (this.spellIdx === 2) {
-          // 🐉 黑龙波：三条黑龙横扫，打出硬直（致敬奇迹MU）
-          for (let i = -1; i <= 1; i++) {
-            A.waves.push({ x: this.x, y: this.y + i * 46, a: this.facing, t: 2.0, hit: new Set() });
+          // 🐉 黑龙波：黑龙横扫，硬直+强击退（龙群怒啸卡可加条数）
+          const nDrag = 3 + 2 * (HM.mageDragon || 0);
+          for (let i = 0; i < nDrag; i++) {
+            A.waves.push({ x: this.x, y: this.y + (i - (nDrag - 1) / 2) * 44, a: this.facing, t: 2.0, hit: new Set() });
           }
           game.floater(this.x, this.y - 28, '🐉 黑龙波！', '#b48aff');
           Sfx.banshee();
         } else if (this.spellIdx === 3) {
-          // ⚡ 激光束：直线贯穿
-          A.beams.push({ x0: this.x, y0: this.y, x1: tgt.x, y1: tgt.y, t: 0.28 });
-          const dx2 = tgt.x - this.x, dy2 = tgt.y - this.y, len2 = Math.hypot(dx2, dy2) || 1;
-          for (const m of game.monsters.slice()) {
-            const t2 = Math.max(0, Math.min(1, ((m.x - this.x) * dx2 + (m.y - this.y) * dy2) / (len2 * len2)));
-            const px2 = this.x + dx2 * t2, py2 = this.y + dy2 * t2;
-            if (Math.hypot(m.x - px2, m.y - py2) < m.r + 14) {
-              if (m.hurt(Math.round(42 * pow), game)) game.killMonster(m, this.owner);
+          // ⚡ 激光束：直线贯穿（激光折射卡：额外随机方向再射）
+          const beamsN = 1 + (HM.mageLaser || 0);
+          for (let bi = 0; bi < beamsN; bi++) {
+            const ba = bi === 0 ? Math.atan2(tgt.y - this.y, tgt.x - this.x) : Math.random() * Math.PI * 2;
+            const bx2 = this.x + Math.cos(ba) * 520, by2 = this.y + Math.sin(ba) * 520;
+            A.beams.push({ x0: this.x, y0: this.y, x1: bx2, y1: by2, t: 0.28 });
+            const dx2 = bx2 - this.x, dy2 = by2 - this.y, len2 = Math.hypot(dx2, dy2) || 1;
+            for (const m of game.monsters.slice()) {
+              const t2 = Math.max(0, Math.min(1, ((m.x - this.x) * dx2 + (m.y - this.y) * dy2) / (len2 * len2)));
+              const px2 = this.x + dx2 * t2, py2 = this.y + dy2 * t2;
+              if (Math.hypot(m.x - px2, m.y - py2) < m.r + 16) {
+                if (m.hurt(Math.round(hv('laserDmg', 42) * pow), game)) game.killMonster(m, this.owner);
+              }
             }
           }
           Sfx.laser();
         } else {
           // 🔥 烈焰之环（血法师的火圈）
-          A.fires.push({ x: tgt.x, y: tgt.y, r: 95, t: 3.5, tick: 0 });
+          A.fires.push({ x: tgt.x, y: tgt.y, r: hv('fireR', 95), t: 3.5, tick: 0, dmg: Math.round(hv('fireDmg', 9) * pow) });
           game.floater(tgt.x, tgt.y - 28, '🔥 烈焰之环！', '#ff9a4d');
           Sfx.boom();
         }
@@ -1046,7 +1100,7 @@ class Mercenary {
           if (Math.hypot(m.x - this.x, m.y - this.y) > 130 + m.r) continue;
           m.knock(Math.atan2(m.y - this.y, m.x - this.x), 620);
           m.slowT = Math.max(m.slowT, 1.2);
-          if (m.hurt(22, game)) game.killMonster(m, this.owner);
+          if (m.hurt(heroVal('mage', 'waterDmg') || 22, game)) game.killMonster(m, this.owner);
         }
         Sfx.wisp();
       }
@@ -1066,7 +1120,7 @@ class Mercenary {
       if (this.def.buffCd && o && o.active) {
         this.buffT = (this.buffT === undefined ? 3.5 : this.buffT) - dt;
         if (this.buffT <= 0) {
-          this.buffT = this.def.buffCd * (tier >= 2 ? 0.7 : 1) / heroT;
+          this.buffT = hv('buffCd', 7) * Math.pow(0.75, HM.priestCd || 0);
           const buffs = [
             ['📖 经验祝福', () => { game.xpBuffT = 8; }],
             ['🛡️ 圣光护甲', () => { o.tempShield = Math.min(150, o.tempShield + 40); }],
@@ -1074,7 +1128,7 @@ class Mercenary {
             ['🏃 神速祝福', () => { o.sodaTime = Math.max(o.sodaTime, 6); o.sodaMul = Math.max(o.sodaMul || 1, 1.3); }],
             ['😤 狂暴祝福', () => { o.rageT = Math.max(o.rageT, 6); }],
           ];
-          const n2 = tier >= 3 ? 2 : 1;                     // 3 阶：一次双祝福
+          const n2 = HM.priestDual ? 2 : 1;                  // 双重祝福
           const bag2 = buffs.slice().sort(() => Math.random() - 0.5).slice(0, n2);
           for (const [bn, bf] of bag2) { bf(); game.floater(o.x, o.y - 44, bn + '！', '#ffe9a0'); }
           game.fxP({ tex: FxTex.glow, x: o.x, y: o.y, s0: 34, s1: 70, a0: 0.6, a1: 0, life: 0.4 });
@@ -1096,7 +1150,7 @@ class Mercenary {
           if (f < worst) { worst = f; tgt2 = mc; }
         }
         if (tgt2) {
-          const amt = Math.round(this.def.heal * pow);
+          const amt = Math.round(hv('heal', 15) * pow);
           tgt2.hp = Math.min(tgt2.maxHp, tgt2.hp + amt);
           game.floater(tgt2.x, tgt2.y - 30, `+${amt}💚`, '#7dff9a');
           game.fxP({ tex: FxTex.glow, x: tgt2.x, y: tgt2.y, s0: 30, s1: 56, a0: 0.5, a1: 0, life: 0.35 });
@@ -1120,7 +1174,7 @@ class Mercenary {
     // —— 金币嗅探犬：满场叼经验宝石和金币（不参战） ——
     if (this.def.fetch) {
       const H2 = game.horde ? game.hordeState : null;
-      let tgt2 = null, td2 = this.def.fetch;
+      let tgt2 = null, td2 = heroVal('dog', 'fetch') || this.def.fetch;
       if (H2) for (const gm of H2.gems) { const d = Math.hypot(gm.x - this.x, gm.y - this.y); if (d < td2) { tgt2 = gm; td2 = d; } }
       for (const gd of game.goldDrops) { const d = Math.hypot(gd.x - this.x, gd.y - this.y); if (d < td2) { tgt2 = gd; td2 = d; } }
       let goal2 = null;
@@ -1152,7 +1206,7 @@ class Mercenary {
     // 找射程内最近的可见怪（潜伏中的不打，免得帮倒忙）
     // 喷火兵：火舌持续横扫身前扇形
     if (this.def.flamerCone) {
-      const rngF = (this.def.range || 200) * tune('mercRange');
+      const rngF = hv('range', this.def.range || 200) * tune('mercRange');
       let near2 = null, nd3 = rngF + 160;
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
@@ -1163,16 +1217,16 @@ class Mercenary {
       this.flameT = (this.flameT || 0) - dt;
       if (near2 && nd3 < rngF && this.flameT <= 0) {
         this.flameT = 0.15;
-        const coneA = tier >= 2 ? 0.8 : 0.55;               // 2 阶：火舌更宽
+        const coneA = HM.flamerWide ? 0.85 : 0.55;          // 广角喷嘴
         for (const m of game.monsters.slice()) {
           const d = Math.hypot(m.x - this.x, m.y - this.y);
           if (d > rngF) continue;
           let da = Math.atan2(m.y - this.y, m.x - this.x) - this.facing;
           da = Math.atan2(Math.sin(da), Math.cos(da));
           if (Math.abs(da) > coneA) continue;
-          m.burnT = Math.max(m.burnT, tier >= 3 ? 3 : 1.5);  // 3 阶：灼烧更久且蔓延
-          if (tier >= 3) m.fireSpread = true;
-          if (m.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(m, o);
+          m.burnT = Math.max(m.burnT, hv('burn', 1.5) + (HM.flamerBurn ? 1.5 : 0));   // 凝固汽油
+          if (HM.flamerBurn) m.fireSpread = true;
+          if (m.hurt(Math.round(hv('dmg', 7) * pow), game)) game.killMonster(m, o);
         }
         // 真实感火舌：白热核心 → 橙焰 → 火焰云贴图 → 黑烟，沿锥形高频喷射
         const nx2 = this.x + Math.cos(this.facing) * 20, ny2 = this.y + Math.sin(this.facing) * 20;
@@ -1218,7 +1272,7 @@ class Mercenary {
     if (leashD <= 300) {
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
-        if (o && o.alive && Math.hypot(m.x - o.x, m.y - o.y) > 380) continue;
+        if (o && o.alive && Math.hypot(m.x - o.x, m.y - o.y) > tune('mercDesire')) continue;   // 进攻欲望（面板）
         const d = Math.hypot(m.x - this.x, m.y - this.y);
         if (d < td && losClear(this.x, this.y, m.x, m.y)) { target = m; td = d; }
       }
@@ -1247,16 +1301,17 @@ class Mercenary {
       } else {
         if (td > this.def.range * rngM) goal = target;
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
-        if (this.attackCd <= 0 && td <= this.def.range * rngM) {
-          this.attackCd = 1 / (this.def.rate * pow);
+        if (this.attackCd <= 0 && td <= this.def.range * rngM && !(this.def.mag && (this.mgReloadT !== undefined || this.mag <= 0))) {
+          this.attackCd = 1 / (hv('rate', this.def.rate) * pow);
           if (this.def.id === 'sniper') {
-            // 鹰眼：超高伤狙击（2 阶穿透 / 3 阶 20% 爆头三倍）
-            const head = tier >= 3 && Math.random() < 0.2;
+            // 鹰眼：超高伤狙击（升级卡：钨芯穿透 / 致命一击）
+            const head = Math.random() < 0.15 * (HM.sniperCrit || 0);
             const sb2 = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
               this.facing + (Math.random() - 0.5) * 0.02,
-              { id: 'mercgun', dmg: Math.round(this.def.dmg * pow * (head ? 3 : 1)), speed: this.def.bulletSpeed,
-                range: this.def.range + 120, knock: 220, pierce: tier >= 2 ? 2 : 1, spread: 0 }, o);
+              { id: 'mercgun', dmg: Math.round(hv('dmg', 150) * pow * (head ? 3 : 1)), speed: this.def.bulletSpeed,
+                range: hv('range', 980) + 120, knock: 220, pierce: 1 + (HM.sniperPierce || 0), spread: 0 }, o);
             game.bullets.push(sb2);
+            this.mag--;
             if (head) game.floater(this.x, this.y - 26, '🎯 致命一击！', '#ffd93d');
             Sfx.sniper();
           } else if (this.def.archer) {
@@ -1269,28 +1324,23 @@ class Mercenary {
               { c: '#ff7b2d', explosive: 62, n: '爆' },
               { c: '#c9ced8', knock: 460, n: '退' },
             ];
-            const durMul = tier >= 3 ? 1.5 : 1;               // 3 阶：箭矢附加效果更持久
-            const shots2 = tier >= 2 ? 2 : 1;                  // 2 阶：双箭齐发
+            const durMul = 1 + 0.5 * (HM.archerDur || 0);      // 淬毒工艺：效果加时
+            const shots2 = HM.archerDouble ? 2 : 1;             // 双弦：双箭齐发
             for (let s2 = 0; s2 < shots2; s2++) {
               const k = kinds[Math.floor(Math.random() * kinds.length)];
               const ab = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
                 this.facing + (Math.random() - 0.5) * 0.04 + (s2 ? 0.12 : 0),
-                { id: 'arrow', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80,
+                { id: 'arrow', dmg: Math.round(hv('dmg', 24) * pow), speed: this.def.bulletSpeed, range: hv('range', 640) + 80,
                   knock: k.knock || 90, burn: k.burn && k.burn * durMul, slow: k.slow && k.slow * durMul,
                   freeze: k.freeze && k.freeze * durMul, explosive: k.explosive, noHoming: true }, o);
               ab.arrowC = k.c;
               ab.zapArrow = !!k.zapArrow;
               game.bullets.push(ab);
             }
+            this.mag--;
             Sfx.crossbow();
           } else if (this.def.mech) {
-            // 重装机兵：弹链有限（打空换弹），双管交替
-            if (this.mag === undefined) this.mag = (tier >= 2 ? 60 : this.def.mag) || 40;
-            if (this.mag <= 0) {
-              this.mgReloadT = (this.mgReloadT === undefined ? this.def.reload : this.mgReloadT) - dt;
-              if (this.mgReloadT <= 0) { this.mag = (tier >= 2 ? 60 : this.def.mag) || 40; this.mgReloadT = undefined; Sfx.tick(); }
-              this.attackCd = 0.2;
-            } else {
+            // 重装机兵：双管交替（弹链走通用换弹系统）
             this.mag--;
             this.barrel = 1 - (this.barrel || 0);
             const side = this.barrel ? 1 : -1;
@@ -1299,13 +1349,13 @@ class Mercenary {
               this.facing + (Math.random() - 0.5) * 0.12,
               { id: 'mercgun', dmg: Math.round(this.def.dmg * pow), speed: this.def.bulletSpeed, range: this.def.range + 80, knock: 60, spread: 0 }, o));
             if (this.barrel) Sfx.mg();
-            }
           } else {
-            if (this.def.id === 'marine' && tier >= 2) this.attackCd /= 1.35;   // 2 阶：点射更密
+            if (this.def.id === 'marine' && HM.marineRate) this.attackCd /= Math.pow(1.25, HM.marineRate);   // 风暴点射
             Sfx.shoot();
             game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
               this.facing + (Math.random() - 0.5) * 0.06,
-              { id:'mercgun', dmg:Math.round(this.def.dmg * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+              { id:'mercgun', dmg:Math.round(hv('dmg', this.def.dmg) * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+            if (this.def.mag) this.mag--;
           }
         }
         // 机兵：周期呼叫火炮覆盖目标区域
@@ -1315,7 +1365,7 @@ class Mercenary {
             this.artyT = 9;
             const A = game.allyFx();
             const placed = [];
-            for (let i = 0; i < (tier >= 3 ? 8 : 5); i++) {
+            for (let i = 0; i < 5 + 3 * (HM.mechArty || 0); i++) {
               // 落点避墙 + 彼此隔开 60px
               let sx3 = target.x, sy3 = target.y, ok3 = false;
               for (let tr = 0; tr < 12; tr++) {

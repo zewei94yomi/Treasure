@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
 
@@ -150,7 +150,8 @@
         <button class="btn small" onclick="Game.current&&Game.current.arenaFreeLevel()">⬆️ 免费升级</button>
         <button class="btn small" onclick="Game.current&&Game.current.arenaReset()">🎯 重置木桩</button>
         <button class="btn small" onclick="UI.startArena()">🔄 全部重置</button>
-        <button class="btn small" onclick="UI.showTuning()">🎛️ 调参（英雄强度）</button>
+        <button class="btn small" onclick="UI.showHeroTune()">⚔️ 英雄调参</button>
+        <button class="btn small" onclick="UI.showTuning()">🎛️ 全局调参</button>
       </div>
       <div id="hud-supplies"></div>
       <div id="hud-toasts"></div>
@@ -248,6 +249,10 @@
         <div class="card-icon">✨</div><div class="card-title">技能图鉴</div>
         <div class="card-desc">割草技能等级演示台</div>
       </div>
+      <div class="card dexhub-card" onclick="UI.hideDexHub();UI.showHeroDex()">
+        <div class="card-icon">⚔️</div><div class="card-title">英雄图鉴</div>
+        <div class="card-desc">11 位雇佣兵与随从档案</div>
+      </div>
     </div>
     <div style="display:flex; justify-content:center; margin-top:10px">
       <button class="btn small primary" onclick="UI.hideDexHub()">返回</button>
@@ -309,6 +314,31 @@
   </div>
 </div>
 
+<!-- ======== 英雄调参面板 ======== -->
+<div id="herotune-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeHeroTune()">
+  <div class="modal-box help monsterdex-box">
+    <h3>⚔️ 英雄调参面板</h3>
+    <p class="pause-tip">每位招募英雄的具体数值，实时生效并持久保存。调好后告诉我，可固化为默认。</p>
+    <div id="herotune-body"></div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn small" onclick="UI.resetHeroTune()">恢复默认</button>
+      <button class="btn small primary" onclick="UI.closeHeroTune()">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 英雄图鉴 ======== -->
+<div id="herodex-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeHeroDex()">
+  <div class="modal-box help monsterdex-box">
+    <h3>⚔️ 英雄图鉴（雇佣兵与随从）</h3>
+    <p class="pause-tip">出发准备可雇佣；割草/大逃亡中通过升级三选一的招募卡、或神秘商人入队。</p>
+    <div id="herodex-body"></div>
+    <div style="display:flex; justify-content:center; margin-top:10px">
+      <button class="btn small primary" onclick="UI.closeHeroDex()">返回</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== 策划调参面板 ======== -->
 <div id="tuning-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeTuning()">
   <div class="modal-box help">
@@ -344,24 +374,24 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=22"></script>
-<script src="js/music.js?v=22"></script>
-<script src="js/skins-data.js?v=22"></script>
-<script src="js/monsters-data.js?v=22"></script>
-<script src="js/tiles-data.js?v=22"></script>
-<script src="js/data.js?v=22"></script>
-<script src="js/save.js?v=22"></script>
-<script src="js/map.js?v=22"></script>
-<script src="js/vision.js?v=22"></script>
-<script src="js/entities.js?v=22"></script>
-<script src="js/game.js?v=22"></script>
-<script src="js/fx.js?v=22"></script>
-<script src="js/dex.js?v=22"></script>
-<script src="js/horde.js?v=22"></script>
-<script src="js/weather.js?v=22"></script>
-<script src="js/powerups.js?v=22"></script>
-<script src="js/ui.js?v=22"></script>
-<script src="js/trainer.js?v=22"></script>
-<script src="js/main.js?v=22"></script>
+<script src="js/sfx.js?v=23"></script>
+<script src="js/music.js?v=23"></script>
+<script src="js/skins-data.js?v=23"></script>
+<script src="js/monsters-data.js?v=23"></script>
+<script src="js/tiles-data.js?v=23"></script>
+<script src="js/data.js?v=23"></script>
+<script src="js/save.js?v=23"></script>
+<script src="js/map.js?v=23"></script>
+<script src="js/vision.js?v=23"></script>
+<script src="js/entities.js?v=23"></script>
+<script src="js/game.js?v=23"></script>
+<script src="js/fx.js?v=23"></script>
+<script src="js/dex.js?v=23"></script>
+<script src="js/horde.js?v=23"></script>
+<script src="js/weather.js?v=23"></script>
+<script src="js/powerups.js?v=23"></script>
+<script src="js/ui.js?v=23"></script>
+<script src="js/trainer.js?v=23"></script>
+<script src="js/main.js?v=23"></script>
 </body>
 </html>

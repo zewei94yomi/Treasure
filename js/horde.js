@@ -14,6 +14,7 @@ Object.assign(Game.prototype, {
       if (u.requires && !(H.skills[u.requires] > 0)) return false;   // 变体：先有母技能
       if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0)) return false;   // 招募流：有佣兵在场才出
       if (u.gate && !u.gate(H)) return false;                              // 门槛型升级（呼叫支援等）
+      if (u.heroUp && !this.mercs.some(mc => mc.hp > 0 && mc.def.id === u.heroUp)) return false;   // 英雄专属卡：该英雄在场才出
       return true;
     });
     if (!pool.length) { H.freeChoices = 0; return; }
@@ -29,6 +30,7 @@ Object.assign(Game.prototype, {
       if (u.requires) w *= 1.6;                              // 变体强化贴合已有 build
       if (lowHp && (u.id === 'maxhp' || u.id === 'steal' || u.id === 'regen' || u.id === 'barrier')) w *= 2.2;  // 残血时供生存牌
       if (u.special === 'recruit') w *= this.mercs.some(mc => mc.hp > 0) ? 1.2 : 1.8;   // 招募卡：无佣兵时更常见
+      if (u.heroUp) w *= 1.5;                                                             // 英雄专属卡贴合 build
       // 近战流没有弹道类需求
       const def = this.players[0].weaponDef();
       if (def.melee && (u.id === 'multi' || u.id === 'pierce' || u.id === 'range')) w *= 0.35;

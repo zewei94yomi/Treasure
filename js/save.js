@@ -27,6 +27,7 @@ function defaultSave() {
     hordeBest: null,           // 无双割草最佳战绩 { time, kills, level }
     stats: { runs: 0, extractions: 0, goldEarned: 0, kills: 0, chestsOpened: 0, deaths: 0, mKills: {} },
     monsterSeen: {},           // 怪物图鉴解锁（击败过或被它击中过）
+    heroTuning: {},            // 英雄详细调参（英雄面板持久化）
   };
 }
 
@@ -50,6 +51,7 @@ function loadSave() {
         if (!SAVE.trophies || typeof SAVE.trophies !== 'object') SAVE.trophies = {};
         if (!SAVE.monsterSeen || typeof SAVE.monsterSeen !== 'object') SAVE.monsterSeen = {};
         if (!SAVE.stats.mKills || typeof SAVE.stats.mKills !== 'object') SAVE.stats.mKills = {};
+        if (!SAVE.heroTuning || typeof SAVE.heroTuning !== 'object') SAVE.heroTuning = {};
         return SAVE;
       }
     }
