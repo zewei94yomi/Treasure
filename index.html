@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/fonts.css?v=25">
-<link rel="stylesheet" href="css/style.css?v=25">
+<link rel="stylesheet" href="css/fonts.css?v=26">
+<link rel="stylesheet" href="css/style.css?v=26">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
         <button class="menu-item" onclick="UI.showSettingsHub()"><span class="mi-num">06</span><span class="mi-name">设置中心</span><span class="mi-en">SYSTEM</span><span class="mi-arrow">›</span></button>
       </div>
       <div class="menu-status">
-        <span>v19 · 野战档案 UI</span>
+        <span>v20 · 铭牌 HUD</span>
         <span>存档已挂载 · 本地浏览器</span>
         <span class="go">双人同屏 · 键鼠即玩</span>
       </div>
@@ -126,32 +126,60 @@
   <div class="game-wrap">
     <canvas id="game-canvas" width="1280" height="720"></canvas>
     <div id="hud">
-      <!-- 全部玩家状态统一置于正下方（背包栏上方） -->
+      <!-- 大胆版铭牌 HUD：左上任务层 / 右上世界层 / 下角角色铭牌（信息三层，中央视野干净） -->
+      <div id="hud-task">
+        <div class="ht-box ht-time">
+          <div id="hm-time">--:--</div>
+          <div id="hm-timesub" class="ht-sub"></div>
+        </div>
+        <div class="ht-box ht-objbox">
+          <div class="ht-label">行动目标 OBJECTIVE</div>
+          <div id="hm-obj"></div>
+          <div id="hm-pips"></div>
+        </div>
+        <div class="ht-box">
+          <div class="ht-label">击杀</div>
+          <div id="hm-kills">0</div>
+        </div>
+        <div class="ht-box">
+          <div class="ht-label">军资</div>
+          <div id="hud-supplies"></div>
+        </div>
+      </div>
+      <div id="hud-world">
+        <span id="hw-weather" style="display:none"></span>
+        <div id="hw-alert" style="display:none">神话宝物已现世 — 全图可见</div>
+        <div id="hw-feed"></div>
+      </div>
       <div id="hud-bottom">
-        <div class="bottom-bar" id="hud-bot-p1">
-          <div class="bb-left">
-            <div class="bb-head"><span class="bb-name">1P</span><span class="hud-status"></span></div>
-            <div class="hp-bar"><div class="hp-fill"></div></div>
-            <div class="armor-bar"><div class="armor-fill"></div></div>
-            <div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div>
-          </div>
-          <div class="bb-right">
-            <div class="bag-strip"></div>
-            <div class="bb-meta"><span class="hud-consum"></span><span class="hud-weight"></span><span class="hud-bag-info"></span></div>
-            <div class="hud-fx"></div>
+        <div class="nameplate" id="hud-bot-p1">
+          <div class="np-inner">
+            <div class="np-side">
+              <div class="np-portrait"><canvas class="np-face" width="84" height="84"></canvas><span class="np-ptag">1P</span></div>
+              <div class="np-stars"></div>
+            </div>
+            <div class="np-main">
+              <div class="np-row1"><span class="np-name"></span><span class="np-lv"></span><span class="hud-weight"></span><span class="hud-status"></span><span class="hud-bag-info"></span></div>
+              <div class="hp-bar"><div class="hp-fill"></div><div class="hp-num"></div></div>
+              <div class="np-row2"><div class="stam-pips"></div><span class="np-cap">体力</span><div class="np-armor"><div class="armor-pips"></div><span class="np-cap">护甲</span></div></div>
+              <div class="np-row3"><div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div><div class="np-meds"><span class="hud-consum"></span></div></div>
+              <div class="np-row4"><div class="bag-strip"></div><div class="hud-fx"></div></div>
+            </div>
           </div>
         </div>
-        <div class="bottom-bar" id="hud-bot-p2">
-          <div class="bb-left">
-            <div class="bb-head"><span class="bb-name">2P</span><span class="hud-status"></span></div>
-            <div class="hp-bar"><div class="hp-fill"></div></div>
-            <div class="armor-bar"><div class="armor-fill"></div></div>
-            <div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div>
-          </div>
-          <div class="bb-right">
-            <div class="bag-strip"></div>
-            <div class="bb-meta"><span class="hud-consum"></span><span class="hud-weight"></span><span class="hud-bag-info"></span></div>
-            <div class="hud-fx"></div>
+        <div class="nameplate" id="hud-bot-p2">
+          <div class="np-inner">
+            <div class="np-side">
+              <div class="np-portrait"><canvas class="np-face" width="84" height="84"></canvas><span class="np-ptag">2P</span></div>
+              <div class="np-stars"></div>
+            </div>
+            <div class="np-main">
+              <div class="np-row1"><span class="np-name"></span><span class="np-lv"></span><span class="hud-weight"></span><span class="hud-status"></span><span class="hud-bag-info"></span></div>
+              <div class="hp-bar"><div class="hp-fill"></div><div class="hp-num"></div></div>
+              <div class="np-row2"><div class="stam-pips"></div><span class="np-cap">体力</span><div class="np-armor"><div class="armor-pips"></div><span class="np-cap">护甲</span></div></div>
+              <div class="np-row3"><div class="hud-weapons"><span class="wslot"></span><span class="wslot"></span></div><div class="np-meds"><span class="hud-consum"></span></div></div>
+              <div class="np-row4"><div class="bag-strip"></div><div class="hud-fx"></div></div>
+            </div>
           </div>
         </div>
       </div>
@@ -159,13 +187,13 @@
       <div id="arena-bar" style="display:none">
         <select id="arena-wsel" onchange="if(this.value){Game.current&&Game.current.arenaPickWeapon(this.value);this.selectedIndex=0}"></select>
         <select id="arena-rsel" onchange="if(this.value){Game.current&&Game.current.arenaPickHero(this.value);this.selectedIndex=0}"></select>
+        <select id="arena-msel" onchange="if(this.value){Game.current&&Game.current.arenaSpawnMonster(this.value);this.selectedIndex=0}"></select>
         <button class="btn small" onclick="Game.current&&Game.current.arenaFreeLevel()">⬆️ 免费升级</button>
         <button class="btn small" onclick="Game.current&&Game.current.arenaReset()">🎯 重置木桩</button>
         <button class="btn small" onclick="UI.startArena()">🔄 全部重置</button>
         <button class="btn small" onclick="UI.showHeroTune()">⚔️ 英雄调参</button>
         <button class="btn small" onclick="UI.showTuning()">🎛️ 全局调参</button>
       </div>
-      <div id="hud-supplies"></div>
       <div id="hud-toasts"></div>
       <div id="vignette"></div>
       <div id="hurt-flash"></div>
@@ -386,24 +414,25 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=25"></script>
-<script src="js/music.js?v=25"></script>
-<script src="js/skins-data.js?v=25"></script>
-<script src="js/monsters-data.js?v=25"></script>
-<script src="js/tiles-data.js?v=25"></script>
-<script src="js/data.js?v=25"></script>
-<script src="js/save.js?v=25"></script>
-<script src="js/map.js?v=25"></script>
-<script src="js/vision.js?v=25"></script>
-<script src="js/entities.js?v=25"></script>
-<script src="js/game.js?v=25"></script>
-<script src="js/fx.js?v=25"></script>
-<script src="js/dex.js?v=25"></script>
-<script src="js/horde.js?v=25"></script>
-<script src="js/weather.js?v=25"></script>
-<script src="js/powerups.js?v=25"></script>
-<script src="js/ui.js?v=25"></script>
-<script src="js/trainer.js?v=25"></script>
-<script src="js/main.js?v=25"></script>
+<script src="js/sfx.js?v=26"></script>
+<script src="js/music.js?v=26"></script>
+<script src="js/skins-data.js?v=26"></script>
+<script src="js/monsters-data.js?v=26"></script>
+<script src="js/mugshots-data.js?v=26"></script>
+<script src="js/tiles-data.js?v=26"></script>
+<script src="js/data.js?v=26"></script>
+<script src="js/save.js?v=26"></script>
+<script src="js/map.js?v=26"></script>
+<script src="js/vision.js?v=26"></script>
+<script src="js/entities.js?v=26"></script>
+<script src="js/game.js?v=26"></script>
+<script src="js/fx.js?v=26"></script>
+<script src="js/dex.js?v=26"></script>
+<script src="js/horde.js?v=26"></script>
+<script src="js/weather.js?v=26"></script>
+<script src="js/powerups.js?v=26"></script>
+<script src="js/ui.js?v=26"></script>
+<script src="js/trainer.js?v=26"></script>
+<script src="js/main.js?v=26"></script>
 </body>
 </html>

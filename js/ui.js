@@ -71,19 +71,79 @@ const UI = (() => {
     const dv = $('btn-devmode');
     if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 金钱无限/全解锁/经验加倍' : '🧪 开发者模式：关';
   }
+  // ---------- 自定义下拉框（方向A 军械库风；原生 select 的弹出菜单无法样式化） ----------
+  function closeAllDrops(except) {
+    document.querySelectorAll('.adrop.open').forEach(d => { if (d !== except) d.classList.remove('open'); });
+  }
+  document.addEventListener('click', () => closeAllDrops());
+  // 把一个原生 select 变成方向A风格下拉：隐藏原生控件保持状态/事件，UI 用 div 重建。
+  // opts.icon(value) 可返回一段 HTML（如档案照 <img>）；opts.tag(value) 返回右侧小标（如 BOSS）。
+  function enhanceSelect(sel, opts = {}) {
+    if (!sel) return;
+    if (sel._adrop) sel._adrop.remove();
+    const wrap = document.createElement('div');
+    wrap.className = 'adrop';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'adrop-btn';
+    btn.innerHTML = `<span class="adrop-label">${sel.options[0] ? sel.options[0].text : ''}</span><span class="adrop-caret">▾</span>`;
+    btn.onclick = (e) => { e.stopPropagation(); closeAllDrops(wrap); wrap.classList.toggle('open'); };
+    const list = document.createElement('div');
+    list.className = 'adrop-list';
+    for (let i = 0; i < sel.options.length; i++) {
+      const o = sel.options[i];
+      if (!o.value) { if (i > 0) { const g = document.createElement('div'); g.className = 'adrop-group'; g.textContent = o.text; list.appendChild(g); } continue; }
+      const it = document.createElement('div');
+      it.className = 'adrop-item';
+      it.innerHTML = (opts.icon ? (opts.icon(o.value) || '') : '') + `<span>${o.text}</span>` +
+                     (opts.tag && opts.tag(o.value) ? `<span class="adrop-tag">${opts.tag(o.value)}</span>` : '');
+      it.onclick = (e) => {
+        e.stopPropagation();
+        wrap.classList.remove('open');
+        sel.value = o.value;
+        sel.dispatchEvent(new Event('change'));
+      };
+      list.appendChild(it);
+    }
+    wrap.append(btn, list);
+    sel.style.display = 'none';
+    sel.after(wrap);
+    sel._adrop = wrap;
+  }
+
   function startArena() {
     showScreen('screen-game');
     new Game(1, 'normal', [{}], 'manor', SAVE.settings.skins, { horde: true, arena: true });
     const bar = $('arena-bar');
     if (bar) bar.style.display = 'flex';
-    // 填充武器/英雄选择器
+    // 填充武器/英雄/怪物选择器（军械库风自定义下拉）
     const ws = $('arena-wsel');
-    if (ws) ws.innerHTML = '<option value="">🔫 选武器试用…</option>' +
-      Object.values(WEAPONS).filter(w => w.id !== 'fists').map(w => `<option value="${w.id}">${w.icon} ${w.name}</option>`).join('');
+    if (ws) {
+      ws.innerHTML = '<option value="">🔫 选武器试用…</option>' +
+        Object.values(WEAPONS).filter(w => w.id !== 'fists').map(w => `<option value="${w.id}">${w.icon} ${w.name}</option>`).join('');
+      enhanceSelect(ws);
+    }
     const rs = $('arena-rsel');
-    if (rs) rs.innerHTML = '<option value="">⚔️ 选英雄入队…</option>' +
-      Object.values(MERCS).map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
-    setTimeout(() => Game.current && Game.current.toast('🎯 练习场：无敌+站桩木人；调参面板里有每位英雄的强度滑杆', '#7ef7ff'), 500);
+    if (rs) {
+      rs.innerHTML = '<option value="">⚔️ 选英雄入队…</option>' +
+        Object.values(MERCS).map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
+      enhanceSelect(rs);
+    }
+    const ms = $('arena-msel');
+    if (ms) {
+      const ids = Object.keys(MONSTER_TYPES);
+      ms.innerHTML = '<option value="">👹 放置怪物…</option>' +
+        '<option value="wave">🌊 随机一波 ×8</option><option value="elite">👑 随机精英</option>' +
+        '<option value="">— 杂兵 —</option>' +
+        ids.filter(id => !MONSTER_TYPES[id].boss).map(id => `<option value="${id}">${MONSTER_TYPES[id].name}</option>`).join('') +
+        '<option value="">— BOSS —</option>' +
+        ids.filter(id => MONSTER_TYPES[id].boss).map(id => `<option value="${id}">${MONSTER_TYPES[id].name}</option>`).join('');
+      enhanceSelect(ms, {
+        icon: id => (typeof MUGSHOTS !== 'undefined' && MUGSHOTS[id]) ? `<img src="${MUGSHOTS[id]}" alt="">` : '',
+        tag: id => MONSTER_TYPES[id] && MONSTER_TYPES[id].boss ? 'BOSS' : '',
+      });
+    }
+    setTimeout(() => Game.current && Game.current.toast('🎯 练习场：无敌+站桩木人；可放置怪物、每位英雄都有强度滑杆', '#7ef7ff'), 500);
   }
   function toggleDevMode() {
     SAVE.settings.devMode = !SAVE.settings.devMode;
@@ -831,6 +891,7 @@ const UI = (() => {
       <div class="mdex-card ${t.boss ? 'boss' : ''} ${ok ? '' : 'locked'}">
         <canvas id="mdex-cv-${id}" width="94" height="94"></canvas>
         <div class="mdex-info">
+          ${ok && typeof MUGSHOTS !== 'undefined' && MUGSHOTS[id] ? `<img class="mdex-photo" src="${MUGSHOTS[id]}" alt="${t.name} 档案照">` : ''}
           <div class="mdex-name">${ok ? t.name : '？？？'}${ok && kills ? ` <span class="mdex-kills">已讨伐 ×${kills}</span>` : ''}</div>
           ${ok ? `<div class="mdex-tags">${tags}</div>
           <div class="mdex-stats">血 ${mdexPips(t.hpMul, t.boss ? 1 : 2.8)}　攻 ${mdexPips(t.dmgMul, 2.2)}　速 ${mdexPips(t.spdMul, 1.7)}</div>

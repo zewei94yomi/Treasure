@@ -15,7 +15,7 @@ const sandbox = {
   console, Math, Date, JSON, Object, Array, Map, Set, Proxy, isFinite, Infinity, performance: { now: () => 0 },
 };
 vm.createContext(sandbox);
-for (const f of ['monsters-data.js', 'data.js', 'save.js', 'map.js']) {
+for (const f of ['monsters-data.js', 'mugshots-data.js', 'data.js', 'save.js', 'map.js']) {
   vm.runInContext(fs.readFileSync(base + f, 'utf8'), sandbox, { filename: f });
 }
 const run = code => vm.runInContext(code, sandbox);
@@ -150,7 +150,7 @@ check('奖杯授予幂等', run(`
 
 // ==================== 无双割草 ====================
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
-check('割草基准 900s/上限80/4个Boss波/时长可调', run(`HORDE_DURATION === 900 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 4 && tune('hordeTime') === 15`));
+check('割草基准 900s/上限80/4个Boss波/时长可调', run(`HORDE_DURATION === 900 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 4 && tune('hordeTime') === 10`));
 check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || u.hmod || typeof u.mod === 'function'))`));
 check('19 个技能项 id 合法（+呼叫支援）', run(`HORDE_UPGRADES.filter(u => u.skill).length === 19 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge','arty'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
@@ -214,8 +214,8 @@ check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
 check('调参面板 27 项（英雄改专属详细面板）', run(`
-  TUNE_DEFS.length === 27 && TUNE_DEFS.every(t => t.name && t.min < t.max) && tune('zapHop') === 0.2 &&
-  tune('pSpeed') === 1 && tune('mimic') === 0.35 && tune('mDmg') === 1.05 && tune('rollCd') === 1 && tune('thorns') === 1`));
+  TUNE_DEFS.length === 27 && TUNE_DEFS.every(t => t.name && t.min < t.max) && tune('zapHop') === 0.35 &&
+  tune('pSpeed') === 1.2 && tune('mimic') === 0.3 && tune('mDmg') === 1.3 && tune('rollCd') === 1 && tune('thorns') === 1.2`));
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
 check('普通难度商人概率 0.5', run(`DIFFICULTIES.normal.merchant === 0.5`));
@@ -423,7 +423,7 @@ check('呼叫支援带武器投资门槛', run(`
 check('招募卡进升级池（7 位英雄）', run(`
   HORDE_UPGRADES.filter(u => u.special === 'recruit').length === 7 &&
   HORDE_UPGRADES.filter(u => u.special === 'recruit').every(u => MERCS[u.mercId])`));
-check('新调参默认值', run(`tune('mercRange') === 1 && tune('devXp') === 20 && tune('wRate') === 1`));
+check('新调参默认值', run(`tune('mercRange') === 1.1 && tune('devXp') === 20 && tune('wRate') === 1`));
 {
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
   check('割草空手起家（默认手枪）+ 练习场引擎', gameSrc.includes("id: 'pistol', dur: 99999") && gameSrc.includes('arenaUpdate') && gameSrc.includes('arenaNextWeapon'));
@@ -436,7 +436,7 @@ check('新调参默认值', run(`tune('mercRange') === 1 && tune('devXp') === 20
 
 // ==================== 第十六轮：英雄晋阶/形象重做/练习场增强 ====================
 check('英雄详细调参体系 + 鹰眼超高伤 + 机兵弹夹', run(`
-  Object.keys(HERO_TUNE).length === 9 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 150 && MERCS.mech.mag === 40`));
+  Object.keys(HERO_TUNE).length === 11 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 200 && MERCS.mech.mag === 40`));
 check('机兵=武器流最高形态（gate 5 次武器强化）', run(`
   typeof HORDE_UPGRADE_BY_ID.recruit_mech.gate === 'function' && !HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: {} }) &&
   HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: { dmg: 3, rate: 2 } })`));
@@ -458,7 +458,7 @@ check('devMode 全解锁（皮肤/装饰）', run(`
 check('英雄专属升级卡（15 张，需在场）', run(`
   HORDE_UPGRADES.filter(u => u.heroUp).length === 15 && HORDE_UPGRADES.filter(u => u.hmod).every(u => u.heroUp)`));
 check('远程佣兵全配弹夹', run(`['vet','ace','sniper','archer','marine','mech'].every(id => MERCS[id].mag > 0 && MERCS[id].reload > 0)`));
-check('旺财拾取范围大幅提升且可调', run(`MERCS.dog.fetch === 560 && HERO_TUNE.dog.params.fetch.def === 560`));
+check('旺财拾取范围大幅提升且可调', run(`MERCS.dog.fetch === 560 && HERO_TUNE.dog.params.fetch.def === 600`));
 check('佣兵进攻欲望入面板', run(`TUNE_DEFS.some(t => t.id === 'mercDesire' && t.def === 380)`));
 {
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
@@ -495,7 +495,7 @@ check('佣兵进攻欲望入面板', run(`TUNE_DEFS.some(t => t.id === 'mercDesi
     cssSrc.includes('repeating-linear-gradient(45deg, var(--line)') && cssSrc.includes("content: '已选'")
     && cssSrc.includes('clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%)'));
   check('HUD 军规化（1P/2P 铭牌 + 血条刻度 + 军规配色血量）',
-    cssSrc.includes('.bb-name') && cssSrc.includes('repeating-linear-gradient(90deg, transparent 0 22px')
+    cssSrc.includes('.np-name') && cssSrc.includes('repeating-linear-gradient(90deg, transparent 0 17px')
     && fs.readFileSync(base + 'game.js', 'utf8').includes("linear-gradient(#9cbb61,#7d9c48)"));
 }
 
@@ -512,6 +512,40 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('怪物解堵（相互分离+侧滑脱困）+ 佣兵王猎首弹', ['怪物相互分离', '侧滑', 'bossHunter'].every(k => entSrc.includes(k)));
   const cssSrc = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
   check('血条过渡延迟修复 + 抽卡样式', cssSrc.includes('width .04s') && cssSrc.includes('.loot-chest'));
+}
+
+// ==================== 第二十轮：铭牌HUD/放怪/下拉/档案照/欲望调参 ====================
+{
+  const idxSrc = fs.readFileSync(base + '../index.html', 'utf8');
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  const cssSrc2 = fs.readFileSync(base + '../css/style.css', 'utf8');
+  const entSrc2 = fs.readFileSync(base + 'entities.js', 'utf8');
+  check('大胆版铭牌HUD DOM（任务层/世界层/铭牌/立绘/军衔星）',
+    idxSrc.includes('id="hud-task"') && idxSrc.includes('id="hm-time"') && idxSrc.includes('class="np-face"')
+    && idxSrc.includes('id="hw-feed"') && idxSrc.includes('class="np-stars"') && idxSrc.includes('class="nameplate"'));
+  check('铭牌HUD 更新接线（updateHudLayers + 击杀播报 + 神话警报）',
+    gameSrc.includes('updateHudLayers()') && gameSrc.includes('mythicAlertUntil') && gameSrc.includes('击杀 ▸'));
+  check('铭牌CSS（低血呼吸/体力pips/护甲盾/武器卡大字/2P镜像）',
+    cssSrc2.includes('.nameplate.low') && cssSrc2.includes('.stam-pips') && cssSrc2.includes('.armor-pips .ap')
+    && cssSrc2.includes('.ws-ammo') && cssSrc2.includes('#hud-bot-p2 .np-inner'));
+  check('练习场放置怪物（单只/一波/精英 + 下拉）',
+    gameSrc.includes('arenaSpawnMonster(id)') && gameSrc.includes("id === 'wave'") && idxSrc.includes('arena-msel'));
+  check('方向A自定义下拉组件', uiSrc.includes('function enhanceSelect') && cssSrc2.includes('.adrop-item'));
+  check('怪物档案照 21 张（图鉴+下拉头像）', run(`Object.keys(MUGSHOTS).length === 21 && Object.values(MUGSHOTS).every(v => v.startsWith('data:image/webp'))`));
+  check('英雄调参全量（11英雄 + 攻击欲望×9 + 通用hp/speed）', run(`
+    Object.keys(HERO_TUNE).length === 11 &&
+    Object.values(HERO_TUNE).filter(h => h.params.desire).length === 9 &&
+    Object.values(HERO_TUNE).every(h => h.params.hp || h.params.fetch === undefined ? h.params.hp : true) &&
+    heroVal('vet', 'desire') === 600 && heroVal('guard', 'hp') === 150`));
+  check('攻击欲望接线（每英雄绝对值×全局缩放）', entSrc2.includes("hv('desire', 380) * (tune('mercDesire') / 380)"));
+  check('牧师治疗间隔接线', entSrc2.includes("hv('healCd', this.def.healCd)"));
+  check('调参固化为用户配置（抽查）', run(`
+    tune('wSpeed') === 2.2 && tune('mSpeed') === 1.3 && tune('bossHp') === 1.1 &&
+    heroVal('mech', 'mag') === 100 && heroVal('archer', 'dmg') === 40 && heroVal('priest', 'buffCd') === 4`));
+  check('喷火兵火舌视觉=判定射程', entSrc2.includes('const reach = Math.max(80, rngF - 20)'));
+  check('翻滚方向：移动优先/静止朝准星', gameSrc.includes('p.rollT > 0 && !movin'));
+  check('保镖挥锅动画+弧光', gameSrc.includes('攻击抡锅动画'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

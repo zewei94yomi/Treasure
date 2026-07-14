@@ -887,11 +887,13 @@ class Game {
     if (mAim) {
       const cam = this.cams[0];
       p.facing = Math.atan2(Input.mouse.y + cam.y - p.y, Input.mouse.x + cam.x - p.x);
-      // 右键：向准星方向翻滚
+      // 右键翻滚：移动中朝移动方向翻（tryRoll 已按方向键定向），静止才朝准星翻
       if (Input.mouseR) {
         Input.mouseR = false;
+        const km2 = KEYMAP[p.idx];
+        const movin = Input.keys[km2.up] || Input.keys[km2.down] || Input.keys[km2.left] || Input.keys[km2.right];
         this.tryRoll(p);
-        if (p.rollT > 0) p.rollDir = p.facing;
+        if (p.rollT > 0 && !movin) p.rollDir = p.facing;
       }
     }
     // 冰面滑行：速度缓慢逼近目标方向；普通地面直接响应
@@ -1197,6 +1199,13 @@ class Game {
     for (let i = 0; i < 8; i++) this.spark(m.x, m.y, '#b48aff');
     this.fxDeath(m.x, m.y, !!(m.isBoss || m.isElite));
     this.floater(m.x, m.y - 20, `${m.type.name}被击败！`, '#b48aff');
+    // 世界层击杀播报（割草刷屏太快，只报精英/Boss）
+    if (!this.horde || m.isBoss || m.isElite || m.type.boss) {
+      if (!this.feed) this.feed = [];
+      const who = owner ? (owner.isMerc ? '⚔' : this.pname(owner)) : '⚔';
+      this.feed.push({ txt: `${who} ▸ 击杀 ▸ <b>${m.type.name}</b>`, until: this.time + 6 });
+      if (this.feed.length > 12) this.feed.splice(0, this.feed.length - 12);
+    }
     if (m.type.shroom && !m._boomed) {
       m._boomed = true;
       if (!this.poisonClouds) this.poisonClouds = [];
@@ -1376,6 +1385,7 @@ class Game {
       // 神话警报：附近的怪被宝物的低语惊醒
       if (t.rarity === 'mythic') {
         Sfx.banshee();
+        this.mythicAlertUntil = this.time + 12;   // 世界层金色警报条
         this.toast('神话宝物的低语惊动了黑暗中的东西……快撤！', '#ff5c5c');
         for (const m of this.monsters) {
           if (m.state === 'ambush') continue;
@@ -1582,6 +1592,31 @@ class Game {
   arenaFreeLevel() {
     this.hordeState.freeChoices++;
     if (!this.levelupOpen) this.openLevelup();
+  }
+  arenaSpawnMonster(id) {
+    // 练习场：在玩家周围放置指定怪物（wave = 随机一波×8）
+    const p = this.players[0];
+    const spawnOne = (tid) => {
+      const a = Math.random() * Math.PI * 2;
+      const m = new Monster(p.x + Math.cos(a) * (220 + Math.random() * 120), p.y + Math.sin(a) * (220 + Math.random() * 120), this.cfg, tid);
+      if (m.type.boss) { m.isBoss = true; m.hp = this.cfg.mHp * 39; m.maxHp = m.hp; }
+      unstick(m);
+      this.monsters.push(m);
+      return m;
+    };
+    if (id === 'wave') {
+      const pool = Object.keys(MONSTER_TYPES).filter(k => MONSTER_TYPES[k].r && !MONSTER_TYPES[k].boss);
+      for (let i = 0; i < 8; i++) spawnOne(pool[Math.floor(Math.random() * pool.length)]);
+      this.toast('🌊 随机一波 ×8 已放置', '#e0a63c');
+    } else if (id === 'elite') {
+      const pool = Object.keys(MONSTER_TYPES).filter(k => MONSTER_TYPES[k].r && !MONSTER_TYPES[k].boss);
+      const m = spawnOne(pool[Math.floor(Math.random() * pool.length)]);
+      m.isElite = true; m.hp *= 2.5; m.maxHp = m.hp; m.r += 4;
+      this.toast(`👑 精英 ${m.type.name} 已放置`, '#e0a63c');
+    } else {
+      const m = spawnOne(id);
+      this.toast(`已放置 ${m.type.name}`, '#e0a63c');
+    }
   }
   arenaRecruit() {
     const pool = ['sniper', 'priest', 'archer', 'mage', 'mech', 'marine', 'flamerguy'];
@@ -2131,71 +2166,31 @@ class Game {
     }
     this.drawMinimap(ctx);
 
+    // 大胆版 HUD：计时/等级/击杀/经验/天气改由 DOM 任务层与世界层渲染（updateHud）
     ctx.textAlign = 'center';
-    ctx.font = 'bold 14px "PingFang SC",sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,.75)';
-    if (this.weather && this.weather.id !== 'clear') {
-      ctx.font = 'bold 15px "PingFang SC",sans-serif';
-      ctx.fillStyle = '#9fd8ff';
-      ctx.fillText(`${this.weather.icon}${this.weather.name}`, VIEW_W/2 + 210, MapData.minimap.height + 26);
-      if (this.time < 3.5) {
-        ctx.globalAlpha = Math.min(1, 3.5 - this.time);
-        ctx.font = 'bold 30px "PingFang SC",sans-serif';
-        ctx.fillStyle = '#ffd93d';
-        ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 5;
-        const txt = `${this.weather.icon} ${this.weather.name} — ${this.weather.desc}`;
-        ctx.strokeText(txt, VIEW_W/2, 220);
-        ctx.fillText(txt, VIEW_W/2, 220);
-        ctx.globalAlpha = 1;
-      }
+    if (this.weather && this.weather.id !== 'clear' && this.time < 3.5) {
+      ctx.globalAlpha = Math.min(1, 3.5 - this.time);
+      ctx.font = 'bold 30px "PingFang SC",sans-serif';
+      ctx.fillStyle = '#e0a63c';
+      ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 5;
+      const txt = `${this.weather.icon} ${this.weather.name} — ${this.weather.desc}`;
+      ctx.strokeText(txt, VIEW_W/2, 220);
+      ctx.fillText(txt, VIEW_W/2, 220);
+      ctx.globalAlpha = 1;
     }
     if (this.horde) {
       const H = this.hordeState;
-      const left = Math.max(0, hordeDuration() - this.time);
-      const mm = Math.floor(left / 60), ss = Math.floor(left % 60);
-      const y0 = MapData.minimap.height + 22;
-      ctx.font = 'bold 20px "PingFang SC",sans-serif';
-      if (this.escape) {
-        const lead = Math.max(0, ...this.players.filter(p => p.active || p.extracted).map(p => p.x));
-        const pct = Math.min(100, Math.round(lead / (MapData.exitRect.x + MapData.exitRect.w * 0.5) * 100));
-        ctx.fillStyle = '#ffd93d';
-        ctx.fillText(`🏁 ${pct}%`, VIEW_W/2, y0 + 4);
-        const act = this.players.filter(p => p.active);
-        if (act.length) {
-          const gap = Math.round((Math.min(...act.map(p => p.x)) - this.tideX) / TILE);
-          ctx.font = 'bold 12px "PingFang SC",sans-serif';
-          ctx.fillStyle = gap < 8 ? '#ff5c5c' : 'rgba(255,255,255,.55)';
-          ctx.fillText(gap <= 0 ? '☠️ 已陷入死亡之潮！' : `☠️ 死亡之潮 ${gap} 格`, VIEW_W/2, y0 + 40);
-        }
-      } else {
-        ctx.fillStyle = left < 60 ? '#ffd93d' : 'rgba(255,255,255,.9)';
-        ctx.fillText(`⏳ ${mm}:${String(ss).padStart(2,'0')}`, VIEW_W/2, y0 + 4);
-      }
-      ctx.font = 'bold 13px "PingFang SC",sans-serif';
-      ctx.fillStyle = '#b48aff';
-      ctx.fillText(`Lv.${H.level}`, VIEW_W/2 - 130, y0 + 2);
-      ctx.fillStyle = '#ff8f5c';
-      ctx.fillText(`⚔️ ${this.runKills}`, VIEW_W/2 + 130, y0 + 2);
-      // 经验条
-      const bw = 300, bx = VIEW_W/2 - bw/2, by = y0 + 12;
-      ctx.fillStyle = 'rgba(10,8,24,.8)';
-      ctx.fillRect(bx - 2, by - 2, bw + 4, 10);
-      ctx.fillStyle = '#5af0c8';
-      ctx.fillRect(bx, by, bw * Math.min(1, H.xp / H.xpNeed), 6);
-      // Boss 血条
+      // Boss 血条（保留画布绘制：顶部居中，戏剧感）
       if (H.boss && H.boss.hp > 0) {
-        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = by + 18;
-        ctx.fillStyle = 'rgba(10,8,24,.8)';
+        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = 26;
+        ctx.fillStyle = 'rgba(8,9,4,.85)';
         ctx.fillRect(bbx - 2, bby - 2, bbw + 4, 14);
-        ctx.fillStyle = '#ff5c5c';
+        ctx.fillStyle = '#c2452a';
         ctx.fillRect(bbx, bby, bbw * Math.max(0, H.boss.hp / H.boss.maxHp), 10);
         ctx.font = 'bold 11px "PingFang SC",sans-serif';
-        ctx.fillStyle = '#ffb3b3';
+        ctx.fillStyle = '#e0a63c';
         ctx.fillText('👑 ' + (H.boss.type.name || 'Boss'), VIEW_W/2, bby + 24);
       }
-    } else {
-      const mm = Math.floor(this.time / 60), ss = Math.floor(this.time % 60);
-      ctx.fillText(`⏱ ${mm}:${String(ss).padStart(2,'0')}`, VIEW_W/2, MapData.minimap.height + 26);
     }
   }
 
@@ -2727,7 +2722,7 @@ class Game {
 
   drawMinimap(ctx) {
     const mm = MapData.minimap, S = MapData.minimapScale;
-    const x0 = Math.round((VIEW_W - mm.width) / 2), y0 = 8;
+    const x0 = VIEW_W - mm.width - 14, y0 = 14;   // 大胆版 HUD：小地图居右上（世界层）
     ctx.globalAlpha = 0.92;
     ctx.drawImage(mm, x0, y0);
     ctx.globalAlpha = 1;
@@ -3370,7 +3365,25 @@ class Game {
       ctx.imageSmoothingEnabled = true;
       ctx.restore();
     }
-    else if (mc.def.melee) { ctx.fillStyle = '#555'; ctx.fillRect(8, -2, 10, 4); ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(21, 0, 6, 0, Math.PI*2); ctx.fill(); }
+    else if (mc.def.melee) {
+      // 铁嘴保镖：平底锅（攻击抡锅动画 + 挥击弧光；swingT 由攻击时置 0.25）
+      mc.swingT = Math.max(0, (mc.swingT || 0) - 0.016);
+      ctx.save();
+      ctx.rotate(mc.swingT > 0 ? (0.25 - mc.swingT) * 10 - 1.1 : Math.sin(mc.anim * 3) * 0.12 + 0.25);
+      ctx.fillStyle = '#555'; ctx.fillRect(8, -2, 10, 4);
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(21, 0, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#8a8a96'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(21, 0, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      if (mc.swingT > 0.06) {   // 弧光扫过
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (mc.swingT - 0.06) / 0.19) * 0.55;
+        ctx.strokeStyle = '#e8e2d0'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+        const prog = (0.25 - mc.swingT) * 6;
+        ctx.beginPath(); ctx.arc(0, 0, 24, -1.3 + prog, -0.3 + prog); ctx.stroke();
+        ctx.restore();
+      }
+    }
     else { ctx.fillStyle = '#3a3a48'; ctx.strokeStyle = '#241f38'; ctx.lineWidth = 1.5; ctx.fillRect(7, -3, 15, 5); ctx.strokeRect(7, -3, 15, 5); }
     ctx.restore();
     ctx.restore();
@@ -3699,13 +3712,52 @@ class Game {
       if (p.active && hpPct < 30) anyLow = true;
       el.querySelector('.hp-fill').style.width = hpPct + '%';
       el.querySelector('.hp-fill').style.background = hpPct > 50 ? 'linear-gradient(#9cbb61,#7d9c48)' : hpPct > 25 ? 'linear-gradient(#e0c063,#d9a441)' : 'linear-gradient(#d96a4a,#c2452a)';
-      // 护甲条
-      const armorFill = el.querySelector('.armor-fill');
-      if (p.armor) {
-        const adef = ARMORS[p.armor.id];
-        armorFill.parentElement.style.display = '';
-        armorFill.style.width = Math.max(0, p.armor.dur / adef.pool * 100) + '%';
-      } else armorFill.parentElement.style.display = 'none';
+      el.querySelector('.hp-num').innerHTML = `${Math.max(0, Math.ceil(p.hp))}<i>/${p.maxHp}</i>`;
+      el.classList.toggle('low', p.active && hpPct < 30);   // 低血：铭牌红光呼吸
+      // 护甲盾片（3 格）
+      let apFill = 0;
+      if (p.armor) { const adef = ARMORS[p.armor.id]; apFill = Math.max(1, Math.ceil(Math.max(0, p.armor.dur / adef.pool) * 3)); }
+      if (el._apSig !== apFill) {
+        el._apSig = apFill;
+        el.querySelector('.armor-pips').innerHTML = [0,1,2].map(i2 => `<span class="ap${i2 < apFill ? ' on' : ''}"></span>`).join('');
+      }
+      // 体力条（10 格）
+      const stF = Math.round(Math.max(0, p.stamina / STAMINA.max) * 10) + (p.staminaFreeT > 0 ? 100 : 0);
+      if (el._stSig !== stF) {
+        el._stSig = stF;
+        const free = p.staminaFreeT > 0;
+        el.querySelector('.stam-pips').innerHTML = Array.from({length: 10}, (_, i2) =>
+          `<span class="sp${i2 < stF % 100 ? (free ? ' free' : ' on') : ''}"></span>`).join('');
+      }
+      // 军衔星：割草按等级晋衔，搜打撤按身上宝物
+      const stars = this.horde
+        ? 1 + (this.hordeState.level >= 6 ? 1 : 0) + (this.hordeState.level >= 12 ? 1 : 0)
+        : (p.bag.length >= 1 ? 1 : 0) + (p.bag.length >= 3 ? 1 : 0) + (p.bag.length >= 6 ? 1 : 0);
+      if (el._starSig !== stars) {
+        el._starSig = stars;
+        el.querySelector('.np-stars').innerHTML = [0,1,2].map(i2 => `<span class="star${i2 < stars ? ' on' : ''}">★</span>`).join('');
+      }
+      // 铭牌头行：名字 + 等级
+      const nm = el.querySelector('.np-name');
+      if (nm && !nm.textContent) nm.textContent = (p.skin && p.skin.name || `${p.idx + 1}P`).replace(/^[^\u4e00-\u9fa5a-zA-Z]+/, '');
+      const lvEl = el.querySelector('.np-lv');
+      if (lvEl) lvEl.textContent = this.horde ? `LV.${this.hordeState.level}` : '';
+      // 立绘：离屏调用游戏本体的玩家绘制（每 30 帧刷新）
+      el._faceT = (el._faceT || 0) - 1;
+      if (el._faceT <= 0) {
+        el._faceT = 30;
+        const fc = el.querySelector('.np-face');
+        if (fc) {
+          const fx2 = fc.getContext('2d');
+          fx2.clearRect(0, 0, fc.width, fc.height);
+          fx2.save(); fx2.translate(fc.width / 2, fc.height / 2 + 12); fx2.scale(1.7, 1.7);
+          const bak = { ts: p.tempShield, mv: p.moving, fc: p.facing };   // active 是只读 getter，不动
+          p.tempShield = 0; p.moving = false; p.facing = -0.35;
+          try { this.drawPlayer(fx2, p, 0, 0); } catch (e) {}
+          p.tempShield = bak.ts; p.moving = bak.mv; p.facing = bak.fc;
+          fx2.restore();
+        }
+      }
       el.querySelector('.hud-status').textContent =
         p.extracted ? '✅ 已撤离' : p.dead ? '💀 阵亡' : p.downed ? '🆘 倒地！' : '';
       // 双武器槽
@@ -3713,20 +3765,23 @@ class Game {
       for (let s = 0; s < 2; s++) {
         const inst = p.weapons[s];
         const d = inst && inst.dur > 0 ? WEAPONS[inst.id] : (inst ? WEAPONS[inst.id] : null);
-        let text;
-        if (!inst) text = '—';
+        let html;
+        if (!inst) html = '<span class="ws-empty">— 空 —</span>';
         else {
           const wd = WEAPONS[inst.id];
+          const durPct = this.horde || !wd.dur ? 100 : Math.max(0, Math.round(inst.dur / wd.dur * 100));
+          let ammoHtml;
           if (wd.melee) {
-            text = this.horde ? `${wd.icon} ∞` : `${wd.icon}${inst.dur <= 0 ? '✖' : Math.ceil(inst.dur)}`;
+            ammoHtml = this.horde ? '∞' : (inst.dur <= 0 ? '✖' : `${Math.ceil(inst.dur)}`);
           } else {
             const cap = p.magCap(s) || wd.mag;
             const magNow = s === p.activeSlot && p.reloadT > 0 ? '…' : (p.mags[s] === null ? cap : p.mags[s]);
             const reserve = this.horde ? '∞' : `${AMMO_TYPES[wd.ammo].icon}${SAVE.ammo[wd.ammo]}`;
-            text = `${wd.icon}${magNow}/${cap}·${reserve}`;
+            ammoHtml = `${magNow}<i>/${cap}·${reserve}</i>`;
           }
+          html = `<span class="ws-ico">${wd.icon}</span><span class="ws-body"><b>${wd.name}</b><span class="ws-dur"><i style="width:${durPct}%"></i></span></span><span class="ws-ammo">${ammoHtml}</span>`;
         }
-        slots[s].textContent = text;
+        if (slots[s]._sig !== html) { slots[s]._sig = html; slots[s].innerHTML = html; }
         slots[s].classList.toggle('on', s === p.activeSlot);
       }
       // 药品 / 负重 / 背包可视化
@@ -3766,5 +3821,66 @@ class Game {
     if (vg) vg.classList.toggle('lowhp', anyLow);
     document.getElementById('hud-supplies').textContent =
       `💰${SAVE.gold}${this.runCash ? ` (+${this.runCash})` : ''}`;
+    this.updateHudLayers();
+  }
+
+  // —— 大胆版 HUD：左上任务层 + 右上世界层（DOM） ——
+  updateHudLayers() {
+    const $id = x => document.getElementById(x);
+    const hmT = $id('hm-time'); if (!hmT) return;
+    const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+    let timeTxt, subTxt, objTxt, pipsHtml, urgent = false;
+    if (this.horde && this.escape) {
+      const lead = Math.max(0, ...this.players.filter(p => p.active || p.extracted).map(p => p.x));
+      const pct = Math.min(100, Math.round(lead / (MapData.exitRect.x + MapData.exitRect.w * 0.5) * 100));
+      timeTxt = `${pct}%`;
+      const act = this.players.filter(p => p.active);
+      const gap = act.length ? Math.round((Math.min(...act.map(p => p.x)) - this.tideX) / TILE) : 99;
+      subTxt = gap <= 0 ? '☠️ 已陷入死亡之潮！' : `☠️ 死亡之潮 ${gap} 格`;
+      urgent = gap < 8;
+      objTxt = '一路向东 · 抵达撤离点';
+      pipsHtml = `<i style="width:${pct}%"></i>`;
+    } else if (this.horde) {
+      const H = this.hordeState;
+      const left = Math.max(0, hordeDuration() - this.time);
+      timeTxt = fmt(left);
+      subTxt = '距怪潮溃散 · 弹药无限';
+      urgent = left < 60;
+      objTxt = `LV.${H.level} — 经验 ${Math.floor(H.xp)} / ${H.xpNeed}`;
+      pipsHtml = `<i style="width:${Math.min(100, H.xp / H.xpNeed * 100)}%"></i>`;
+    } else {
+      timeTxt = fmt(this.time);
+      subTxt = '已潜入时长 · 撤离才算数';
+      const n = this.players.reduce((a, p) => a + p.bag.length, 0);
+      objTxt = `已搜获宝物 <b>${n}</b> · 前往撤离点`;
+      pipsHtml = Array.from({length: 8}, (_, i) => `<span class="${i < n ? 'on' : ''}"></span>`).join('');
+    }
+    if (this._hmT !== timeTxt) { this._hmT = timeTxt; hmT.textContent = timeTxt; }
+    hmT.classList.toggle('urgent', urgent);
+    const hmS = $id('hm-timesub'); if (this._hmS !== subTxt) { this._hmS = subTxt; hmS.textContent = subTxt; }
+    const hmO = $id('hm-obj'); if (this._hmO !== objTxt) { this._hmO = objTxt; hmO.innerHTML = objTxt; }
+    const hmP = $id('hm-pips'); if (this._hmP !== pipsHtml) { this._hmP = pipsHtml; hmP.innerHTML = pipsHtml; }
+    const hmK = $id('hm-kills'); const k = String(this.runKills); if (this._hmK !== k) { this._hmK = k; hmK.textContent = k; }
+    // 世界层：小地图正下方 = 天气 chip / 神话警报 / 击杀播报 feed
+    const hw = $id('hud-world');
+    if (hw) {
+      // 画布会被 CSS 等比放大铺满窗口，DOM 层要按显示缩放换算才能贴住小地图
+      const scl = (this.canvas && this.canvas.width ? this.canvas.clientWidth / this.canvas.width : 1) || 1;
+      hw.style.top = Math.round((MapData.minimap ? MapData.minimap.height + 14 : 156) * scl + 8) + 'px';
+      hw.style.right = Math.round(14 * scl) + 'px';
+      const wEl = $id('hw-weather');
+      const wtxt = this.weather && this.weather.id !== 'clear' ? `${this.weather.icon} ${this.weather.name} — ${this.weather.desc}` : '';
+      if (this._hwT !== wtxt) { this._hwT = wtxt; wEl.textContent = wtxt; wEl.style.display = wtxt ? '' : 'none'; }
+      const aEl = $id('hw-alert');
+      const aShow = !!(this.mythicAlertUntil && this.time < this.mythicAlertUntil);
+      if (this._hwA !== aShow) { this._hwA = aShow; aEl.style.display = aShow ? '' : 'none'; }
+      const fEl = $id('hw-feed');
+      const feed = (this.feed || []).filter(f => f.until > this.time).slice(-4);
+      const fSig = feed.map(f => f.txt).join('|');
+      if (this._hwF !== fSig) {
+        this._hwF = fSig;
+        fEl.innerHTML = feed.map(f => `<span>${f.txt}</span>`).join('');
+      }
+    }
   }
 }

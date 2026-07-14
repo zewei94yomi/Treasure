@@ -992,7 +992,8 @@ class Mercenary {
     this.def = def;
     this.owner = owner;
     const hpMul = (Game.current && Game.current.horde && Game.current.hordeState && Game.current.hordeState.mods.mercHp) || 1;
-    this.hp = Math.round(def.hp * hpMul); this.maxHp = this.hp;
+    const hpTuned = (typeof heroVal === 'function' && def.id && heroVal(def.id, 'hp')) || def.hp;   // 英雄调参：生命上限
+    this.hp = Math.round(hpTuned * hpMul); this.maxHp = this.hp;
     this.isMerc = true;
     this.facing = 0;
     this.attackCd = 0;
@@ -1046,7 +1047,7 @@ class Mercenary {
     // —— 元素法师：四系法术轮转（水元素/黑龙波/激光束/烈焰之环） ——
     if (this.def.mage) {
       this.castT = (this.castT === undefined ? 2.2 : this.castT) - dt;
-      let tgt = null, td2 = this.def.range;
+      let tgt = null, td2 = hv('range', this.def.range);
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
         const d = Math.hypot(m.x - this.x, m.y - this.y);
@@ -1167,7 +1168,7 @@ class Mercenary {
       }
       this.healT = (this.healT || 0) - dt;
       if (this.healT <= 0) {
-        this.healT = this.def.healCd / pow;
+        this.healT = hv('healCd', this.def.healCd) / pow;   // 英雄调参：治疗间隔
         let tgt2 = null, worst = 0.99;
         for (const p of game.players) {
           if (!p.active || Math.hypot(p.x - this.x, p.y - this.y) > 340) continue;
@@ -1259,28 +1260,30 @@ class Mercenary {
           if (m.hurt(Math.round(hv('dmg', 7) * pow), game)) game.killMonster(m, o);
         }
         // 真实感火舌：白热核心 → 橙焰 → 火焰云贴图 → 黑烟，沿锥形高频喷射
+        // 视觉射程与伤害判定一致：粒子速度/落点按 rngF 缩放（drag 衰减下 fv*(1-e^-drag·t)/drag ≈ 目标距离）
         const nx2 = this.x + Math.cos(this.facing) * 20, ny2 = this.y + Math.sin(this.facing) * 20;
-        for (let i = 0; i < 2; i++) {                        // 白热内芯（快、小、亮）
+        const reach = Math.max(80, rngF - 20);
+        for (let i = 0; i < 2; i++) {                        // 白热内芯（快、小、亮，覆盖前 40%）
           const fa = this.facing + (Math.random() - 0.5) * 0.22;
-          const fv = 300 + Math.random() * 120;
+          const fv = reach * (1.7 + Math.random() * 0.5);
           game.fxP({ tex: FxTex.glow, x: nx2, y: ny2, vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv,
-                     drag: 2.4, s0: 7, s1: 16, a0: 0.9, a1: 0, life: 0.22 });
+                     drag: 2.4, s0: 7, s1: 16, a0: 0.9, a1: 0, life: 0.25 });
         }
-        for (let i = 0; i < 3; i++) {                        // 橙焰主体（膨胀）
+        for (let i = 0; i < 3; i++) {                        // 橙焰主体（膨胀，舔到判定边缘）
           const fa = this.facing + (Math.random() - 0.5) * coneA * 0.9;
-          const fv = 220 + Math.random() * 160;
+          const fv = reach * (2.2 + Math.random() * 0.8);
           game.fxP({ tex: FxTex.fire, x: nx2, y: ny2, vx: Math.cos(fa) * fv, vy: Math.sin(fa) * fv - 12,
-                     drag: 2.1, s0: 10, s1: 34, a0: 0.9, a1: 0, life: 0.34 + Math.random() * 0.12, rv: (Math.random()-0.5)*6 });
+                     drag: 1.6, s0: 10, s1: 34, a0: 0.9, a1: 0, life: 0.42 + Math.random() * 0.14, rv: (Math.random()-0.5)*6 });
         }
         const fimg2 = typeof MonsterImages !== 'undefined' && MonsterImages['fx_flame' + (Math.floor(game.time * 12) % 3)];
-        if (fimg2 && fimg2.naturalWidth) {                   // 火焰云舔舐
+        if (fimg2 && fimg2.naturalWidth) {                   // 火焰云舔舐（中后段）
           const fa = this.facing + (Math.random() - 0.5) * coneA;
-          game.fxP({ img: fimg2, x: nx2 + Math.cos(fa) * 40, y: ny2 + Math.sin(fa) * 40,
-                     vx: Math.cos(fa) * 170, vy: Math.sin(fa) * 170 - 20, drag: 1.8,
-                     s0: 16, s1: 30, a0: 1, a1: 0, life: 0.4, rv: (Math.random()-0.5)*4 });
+          game.fxP({ img: fimg2, x: nx2 + Math.cos(fa) * reach * 0.2, y: ny2 + Math.sin(fa) * reach * 0.2,
+                     vx: Math.cos(fa) * reach * 1.4, vy: Math.sin(fa) * reach * 1.4 - 20, drag: 1.6,
+                     s0: 16, s1: 30, a0: 1, a1: 0, life: 0.42, rv: (Math.random()-0.5)*4 });
         }
-        if (Math.random() < 0.35)                             // 黑烟收尾
-          game.fxP({ tex: FxTex.smoke, x: nx2 + Math.cos(this.facing) * 90, y: ny2 + Math.sin(this.facing) * 90,
+        if (Math.random() < 0.35)                             // 黑烟收尾（射程尽头）
+          game.fxP({ tex: FxTex.smoke, x: nx2 + Math.cos(this.facing) * reach * 0.72, y: ny2 + Math.sin(this.facing) * reach * 0.72,
                      vx: Math.cos(this.facing) * 60, vy: -28, s0: 14, s1: 40, a0: 0.35, a1: 0, life: 0.7, add: false });
         if (Math.random() < 0.3) Sfx.melee();
       }
@@ -1298,23 +1301,25 @@ class Mercenary {
     // 牵引绳：离主人超过 300 就放下一切归队；只打主人 380 范围内的怪（紧跟主角作战）
     const leashD = o && o.alive ? Math.hypot(o.x - this.x, o.y - this.y) : 0;
     const rngM = tune('mercRange');   // 佣兵攻击范围倍率（面板）
-    let target = null, td = ((this.def.range || 58) * rngM) + 200;
+    const rngEff = hv('range', this.def.range || 58);                                   // 英雄调参：射程
+    const desireEff = hv('desire', 380) * (tune('mercDesire') / 380);   // 攻击欲望 = 每英雄绝对值 × 全局面板缩放（全局 380 = ×1 基准）
+    let target = null, td = (rngEff * rngM) + 200;
     if (leashD <= 300) {
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
-        if (o && o.alive && Math.hypot(m.x - o.x, m.y - o.y) > tune('mercDesire')) continue;   // 进攻欲望（面板）
+        if (o && o.alive && Math.hypot(m.x - o.x, m.y - o.y) > desireEff) continue;   // 进攻欲望（每英雄可调）
         const d = Math.hypot(m.x - this.x, m.y - this.y);
         if (d < td && losClear(this.x, this.y, m.x, m.y)) { target = m; td = d; }
       }
     }
-    let goal = null, spd = this.def.speed;
+    let goal = null, spd = hv('speed', this.def.speed);
     if (leashD > 300) spd *= 1.35;   // 归队小跑
     if (target) {
       this.facing = Math.atan2(target.y - this.y, target.x - this.x);
       if (this.def.melee) {
-        if (td > this.def.range * rngM + target.r - 6) goal = target;
+        if (td > rngEff * rngM + target.r - 6) goal = target;
         else if (this.attackCd <= 0) {
-          this.attackCd = 1 / (this.def.rate * pow);
+          this.attackCd = 1 / (hv('rate', this.def.rate) * pow);
           Sfx.melee();
           this.swingT = 0.25;                       // 挥剑动画计时（drawMerc 用）
           if (this.def.sword) {                      // 鸭灵圣剑：小范围横扫（不止单体）
@@ -1325,20 +1330,20 @@ class Mercenary {
             }
           } else {
             target.knock(this.facing, 500);
-            if (target.hurt(Math.round(this.def.dmg * pow), game)) game.killMonster(target, o);
+            if (target.hurt(Math.round(hv('dmg', this.def.dmg) * pow), game)) game.killMonster(target, o);
           }
         }
       } else {
-        if (td > this.def.range * rngM) goal = target;
+        if (td > rngEff * rngM) goal = target;
         else if (td < 110) goal = { x: this.x - Math.cos(this.facing) * 80, y: this.y - Math.sin(this.facing) * 80 };
-        if (this.attackCd <= 0 && td <= this.def.range * rngM && !(this.def.mag && (this.mgReloadT !== undefined || this.mag <= 0))) {
+        if (this.attackCd <= 0 && td <= rngEff * rngM && !(this.def.mag && (this.mgReloadT !== undefined || this.mag <= 0))) {
           this.attackCd = 1 / (hv('rate', this.def.rate) * pow);
           if (this.def.id === 'ace') {
             // 佣兵王：反器材狙击（Boss/精英双倍）
             const ab2 = new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
               this.facing + (Math.random() - 0.5) * 0.03,
               { id: 'mercgun', dmg: Math.round(hv('dmg', 60) * pow), speed: this.def.bulletSpeed,
-                range: this.def.range + 100, knock: 200, pierce: 1, spread: 0 }, o);
+                range: rngEff + 100, knock: 200, pierce: 1, spread: 0 }, o);
             ab2.bossHunter = true;
             game.bullets.push(ab2);
             this.mag--;
@@ -1394,7 +1399,7 @@ class Mercenary {
             Sfx.shoot();
             game.bullets.push(new Bullet(this.x + Math.cos(this.facing) * 18, this.y + Math.sin(this.facing) * 18,
               this.facing + (Math.random() - 0.5) * 0.06,
-              { id:'mercgun', dmg:Math.round(hv('dmg', this.def.dmg) * pow), speed:this.def.bulletSpeed, range:this.def.range + 80, knock:70, spread:0 }, o));
+              { id:'mercgun', dmg:Math.round(hv('dmg', this.def.dmg) * pow), speed:this.def.bulletSpeed, range:rngEff + 80, knock:70, spread:0 }, o));
             if (this.def.mag) this.mag--;
           }
         }
