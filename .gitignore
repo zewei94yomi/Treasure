@@ -12,3 +12,4 @@
 # 临时文件
 *.log
 scratchpad/
+backups/
