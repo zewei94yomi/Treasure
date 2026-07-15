@@ -381,7 +381,7 @@ select, .loadout-row select {
 
 /* ---------- 顶部中央大经验条（升级分离：每人一条，1P 弹壳黄 / 2P 蓝） ---------- */
 #hud-xp {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 7px; width: 800px; max-width: 62vw;
 }
 .xp-row { display: flex; align-items: center; gap: 12px; }

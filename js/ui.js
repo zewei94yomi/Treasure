@@ -460,8 +460,11 @@ const UI = (() => {
       let fx = '';
       try {
         if (u.skill && typeof Dex !== 'undefined' && Dex.skillInfo) {
-          const line = Dex.skillInfo(u.skill, cur + 1);
-          if (line) fx = `<span class="lv-fx">📈 ${line}</span>`;
+          const next = Dex.skillInfo(u.skill, cur + 1);
+          if (next && cur > 0) {
+            const now = Dex.skillInfo(u.skill, cur);
+            fx = `<span class="lv-fx"><s style="opacity:.65">现 Lv.${cur}：${now}</s><br>📈 升 Lv.${cur + 1}：${next}</span>`;
+          } else if (next) fx = `<span class="lv-fx">📈 ${next}</span>`;
         }
       } catch (e) {}
       return `
@@ -906,7 +909,22 @@ const UI = (() => {
         </span>
       </div>`;
     }).join('');
+    // 数值/变体强化（狂怒弹头、黑龙波强化、手雷改装等）：叠加计数，− 不可用（乘算不可逆），清空按钮整体重置
+    const PP1 = g.hsP(g.players[0]);
+    const modRows = HORDE_UPGRADES.filter(u => (u.mod || u.hmod) && !u.skill).map(u => {
+      const n = (PP1.picked && PP1.picked[u.id]) || 0;
+      const full = n >= u.max;
+      return `<div class="sl-cell ${n > 0 ? 'on' : ''}">
+        <span class="sl-icon">${u.icon}</span>
+        <span class="sl-name" title="${(u.descFn ? u.descFn() : u.desc).replace(/"/g, '')}">${u.name}</span>
+        <span class="sl-ctl">
+          <b class="sl-lv">${n}</b><i>/${u.max}</i>
+          <button class="btn tiny" ${full ? 'disabled' : ''} onclick="UI.adjModLearn('${u.id}')">＋</button>
+        </span>
+      </div>`;
+    }).join('');
     $('skilllearn-body').innerHTML = `<h4 class="section-label">⚔️ 雇佣兵（1P · 调试直招，无视门槛）</h4><div class="sl-grid">${mercRows}</div>
+      <h4 class="section-label">📊 数值/变体强化（黑龙波·手雷改装·狂怒弹头等；只能叠加，用「清空」整体重置）</h4><div class="sl-grid">${modRows}</div>
       <h4 class="section-label">✨ 割草技能</h4><div class="sl-grid">` + Object.keys(S).map(sid => {
       const u = byId[sid] || { icon: '✨', name: sid, max: 5 };
       const lv = S[sid] || 0;
@@ -920,6 +938,19 @@ const UI = (() => {
         </span>
       </div>`;
     }).join('') + '</div>';
+  }
+  function adjModLearn(uid) {
+    const g = Game.current;
+    if (!g || !g.horde) return;
+    const u = HORDE_UPGRADE_BY_ID[uid];
+    const PP = g.hsP(g.players[0]);
+    PP.picked = PP.picked || {};
+    if ((PP.picked[u.id] || 0) >= u.max) return;
+    PP.picked[u.id] = (PP.picked[u.id] || 0) + 1;
+    if (u.hmod) { PP.mods.hero = PP.mods.hero || {}; PP.mods.hero[u.hmod] = (PP.mods.hero[u.hmod] || 0) + 1; }
+    else u.mod(PP.mods);
+    Sfx.buy();
+    renderSkillLearn();
   }
   function adjMercLearn(mid, d) {
     const g = Game.current;
@@ -948,8 +979,14 @@ const UI = (() => {
   function clearSkillLearn() {
     const g = Game.current;
     if (!g || !g.horde) return;
-    const S = g.hsP(g.players[0]).skills;
-    for (const k of Object.keys(S)) S[k] = 0;
+    const PP = g.hsP(g.players[0]);
+    for (const k of Object.keys(PP.skills)) PP.skills[k] = 0;
+    // 数值强化整体归零（乘算不可逆，只能整置）
+    Object.assign(PP.mods, { dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 });
+    for (const k of Object.keys(PP.mods)) {
+      if (!['dmg','rate','multi','pierce','range','knock','speed','magnet','lifesteal','regen'].includes(k)) delete PP.mods[k];
+    }
+    PP.picked = {};
     Sfx.buy();
     renderSkillLearn();
   }
@@ -1369,7 +1406,7 @@ const UI = (() => {
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
            showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
            showMonsterTune, closeMonsterTune, setMonsterTune, resetMonsterTune,
-           toggleHideCursor, showSkillLearn, closeSkillLearn, adjSkillLearn, clearSkillLearn, adjMercLearn,
+           toggleHideCursor, showSkillLearn, closeSkillLearn, adjSkillLearn, clearSkillLearn, adjMercLearn, adjModLearn,
            showSkillTune, closeSkillTune, setSkillTune, resetSkillTune,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,

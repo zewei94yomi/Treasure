@@ -214,8 +214,8 @@ check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
 check('调参面板 27 项（英雄改专属详细面板）', run(`
-  TUNE_DEFS.length === 26 && TUNE_DEFS.every(t => t.name && t.min < t.max) && skillVal('lightning', 'hopT') === 0.35 &&
-  tune('pSpeed') === 1.2 && tune('mimic') === 0.3 && tune('mDmg') === 1.3 && tune('rollCd') === 1 && tune('thorns') === 1.2`));
+  TUNE_DEFS.length === 28 && TUNE_DEFS.every(t => t.name && t.min < t.max) && skillVal('lightning', 'hopT') === 0.35 &&
+  tune('pSpeed') === 1.2 && tune('mimic') === 0.3 && tune('mDmg') === 1.3 && tune('rollCd') === 1 && skillVal('thorns', 'reduce') === 1.5`));   // thorns 全局项已移入技能调参
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
 check('普通难度商人概率 0.5', run(`DIFFICULTIES.normal.merchant === 0.5`));
@@ -396,7 +396,7 @@ check('商人局内卖佣兵（割草招募流入口）', run(`
   (() => { for (let i = 0; i < 20; i++) { const s = merchantStock(true); if (s.some(it => it.kind === 'merc')) return true; } return false; })()`));
 check('呼叫支援带武器投资门槛', run(`
   typeof HORDE_UPGRADE_BY_ID.arty.gate === 'function' &&
-  !HORDE_UPGRADE_BY_ID.arty.gate({ picked: {} }) && HORDE_UPGRADE_BY_ID.arty.gate({ picked: { dmg: 1, rate: 1 } })`));
+  !HORDE_UPGRADE_BY_ID.arty.gate({ picked: { dmg: 1, rate: 1 } }) && HORDE_UPGRADE_BY_ID.arty.gate({ picked: { dmg: 3, rate: 1 } })`));   // 门槛 2→4
 {
   const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
   check('佣兵分离 + 跟随错位 + 火炮落点校验', entSrc.includes('相互推挤') && entSrc.includes('按队伍序号错开') && entSrc.includes('落点避墙'));
@@ -423,13 +423,13 @@ check('呼叫支援带武器投资门槛', run(`
 check('招募卡进升级池（8 位英雄）', run(`
   HORDE_UPGRADES.filter(u => u.special === 'recruit').length === 8 &&
   HORDE_UPGRADES.filter(u => u.special === 'recruit').every(u => MERCS[u.mercId])`));
-check('新调参默认值', run(`tune('mercRange') === 1.1 && tune('devXp') === 20 && tune('wRate') === 1`));
+check('新调参默认值', run(`tune('weatherPow') === 1.3 && tune('devXp') === 20 && tune('wRate') === 1 && tune('hordeCap') === 80`));
 {
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
   check('割草空手起家（默认手枪）+ 练习场引擎', gameSrc.includes("id: 'pistol', dur: 99999") && gameSrc.includes('arenaUpdate') && gameSrc.includes('arenaNextWeapon'));
   check('招募卡生效 + 曳光弹美化', gameSrc.includes("u.special === 'recruit'") && gameSrc.includes('曳光弹'));
   const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
-  check('喷火兵火舌 + 佣兵范围调参', entSrc.includes('flamerCone') && entSrc.includes("tune('mercRange')"));
+  check('喷火兵火舌 + 佣兵范围每英雄化', entSrc.includes('flamerCone') && entSrc.includes("hv('range', this.def.range || 200)"));
   const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
   check('练习场入口 + 割草隐藏装备行', uiSrc.includes('startArena') && uiSrc.includes('空手入场'));
 }
@@ -459,7 +459,7 @@ check('英雄专属升级卡（15 张，需在场）', run(`
   HORDE_UPGRADES.filter(u => u.heroUp).length === 15 && HORDE_UPGRADES.filter(u => u.hmod).every(u => u.heroUp)`));
 check('远程佣兵全配弹夹', run(`['vet','ace','sniper','archer','marine','mech'].every(id => MERCS[id].mag > 0 && MERCS[id].reload > 0)`));
 check('旺财拾取范围大幅提升且可调', run(`MERCS.dog.fetch === 560 && HERO_TUNE.dog.params.fetch.def === 600`));
-check('佣兵进攻欲望入面板（默认600）', run(`TUNE_DEFS.some(t => t.id === 'mercDesire' && t.def === 600)`));
+check('佣兵进攻欲望已并入每英雄面板（全局项移除）', run(`!TUNE_DEFS.some(t => t.id === 'mercDesire') && HERO_TUNE.guard.params.desire.def === 580`));
 {
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
   check('旧局销毁（重置双循环修复）+ 英雄上限5 + 黑龙击退可调',
@@ -538,7 +538,7 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
     Object.values(HERO_TUNE).filter(h => h.params.desire).length === 10 &&
     Object.values(HERO_TUNE).every(h => h.params.hp || h.params.fetch === undefined ? h.params.hp : true) &&
     heroVal('vet', 'desire') === 600 && heroVal('guard', 'hp') === 320`));   // 第二十三轮固化用户值
-  check('攻击欲望接线（每英雄绝对值×全局缩放·600基准）', entSrc2.includes("hv('desire', 380) * (tune('mercDesire') / 600)"));
+  check('攻击欲望接线（每英雄绝对值）', entSrc2.includes("const desireEff = hv('desire', 380);"));
   check('牧师治疗间隔接线', entSrc2.includes("hv('healCd', this.def.healCd)"));
   check('调参固化为用户配置（抽查）', run(`
     tune('wSpeed') === 2.2 && tune('mSpeed') === 1.3 && tune('bossHp') === 1.1 &&
@@ -648,6 +648,32 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('学习台佣兵直招', uiSrc.includes('adjMercLearn') && uiSrc.includes('调试直招'));
   check('升级卡吸附半屏正中', cssSrc.includes('padding-right: 50vw') && cssSrc.includes('padding-left: 50vw'));
   check('面板高亮实时跟手', uiSrc.split("classList.toggle('changed'").length >= 4);
+}
+
+// ==================== 第二十四轮：音效采样/天气轮换/轰炸机/丢枪键/学习台变体/关卡参数 ====================
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  const sfxSrc = fs.readFileSync(base + 'sfx.js', 'utf8');
+  const wSrc = fs.readFileSync(base + 'weather.js', 'utf8');
+  const cssSrc = fs.readFileSync(base + '../css/style.css', 'utf8');
+  check('采样音效层（CC0 翻滚/冰冻落盘）', sfxSrc.includes('playSample') && sfxSrc.includes('SFX_SAMPLES') &&
+    fs.existsSync(base + '../assets/sfx/roll.m4a') && fs.existsSync(base + '../assets/sfx/freeze.m4a'));
+  check('翻滚/寒冰新星接采样', gameSrc.includes('Sfx.roll();') && gameSrc.includes('Sfx.freeze();'));
+  check('天气轮换 + 强度倍率', wSrc.includes('setWeather') && wSrc.includes('_wPow') && run(`
+    TUNE_DEFS.some(t => t.id === 'weatherLen' && t.def === 75) && tune('weatherPow') === 1.3`));
+  check('关卡调控参数（大逃亡怪量/潮速/同屏上限）', run(`
+    tune('escapeMobs') === 1 && tune('tideSpd') === 1 && tune('hordeCap') === 80`) &&
+    gameSrc.includes("tune('tideSpd')") && gameSrc.includes("tune('escapeMobs')") && gameSrc.includes("tune('hordeCap')"));
+  check('丢枪专用键（V/U 入键位表）', run(`KEY_ACTIONS.some(a => a[0] === 'drop') && DEFAULT_KEYS[0].drop === 'KeyV' && DEFAULT_KEYS[1].drop === 'KeyU'`) &&
+    gameSrc.includes('dropWeapon(p)'));
+  check('呼叫支援门槛 4 + 轰炸机', hordeSrc.includes('ex.bombers.push') && hordeSrc.includes('轰炸机已呼叫'));
+  check('升级卡现在→下级对比', uiSrc.includes('现 Lv.') && uiSrc.includes('升 Lv.'));
+  check('学习台变体强化区', uiSrc.includes('adjModLearn') && uiSrc.includes('数值/变体强化'));
+  check('经验条下移防重叠', cssSrc.includes('top: 96px'));
+  check('全局面板重复项已清（thorns/mercRange/mercDesire）', run(`
+    !TUNE_DEFS.some(t => ['thorns', 'mercRange', 'mercDesire'].includes(t.id))`));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

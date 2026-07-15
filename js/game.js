@@ -249,6 +249,7 @@ class Game {
         this.openMerchant(p);
       }
       else if (code === (km.pebble || (p.idx ? 'KeyO' : 'KeyG')) && !this.horde) this.throwPebble(p);
+      else if (code === (km.drop || (p.idx ? 'KeyU' : 'KeyV')) && (this.horde || this.versus)) this.dropWeapon(p);
     }
   }
 
@@ -476,7 +477,7 @@ class Game {
       let batch = 1 + Math.floor(t / 60);
       if (this.mode === 2) batch = Math.ceil(batch * 1.95);   // 双人：怪量大幅上调
       for (let i = 0; i < batch; i++) {
-        if (this.monsters.length >= HORDE_CAP) break;
+        if (this.monsters.length >= tune('hordeCap')) break;
         this.spawnHordeMonster();
       }
     }
@@ -491,7 +492,7 @@ class Game {
         Sfx.banshee();
         const pool = hordeSpawnPool(t);
         for (let i = 0; i < 8; i++) {
-          if (this.monsters.length >= HORDE_CAP + 10) break;
+          if (this.monsters.length >= tune('hordeCap') + 10) break;
           const a = i * Math.PI / 4;
           const m = new Monster(tgt.x + Math.cos(a) * 460, tgt.y + Math.sin(a) * 460,
                                 this.cfg, pool[Math.floor(Math.random() * pool.length)]);
@@ -578,7 +579,7 @@ class Game {
             m.slowT = Math.max(m.slowT, 2.5);
             if (m.hurt(skillVal('nova', 'dmg') + S.nova * skillVal('nova', 'dmgLv'), this)) this.killMonster(m, p);
           }
-          Sfx.laser();
+          Sfx.freeze();
         }
       }
       // 火焰足迹（火焰片挂 owner：伤害按其等级、击杀归属他）
@@ -823,6 +824,20 @@ class Game {
     return this.mode === 1 && p.idx === 0 && SAVE.settings.mouseAim !== false;
   }
 
+  // 丢枪：把手中武器丢在脚下（割草/大逃亡/对决限定；起家手枪防呆不可丢）
+  dropWeapon(p) {
+    if (!p.active) return;
+    const inst = p.weapons[p.activeSlot];
+    if (!inst) { Sfx.error(); return; }
+    if (this.horde && inst.id === 'pistol') { this.floater(p.x, p.y - 34, '起家手枪不能丢！', '#ff8f8f'); return; }
+    if (!this.weaponDrops) this.weaponDrops = [];
+    this.weaponDrops.push({ x: p.x + Math.cos(p.facing) * 26, y: p.y + Math.sin(p.facing) * 26, inst, cd: 0.8, needExit: true });
+    p.weapons[p.activeSlot] = null;
+    if (p.weapons[1 - p.activeSlot]) p.activeSlot = 1 - p.activeSlot;
+    this.toast(`${this.pname(p)} 丢下了 ${WEAPONS[inst.id].icon}【${WEAPONS[inst.id].name}】`, '#9fd8ff');
+    Sfx.tick();
+  }
+
   tryRoll(p) {
     if (!p.active || p.rollT > 0 || p.rollCd > 0) return;
     if (this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0)) return;
@@ -833,6 +848,7 @@ class Game {
     p.rollT = STAMINA.rollDur;
     p.rollCd = STAMINA.rollCd * tune('rollCd');
     p.rollCut = false;
+    Sfx.roll();
     // 有方向键按方向翻，否则朝面向翻
     const km = KEYMAP[p.idx];
     let dx = 0, dy = 0;
@@ -841,7 +857,6 @@ class Game {
     if (Input.keys[km.left]) dx--;
     if (Input.keys[km.right]) dx++;
     p.rollDir = (dx || dy) ? Math.atan2(dy, dx) : p.facing;
-    Sfx.crossbow();
   }
 
   updatePlayer(p, dt) {
@@ -914,21 +929,10 @@ class Game {
     }
 
     const km = KEYMAP[p.idx];
-    // 丢枪：长按换枪键 0.6s 把手中武器丢在脚下（临时武器模式限定；经典模式不丢真家当）
+    // 丢枪：专用键（1P V / 2P U，键位面板可改）或长按换枪键 0.6s；经典模式不丢真家当
     if ((this.horde || this.versus) && Input.keys[km.swap]) {
       p.swapHeldT = (p.swapHeldT || 0) + dt;
-      if (p.swapHeldT >= 0.6 && !p.swapDropped) {
-        p.swapDropped = true;
-        const inst = p.weapons[p.activeSlot];
-        if (inst && !(this.horde && inst.id === 'pistol')) {   // 起家手枪不许丢，防止空手卡死
-          if (!this.weaponDrops) this.weaponDrops = [];
-          this.weaponDrops.push({ x: p.x + Math.cos(p.facing) * 26, y: p.y + Math.sin(p.facing) * 26, inst, cd: 0.8, needExit: true });
-          p.weapons[p.activeSlot] = null;
-          if (p.weapons[1 - p.activeSlot]) p.activeSlot = 1 - p.activeSlot;
-          this.toast(`${this.pname(p)} 丢下了 ${WEAPONS[inst.id].icon}【${WEAPONS[inst.id].name}】`, '#9fd8ff');
-          Sfx.tick();
-        }
-      }
+      if (p.swapHeldT >= 0.6 && !p.swapDropped) { p.swapDropped = true; this.dropWeapon(p); }
     } else { p.swapHeldT = 0; p.swapDropped = false; }
     if (this.horde) p.sneak = false;   // 潜行为切换状态：翻滚/开枪/受伤会自动破隐
 
@@ -1620,7 +1624,7 @@ class Game {
     if (src && src.type && src.type.id) { if (!SAVE.monsterSeen) SAVE.monsterSeen = {}; SAVE.monsterSeen[src.type.id] = true; }
     // 荆棘羽甲的被动护甲：每级减免 1.5 点受击伤害（至少剩 1）
     if (this.horde && this.hsP(p).skills.thorns > 0 && dmg > 0) {
-      dmg = Math.max(1, dmg - this.hsP(p).skills.thorns * skillVal('thorns', 'reduce') * tune('thorns'));
+      dmg = Math.max(1, dmg - this.hsP(p).skills.thorns * skillVal('thorns', 'reduce'));
     }
     // 灵敏反射：闪避判定
     if (this.horde && this.hsP(p).mods.dodge && Math.random() < this.hsP(p).mods.dodge) {
@@ -1680,7 +1684,7 @@ class Game {
     this.shake = src && src.type && src.type.id === 'brute' ? 9 : 5;
     // 荆棘羽甲：反弹伤害给近身攻击者
     if (this.horde && src && src.hurt && this.hsP(p).skills.thorns > 0) {
-      const th = Math.round((skillVal('thorns', 'dmg') + this.hsP(p).skills.thorns * skillVal('thorns', 'dmgLv')) * tune('thorns'));
+      const th = Math.round(skillVal('thorns', 'dmg') + this.hsP(p).skills.thorns * skillVal('thorns', 'dmgLv'));
       if (src.hurt(th, this)) this.killMonster(src, p);
       else this.floater(src.x, src.y - 20, `🌵${th}`, '#7ac74f');
     }
@@ -2004,7 +2008,7 @@ class Game {
     const t = this.time;
     // —— 死亡之潮推进（越拖越快） ——
     if (t > ESCAPE.tideDelay) {
-      this.tideX += ESCAPE.tideSpeed * (1 + (t - ESCAPE.tideDelay) * ESCAPE.tideAccel) * tune('mSpeed') * dt;
+      this.tideX += ESCAPE.tideSpeed * (1 + (t - ESCAPE.tideDelay) * ESCAPE.tideAccel) * tune('mSpeed') * tune('tideSpd') * dt;
     }
     for (const p of this.players) {
       if (!p.active) continue;
@@ -2081,7 +2085,7 @@ class Game {
     }
     // —— 追兵：死亡之潮启动后才从队伍后方刷狂暴怪（前期安心搜刮） ——
     this.escapePursuitT -= dt;
-    if (t > ESCAPE.tideDelay && this.escapePursuitT <= 0 && this.monsters.length < HORDE_CAP) {
+    if (t > ESCAPE.tideDelay && this.escapePursuitT <= 0 && this.monsters.length < tune('hordeCap')) {
       this.escapePursuitT = Math.max(3.2, ESCAPE.pursuitEvery - t * 0.01) / tune('spawnRate');
       const act = this.players.filter(p => p.active);
       if (act.length) {
@@ -2118,7 +2122,7 @@ class Game {
   escSpawnWave(r) {
     const prog = (r.x + r.w / 2) / MapData.pxW;
     const mid = Math.floor((this.escRooms.length - 1) / 2);
-    const n = Math.min(14, Math.round((3 + r.idx * 1.1) * (this.mode === 2 ? 1.5 : 1)));
+    const n = Math.min(24, Math.round((3 + r.idx * 1.1) * (this.mode === 2 ? 1.5 : 1) * tune('escapeMobs')));
     const pool = escapePool(prog);
     const tgt0 = this.players.find(p => p.active);
     let spawned = 0;

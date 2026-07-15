@@ -269,7 +269,9 @@ Object.assign(Game.prototype, {
             placed.push({ x: sx2, y: sy2 });
             ex.meteors.push({ x: sx2, y: sy2, t: 0.5 + i * 0.14, arty: true, lv: S.arty, pl: p, rMul: PP.mods.meteorR || 1 });
           }
-          this.floater(p.x, p.y - 46, '📡 火炮支援已呼叫！', '#7ef7ff');
+          if (!ex.bombers) ex.bombers = [];
+          ex.bombers.push({ x: p.x + 620, y: p.y - 230, vx: -860, t: 1.7 });
+          this.floater(p.x, p.y - 46, '📡 轰炸机已呼叫！', '#7ef7ff');
           Sfx.aggro();
         }
       }
@@ -388,9 +390,14 @@ Object.assign(Game.prototype, {
         }
       }
       if (gr.elem === 'fire') H.firePatches.push({ x: gr.x, y: gr.y, t: 2.5, pl: gr.pl, lv: 2 });
-      if (gr.elem === 'ice') { for (let i2 = 0; i2 < 8; i2++) this.spark(gr.x, gr.y, '#bfe9ff'); }
+      if (gr.elem === 'ice') { Sfx.freeze(); for (let i2 = 0; i2 < 8; i2++) this.spark(gr.x, gr.y, '#bfe9ff'); }
     }
     ex.grens = ex.grens.filter(gr => !gr.done);
+
+    if (ex.bombers) {
+      for (const b of ex.bombers) { b.t -= dt; b.x += b.vx * dt; }
+      ex.bombers = ex.bombers.filter(b => b.t > 0);
+    }
 
     for (const fx of ex.whirlFx) fx.t -= dt;
     ex.whirlFx = ex.whirlFx.filter(fx => fx.t > 0);
@@ -448,6 +455,28 @@ Object.assign(Game.prototype, {
         ctx.drawImage(FxTex.glow, -9, -11, 18, 18);
       }
       ctx.restore();
+    }
+    if (ex.bombers) for (const b of ex.bombers) {
+      const [sx, sy] = W2S(b.x, b.y);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.globalAlpha = Math.min(1, b.t * 3);
+      // 尾迹
+      ctx.strokeStyle = 'rgba(200,210,220,.25)'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(150, 0); ctx.stroke();
+      // 机身剪影（从右向左飞：机头朝左）
+      ctx.fillStyle = '#2a2f22';
+      ctx.strokeStyle = '#12140c'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-34, 0); ctx.lineTo(-16, -6); ctx.lineTo(22, -5); ctx.lineTo(30, 0); ctx.lineTo(22, 5); ctx.lineTo(-16, 6);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(16, -30); ctx.lineTo(24, -28); ctx.lineTo(6, -4); ctx.closePath(); ctx.fill(); ctx.stroke();   // 左翼
+      ctx.beginPath(); ctx.moveTo(-4, 4); ctx.lineTo(16, 30); ctx.lineTo(24, 28); ctx.lineTo(6, 4); ctx.closePath(); ctx.fill(); ctx.stroke();       // 右翼
+      ctx.beginPath(); ctx.moveTo(-30, -2); ctx.lineTo(-22, -12); ctx.lineTo(-17, -11) ; ctx.lineTo(-24, -2); ctx.closePath(); ctx.fill(); ctx.stroke(); // 尾翼
+      ctx.fillStyle = Math.sin(this.time * 16) > 0 ? '#ff5c5c' : '#5c1c1c';
+      ctx.beginPath(); ctx.arc(20, -29, 2, 0, Math.PI * 2); ctx.fill();   // 翼尖航灯
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
     if (ex.grens) for (const gr of ex.grens) {
       const k = Math.min(1, gr.t / gr.dur);

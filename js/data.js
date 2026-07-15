@@ -296,15 +296,15 @@ const KEY_ACTIONS = [
   ['up', '上移'], ['down', '下移'], ['left', '左移'], ['right', '右移'],
   ['shoot', '射击/攻击'], ['roll', '翻滚'], ['sneak', '潜行'], ['reload', '换弹'],
   ['swap', '切换武器'], ['use', '使用药品'], ['cycle', '切换药品'], ['interact', '开箱/救人/互动'],
-  ['pebble', '投石(引开怪物)'],
+  ['pebble', '投石(引开怪物)'], ['drop', '丢枪(割草/对决)'],
 ];
 const DEFAULT_KEYS = [
   { up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
     shoot:'Space', roll:'ShiftLeft', sneak:'CapsLock', reload:'KeyR',
-    swap:'KeyQ', use:'KeyE', cycle:'Tab', interact:'KeyF', pebble:'KeyG' },
+    swap:'KeyQ', use:'KeyE', cycle:'Tab', interact:'KeyF', pebble:'KeyG', drop:'KeyV' },
   { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight',
     shoot:'Period', roll:'ShiftRight', sneak:'Slash', reload:'KeyI',
-    swap:'KeyL', use:'Comma', cycle:'KeyK', interact:'KeyJ', pebble:'KeyO' },
+    swap:'KeyL', use:'Comma', cycle:'KeyK', interact:'KeyJ', pebble:'KeyO', drop:'KeyU' },
 ];
 // 键码 → 友好显示
 function keyLabel(code) {
@@ -622,8 +622,8 @@ const HORDE_UPGRADES = [
   { id:'greed',     name:'贪婪之喙', icon:'🤑', max:3, desc:'怪物掉落金币 +40%',        mod:m => m.goldMul = (m.goldMul || 1) + skillVal('base', 'goldUp'),
     descFn:() => `怪物掉落金币 +${Math.round(skillVal('base', 'goldUp') * 100)}%` },
   { id:'revenge',   name:'复仇之焰', icon:'💢', max:3, skill:'revenge',   desc:'被怪物直击时爆出火焰怒环反噬（DoT 不触发）' },
-  { id:'arty',      name:'呼叫支援', icon:'📡', max:3, skill:'arty',      desc:'周期呼叫火炮空袭覆盖射击方向（需先投资 2 次武器强化）',
-    gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 2 },
+  { id:'arty',      name:'呼叫支援', icon:'📡', max:3, skill:'arty',      desc:'周期呼叫轰炸机空袭覆盖射击方向（需先投资 4 次武器强化）',
+    gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split'].reduce((s, k) => s + ((H.picked || {})[k] || 0), 0) >= 4 },
   // —— 变体强化（持有母技能后才会出现） ——
   { id:'meteor_big',  name:'陨石·巨岩', icon:'🪨', max:2, requires:'meteor', desc:'陨石半径 +35%', mod:m => m.meteorR = (m.meteorR || 1) + 0.35 },
   { id:'meteor_twin', name:'陨石·连星', icon:'✨', max:2, requires:'meteor', desc:'每轮多落 1 颗陨石', mod:m => m.meteorN = (m.meteorN || 0) + 1 },
@@ -1121,7 +1121,6 @@ const TUNE_DEFS = [
   { id:'magnet',   name:'磁吸范围',        min:0.5,  max:3,    step:0.1,  def:1.1 },
   { id:'staminaRegen', name:'体力恢复',    min:0.5,  max:2.5,  step:0.1,  def:1 },
   { id:'rollCd',   name:'翻滚冷却倍率',    min:0.1,  max:3,    step:0.05, def:1 },
-  { id:'thorns',   name:'荆棘强度(反伤/护甲)', min:0, max:3,   step:0.1,  def:1.2 },
   { id:'mimic',    name:'宝箱怪概率',      min:0,    max:1,    step:0.05, def:0.3, abs:true },
   { id:'merchantF',name:'商人出现倍率',    min:0,    max:2,    step:0.1,  def:1.2 },
   { id:'bossHp',   name:'Boss 血量',       min:0.5,  max:2.5,  step:0.1,  def:1.1 },
@@ -1129,12 +1128,15 @@ const TUNE_DEFS = [
   { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.2, abs:true },
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
   { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:10, abs:true },
-  { id:'mercRange',name:'佣兵攻击范围',    min:0.5,  max:3,    step:0.1,  def:1.1 },
+  { id:'weatherLen',name:'天气时长(秒)',     min:20,   max:600,  step:5,    def:75, abs:true },
+  { id:'weatherPow',name:'环境效果强度',     min:0,    max:3,    step:0.1,  def:1.3 },
+  { id:'escapeMobs',name:'大逃亡房间怪量',   min:0.3,  max:3,    step:0.1,  def:1 },
+  { id:'tideSpd',  name:'死亡之潮速度',      min:0.3,  max:3,    step:0.1,  def:1 },
+  { id:'hordeCap', name:'同屏怪物上限',      min:20,   max:200,  step:10,   def:80, abs:true },
   { id:'devXp',    name:'开发者经验倍率',  min:1,    max:50,   step:1,    def:20, abs:true },
   { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
   { id:'wSpeed',   name:'武器弹速倍率',    min:0.5,  max:3,    step:0.1,  def:2.2 },
   { id:'wKnock',   name:'武器击退倍率',    min:0.5,  max:3,    step:0.1,  def:1 },
-  { id:'mercDesire',name:'佣兵进攻欲望(全局缩放·600=基准)', min:150, max:900, step:10, def:600 },
 ];
 // 读取调参值（面板未改过则用默认）
 function tune(id) {

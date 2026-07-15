@@ -1,6 +1,17 @@
 // ============ 极简 WebAudio 音效（无外部资源） ============
 'use strict';
 
+// 采样音效（CC0：qubodup swoshes / bart icespells，via OpenGameArt）
+const SFX_SAMPLES = {};
+for (const [k, url] of Object.entries({ roll: 'assets/sfx/roll.m4a', freeze: 'assets/sfx/freeze.m4a' })) {
+  try { const a = new Audio(url); a.preload = 'auto'; SFX_SAMPLES[k] = a; } catch (e) {}
+}
+function playSample(name, vol = 0.5) {
+  const a = SFX_SAMPLES[name];
+  if (!a) return false;
+  try { const c = a.cloneNode(); c.volume = vol; c.play().catch(() => {}); return true; } catch (e) { return false; }
+}
+
 const Sfx = (() => {
   let ac = null;
   function ctx() {
@@ -37,6 +48,8 @@ const Sfx = (() => {
     sniper()  { noise(0.22, 0.34, 1000); tone(70, 0.28, 'sawtooth', 0.2, -35); tone(400, 0.06, 'sine', 0.08, -300); },
     rpg()     { noise(0.3, 0.3, 900); tone(60, 0.35, 'sawtooth', 0.18, 40); },
     impact()  { noise(0.05, 0.24, 950); tone(92, 0.07, 'sine', 0.22, -42); tone(320, 0.03, 'square', 0.07, -170); },
+    roll()    { playSample('roll', 0.5) || (noise(0.05, 0.1, 3000), tone(300, 0.05, 'triangle', 0.08, -120)); },
+    freeze()  { playSample('freeze', 0.45) || tone(880, 0.09, 'sawtooth', 0.1, -500); },
     grenThrow(){ noise(0.05, 0.09, 1800); tone(210, 0.09, 'triangle', 0.09, 100); },
     grenBoom() { noise(0.5, 0.42, 520); tone(42, 0.5, 'sine', 0.32, -14); tone(130, 0.12, 'square', 0.11, -70); },
     zap()     { tone(1600, 0.05, 'sawtooth', 0.09, -900); tone(700, 0.07, 'square', 0.07, -400); noise(0.03, 0.1, 5000); },

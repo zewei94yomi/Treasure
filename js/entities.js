@@ -495,7 +495,7 @@ class Monster {
           this.pendingVolley = true;
           return;
         }
-        if (this.bossT2 <= 0 && game.monsters.length < HORDE_CAP + 8) {
+        if (this.bossT2 <= 0 && game.monsters.length < tune('hordeCap') + 8) {
           // 召唤幽影仆从
           this.bossT2 = monsterVal(this.type.id, 'minionCd') || 6.5;
           for (let i = 0; i < 2; i++) {
@@ -1341,7 +1341,7 @@ class Mercenary {
     // 找射程内最近的可见怪（潜伏中的不打，免得帮倒忙）
     // 喷火兵：火舌持续横扫身前扇形
     if (this.def.flamerCone) {
-      const rngF = hv('range', this.def.range || 200) * tune('mercRange');
+      const rngF = hv('range', this.def.range || 200);
       let near2 = null, nd3 = rngF + 160;
       for (const m of game.monsters) {
         if (m.state === 'ambush') continue;
@@ -1404,9 +1404,9 @@ class Mercenary {
     }
     // 牵引绳：离主人超过 300 就放下一切归队；只打主人 380 范围内的怪（紧跟主角作战）
     const leashD = o && o.alive ? Math.hypot(o.x - this.x, o.y - this.y) : 0;
-    const rngM = tune('mercRange');   // 佣兵攻击范围倍率（面板）
+    const rngM = 1;   // 攻击范围全部走每英雄调参（全局倍率已并入并移除）
     const rngEff = hv('range', this.def.range || 58);                                   // 英雄调参：射程
-    const desireEff = hv('desire', 380) * (tune('mercDesire') / 600);   // 攻击欲望 = 每英雄绝对值 × 全局面板缩放（全局 600 = ×1 基准）
+    const desireEff = hv('desire', 380);   // 攻击欲望 = 每英雄绝对值（英雄调参面板）
     let target = null, td = (rngEff * rngM) + 200;
     if (leashD <= 300) {
       for (const m of game.monsters) {

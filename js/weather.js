@@ -4,9 +4,12 @@
 
 Object.assign(Game.prototype, {
   initWeather() {
-    this.weather = rollWeather();
+    this.setWeather(rollWeather());
+    this.weatherT = tune('weatherLen') || 75;
+  },
+  setWeather(w) {
+    this.weather = w;
     this.weatherParts = [];
-    const w = this.weather;
     if (w.id === 'rain' || w.id === 'snow' || w.id === 'sandstorm') {
       const n = w.id === 'sandstorm' ? 70 : 110;
       for (let i = 0; i < n; i++) {
@@ -17,15 +20,25 @@ Object.assign(Game.prototype, {
       }
     }
     if (w.desc) this.toast(`${w.icon} ${w.name} — ${w.desc}`, '#9fd8ff');
+    else this.toast(`${w.icon} 天空放晴了`, '#9fd8ff');
   },
 
-  // 倍率查询（无天气字段时为 1）
-  weatherPSpd()   { return (this.weather && this.weather.pSpd)   || 1; },
-  weatherMSpd()   { return (this.weather && this.weather.mSpd)   || 1; },
-  weatherMDmg()   { return (this.weather && this.weather.mDmg)   || 1; },
-  weatherVision() { return (this.weather && this.weather.vision) || 1; },
+  // 倍率查询：偏离 1 的部分按「环境效果强度」放大（面板可调）
+  _wPow(v) { return v ? 1 + (v - 1) * tune('weatherPow') : 1; },
+  weatherPSpd()   { return this._wPow(this.weather && this.weather.pSpd); },
+  weatherMSpd()   { return this._wPow(this.weather && this.weather.mSpd); },
+  weatherMDmg()   { return this._wPow(this.weather && this.weather.mDmg); },
+  weatherVision() { return this._wPow(this.weather && this.weather.vision); },
 
   updateWeather(dt) {
+    // 天气轮换：一局不再从头下雨到尾
+    this.weatherT = (this.weatherT === undefined ? tune('weatherLen') : this.weatherT) - dt;
+    if (this.weatherT <= 0) {
+      this.weatherT = tune('weatherLen') || 75;
+      let next = rollWeather();
+      for (let i = 0; i < 6 && next.id === this.weather.id; i++) next = rollWeather();
+      this.setWeather(next);
+    }
     const w = this.weather;
     if (!w || !this.weatherParts.length) return;
     for (const p of this.weatherParts) {
