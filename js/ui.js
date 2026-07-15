@@ -70,6 +70,18 @@ const UI = (() => {
       : '⌨️ 鼠标操控（单人）：关 — 使用键盘朝向';
     const dv = $('btn-devmode');
     if (dv) dv.textContent = SAVE.settings.devMode ? '🧪 开发者模式：开 — 金钱无限/全解锁/经验加倍' : '🧪 开发者模式：关';
+    const hc = $('btn-hidecursor');
+    if (hc) hc.textContent = SAVE.settings.hideCursor !== false
+      ? '🎯 隐藏系统鼠标只留准星：开' : '🖱️ 隐藏系统鼠标只留准星：关（鼠标与准星并存）';
+  }
+  function toggleHideCursor() {
+    SAVE.settings.hideCursor = SAVE.settings.hideCursor === false;
+    persistSave();
+    // 局内立即生效
+    const g = Game.current;
+    if (g && !g.over && g.canvas) g.canvas.style.cursor = (g.mouseAimRun && SAVE.settings.hideCursor !== false) ? 'none' : '';
+    showSettingsHub();
+    Sfx.tick();
   }
   // ---------- 自定义下拉框（方向A 军械库风；原生 select 的弹出菜单无法样式化） ----------
   function closeAllDrops(except) {
@@ -438,6 +450,10 @@ const UI = (() => {
     }
     const box = document.querySelector('#levelup-overlay .levelup-box');
     if (box) box.style.borderTop = `3px solid ${owner.idx === 1 ? '#5aa7e8' : '#f2c94c'}`;
+    // 双人：升级卡吸附到该玩家的分屏那一侧（1P 左 / 2P 右）
+    const ov = document.getElementById('levelup-overlay');
+    ov.classList.remove('side-l', 'side-r');
+    if (game.mode === 2) ov.classList.add(owner.idx === 0 ? 'side-l' : 'side-r');
     $('levelup-cards').innerHTML = choices.map((u, i) => {
       const cur = (u.skill ? PP.skills[u.skill] : (PP.picked && PP.picked[u.id])) || 0;
       // 技能类：附上"下一级具体效果"（与技能图鉴同一套公式）
@@ -453,7 +469,7 @@ const UI = (() => {
         <span class="lv-icon">${u.icon}</span>
         <span class="lv-name">${u.name}</span>
         <span class="lv-level">Lv.${cur} → Lv.${cur + 1}${cur + 1 >= u.max ? '（满级）' : ''}</span>
-        <span class="lv-desc">${u.desc}</span>
+        <span class="lv-desc">${u.descFn ? u.descFn() : u.desc}</span>
         ${fx}
         <span class="lv-key">按 ${i + 1}</span>
       </div>`;
@@ -857,6 +873,50 @@ const UI = (() => {
     const changed = parseFloat(v) !== p.def;
     if (el) el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
   }
+  // ---------- 练习场：技能学习台（升/降级任意技能，实时生效） ----------
+  function showSkillLearn() {
+    $('skilllearn-overlay').style.display = 'flex';
+    renderSkillLearn();
+  }
+  function closeSkillLearn() { $('skilllearn-overlay').style.display = 'none'; }
+  function renderSkillLearn() {
+    const g = Game.current;
+    if (!g || !g.horde) { $('skilllearn-body').innerHTML = '<p class="pause-tip">仅在练习场/割草局内可用。</p>'; return; }
+    const S = g.hsP(g.players[0]).skills;
+    const byId = {};
+    for (const u of HORDE_UPGRADES) if (u.skill) byId[u.skill] = u;
+    $('skilllearn-body').innerHTML = Object.keys(S).map(sid => {
+      const u = byId[sid] || { icon: '✨', name: sid, max: 5 };
+      const lv = S[sid] || 0;
+      return `<div class="sl-cell ${lv > 0 ? 'on' : ''}">
+        <span class="sl-icon">${u.icon}</span>
+        <span class="sl-name">${u.name}</span>
+        <span class="sl-ctl">
+          <button class="btn tiny" onclick="UI.adjSkillLearn('${sid}',-1)">−</button>
+          <b class="sl-lv">${lv}</b><i>/${u.max}</i>
+          <button class="btn tiny" onclick="UI.adjSkillLearn('${sid}',1)">＋</button>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  function adjSkillLearn(sid, d) {
+    const g = Game.current;
+    if (!g || !g.horde) return;
+    const S = g.hsP(g.players[0]).skills;
+    const u = HORDE_UPGRADES.find(x => x.skill === sid);
+    S[sid] = Math.max(0, Math.min(u ? u.max : 5, (S[sid] || 0) + d));
+    Sfx.tick();
+    renderSkillLearn();
+  }
+  function clearSkillLearn() {
+    const g = Game.current;
+    if (!g || !g.horde) return;
+    const S = g.hsP(g.players[0]).skills;
+    for (const k of Object.keys(S)) S[k] = 0;
+    Sfx.buy();
+    renderSkillLearn();
+  }
+
   // 怪物调参
   function showMonsterTune() { $('monstertune-overlay').style.display = 'flex'; renderTuneTable('monstertune-body', MONSTER_TUNE, 'monsterTuning', 'setMonsterTune'); }
   function closeMonsterTune() { $('monstertune-overlay').style.display = 'none'; }
@@ -1272,6 +1332,7 @@ const UI = (() => {
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
            showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
            showMonsterTune, closeMonsterTune, setMonsterTune, resetMonsterTune,
+           toggleHideCursor, showSkillLearn, closeSkillLearn, adjSkillLearn, clearSkillLearn,
            showSkillTune, closeSkillTune, setSkillTune, resetSkillTune,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,

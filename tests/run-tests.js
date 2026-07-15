@@ -567,8 +567,8 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('双人对决：互伤管线（子弹/近战/爆炸）',
     entSrc.includes('对决：子弹命中对方玩家') && gameSrc.includes('if (this.versus) {') && gameSrc.includes('bullet.owner === p ? null : bullet.owner'));
   check('决斗场地图 + 玩法卡 + 结算', mapSrc.includes("id: 'duel'") && uiSrc.includes("setGameplay('versus')") && uiSrc.includes('决斗获胜'));
-  check('怪物调参 21 + 技能调参 19', run(`
-    Object.keys(MONSTER_TUNE).length === 21 && Object.keys(SKILL_TUNE).length === 19 &&
+  check('怪物调参 21 + 技能调参 19+基础强化组', run(`
+    Object.keys(MONSTER_TUNE).length === 21 && Object.keys(SKILL_TUNE).length === 20 && SKILL_TUNE.base.params.dmgUp.def === 0.18 &&
     monsterVal('boss_cyclops', 'blindDur') === 2.5 && skillVal('whirlwind', 'dmg') === 18 && skillVal('arty', 'shellsLv') === 2`));
   check('新怪技能旗标（眼波/毒吐/掷戟/突进）', run(`
     MONSTER_TYPES.watcher.spit === 'blind' && MONSTER_TYPES.venomsnake.spit === 'poison' &&
@@ -585,6 +585,36 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('鼠标追踪再削（键盘/双人保留）', entSrc.includes('this.turn *= 0.10; this.hCone *= 0.25; this.hDist *= 0.40;'));
   check('旋风斩剑系图标 + 挥剑音效', run(`HORDE_UPGRADE_BY_ID.whirlwind.icon === '🗡️'`) && sfxSrc.includes('sword()') && hordeSrc.includes('Sfx.sword()'));
   check('胜利才有战利抽取', gameSrc.includes('if (H.victory) for (let i = 0; i < 3; i++)'));
+}
+
+// ==================== 第二十二轮：准星/技能学习台/佣兵复活/流场寻路/基础强化调参/分屏升级卡 ====================
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  const mainSrc = fs.readFileSync(base + 'main.js', 'utf8');
+  const idxSrc = fs.readFileSync(base + '../index.html', 'utf8');
+  const cssSrc = fs.readFileSync(base + '../css/style.css', 'utf8');
+  check('DOM 准星零帧延迟 + 隐藏系统鼠标开关',
+    mainSrc.includes("getElementById('aim-cursor')") && idxSrc.includes('id="aim-cursor"') &&
+    gameSrc.includes("hideCursor !== false) ? 'none'") && uiSrc.includes('toggleHideCursor') && cssSrc.includes('#aim-cursor'));
+  check('画布准星已移除（改 DOM）', !gameSrc.includes('鼠标准星（单人鼠标操控）'));
+  check('技能学习台（升/降级/清空）', uiSrc.includes('adjSkillLearn') && uiSrc.includes('clearSkillLearn') &&
+    idxSrc.includes('skilllearn-overlay') && idxSrc.includes('技能学习'));
+  check('经验条加大加粗', cssSrc.includes('width: 580px') && cssSrc.includes('height: 15px'));
+  check('割草佣兵 10s 复活+倒计时', gameSrc.includes('mc.reviveT = 10') && gameSrc.includes('归队！') &&
+    gameSrc.includes('mc.reviveT !== undefined') && entSrc.includes('10 秒后归队'));
+  check('主人阵亡英雄不复活', gameSrc.includes('mc.noRevive = true'));
+  check('流场寻路（多源BFS + 梯度下降 + 禁斜穿墙角）',
+    gameSrc.includes('hordeFlowUpdate') && gameSrc.includes('flowDir') && gameSrc.includes('Int16Array') &&
+    entSrc.includes('g0.flowDir(this.x, this.y)'));
+  check('基础强化接入技能调参', run(`
+    SKILL_TUNE.base && Object.keys(SKILL_TUNE.base.params).length === 16 &&
+    (() => { SAVE.skillTuning = { base: { dmgUp: 0.5 } }; const m = { dmg: 1 }; HORDE_UPGRADE_BY_ID.dmg.mod(m); SAVE.skillTuning = {}; return m.dmg === 1.5; })() &&
+    typeof HORDE_UPGRADE_BY_ID.rate.descFn === 'function'`));
+  check('双人升级卡吸附分屏侧', uiSrc.includes("side-l' : 'side-r'") === false ?
+    (uiSrc.includes("'side-l'") && uiSrc.includes("'side-r'") && cssSrc.includes('#levelup-overlay.side-l')) : true);
+  check('双人键盘弹道追踪增强', entSrc.includes('this.turn *= 1.5; this.hCone *= 1.3; this.hDist *= 1.25;'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

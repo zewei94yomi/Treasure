@@ -37,6 +37,9 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!r.width) return;
     Input.mouse.x = (e.clientX - r.left) * (VIEW_W / r.width);
     Input.mouse.y = (e.clientY - r.top) * (VIEW_H / r.height);
+    // DOM 准星在 mousemove 里直接位移：不等画布下一帧，指哪是哪
+    const ac = document.getElementById('aim-cursor');
+    if (ac) ac.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
   });
   cvs.addEventListener('mousedown', e => {
     if (e.button === 0) Input.mouseL = true;

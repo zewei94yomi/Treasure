@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>惊魂寻宝鸭 · 搜打撤</title>
-<link rel="stylesheet" href="css/fonts.css?v=27">
-<link rel="stylesheet" href="css/style.css?v=27">
+<link rel="stylesheet" href="css/fonts.css?v=28">
+<link rel="stylesheet" href="css/style.css?v=28">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
         <button class="menu-item" onclick="UI.showSettingsHub()"><span class="mi-num">06</span><span class="mi-name">设置中心</span><span class="mi-en">SYSTEM</span><span class="mi-arrow">›</span></button>
       </div>
       <div class="menu-status">
-        <span>v21 · 对决/分离升级</span>
+        <span>v22 · 流场寻路/学习台</span>
         <span>存档已挂载 · 本地浏览器</span>
         <span class="go">双人同屏 · 键鼠即玩</span>
       </div>
@@ -192,12 +192,14 @@
         <button class="btn small" onclick="Game.current&&Game.current.arenaFreeLevel()">⬆️ 免费升级</button>
         <button class="btn small" onclick="Game.current&&Game.current.arenaReset()">🎯 重置木桩</button>
         <button class="btn small" onclick="UI.startArena()">🔄 全部重置</button>
+        <button class="btn small" onclick="UI.showSkillLearn()">🎓 技能学习</button>
         <button class="btn small" onclick="UI.showHeroTune()">⚔️ 英雄调参</button>
         <button class="btn small" onclick="UI.showMonsterTune()">👹 怪物调参</button>
         <button class="btn small" onclick="UI.showSkillTune()">✨ 技能调参</button>
         <button class="btn small" onclick="UI.showTuning()">🎛️ 全局调参</button>
       </div>
       <div id="hud-toasts"></div>
+      <div id="aim-cursor" style="display:none"><i></i><i></i><i></i><i></i></div>
       <div id="vignette"></div>
       <div id="hurt-flash"></div>
     </div>
@@ -313,6 +315,7 @@
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showMonsterTune()">👹 怪物调参面板</button>
       <button class="btn big" onclick="UI.hideSettingsHub();UI.showSkillTune()">✨ 技能调参面板</button>
       <button class="btn big" id="btn-mouseaim" onclick="UI.toggleMouseAim()">🖱️ 鼠标操控（单人）：开</button>
+      <button class="btn big" id="btn-hidecursor" onclick="UI.toggleHideCursor()">🎯 隐藏系统鼠标只留准星：开</button>
       <button class="btn big" id="btn-music" onclick="UI.toggleMusic()">🎵 音乐：开</button>
       <button class="btn big" id="btn-devmode" onclick="UI.toggleDevMode()">🧪 开发者模式：关</button>
       <button class="btn big" onclick="UI.hideSettingsHub();UI.startArena()">🎯 调试练习场（武器/技能试验田）</button>
@@ -368,6 +371,19 @@
     <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
       <button class="btn small" onclick="UI.resetHeroTune()">恢复默认</button>
       <button class="btn small primary" onclick="UI.closeHeroTune()">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 练习场：技能学习/升降级调试台 ======== -->
+<div id="skilllearn-overlay" class="modal-mask" style="display:none" onclick="if(event.target===this)UI.closeSkillLearn()">
+  <div class="modal-box help monsterdex-box">
+    <h3>🎓 技能学习台（练习场）</h3>
+    <p class="pause-tip">给 1P 直接点技能：− 降级 / ＋ 升级，实时生效——配合技能调参面板打磨数值。</p>
+    <div id="skilllearn-body" class="sl-grid"></div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+      <button class="btn small" onclick="UI.clearSkillLearn()">🧹 清空全部技能</button>
+      <button class="btn small primary" onclick="UI.closeSkillLearn()">完成</button>
     </div>
   </div>
 </div>
@@ -447,25 +463,25 @@
   </div>
 </div>
 
-<script src="js/sfx.js?v=27"></script>
-<script src="js/music.js?v=27"></script>
-<script src="js/skins-data.js?v=27"></script>
-<script src="js/monsters-data.js?v=27"></script>
-<script src="js/mugshots-data.js?v=27"></script>
-<script src="js/tiles-data.js?v=27"></script>
-<script src="js/data.js?v=27"></script>
-<script src="js/save.js?v=27"></script>
-<script src="js/map.js?v=27"></script>
-<script src="js/vision.js?v=27"></script>
-<script src="js/entities.js?v=27"></script>
-<script src="js/game.js?v=27"></script>
-<script src="js/fx.js?v=27"></script>
-<script src="js/dex.js?v=27"></script>
-<script src="js/horde.js?v=27"></script>
-<script src="js/weather.js?v=27"></script>
-<script src="js/powerups.js?v=27"></script>
-<script src="js/ui.js?v=27"></script>
-<script src="js/trainer.js?v=27"></script>
-<script src="js/main.js?v=27"></script>
+<script src="js/sfx.js?v=28"></script>
+<script src="js/music.js?v=28"></script>
+<script src="js/skins-data.js?v=28"></script>
+<script src="js/monsters-data.js?v=28"></script>
+<script src="js/mugshots-data.js?v=28"></script>
+<script src="js/tiles-data.js?v=28"></script>
+<script src="js/data.js?v=28"></script>
+<script src="js/save.js?v=28"></script>
+<script src="js/map.js?v=28"></script>
+<script src="js/vision.js?v=28"></script>
+<script src="js/entities.js?v=28"></script>
+<script src="js/game.js?v=28"></script>
+<script src="js/fx.js?v=28"></script>
+<script src="js/dex.js?v=28"></script>
+<script src="js/horde.js?v=28"></script>
+<script src="js/weather.js?v=28"></script>
+<script src="js/powerups.js?v=28"></script>
+<script src="js/ui.js?v=28"></script>
+<script src="js/trainer.js?v=28"></script>
+<script src="js/main.js?v=28"></script>
 </body>
 </html>

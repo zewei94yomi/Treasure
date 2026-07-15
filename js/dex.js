@@ -211,7 +211,7 @@ const Dex = (() => {
     // 数值强化附录（无演示）
     const mods = HORDE_UPGRADES.filter(u => !u.skill && !u.requires);
     html += '<h4 class="section-label" style="margin-top:12px">📈 数值强化（可重复叠加）</h4><div class="sdex-modgrid">' +
-      mods.map(u => `<div class="sdex-mod">${u.icon} <b>${u.name}</b> ×${u.max}<br><span>${u.desc}</span></div>`).join('') + '</div>';
+      mods.map(u => `<div class="sdex-mod">${u.icon} <b>${u.name}</b> ×${u.max}<br><span>${u.descFn ? u.descFn() : u.desc}</span></div>`).join('') + '</div>';
     $('sdex-body').innerHTML = html;
     sCards = skills.map(u => ({ u, id: u.id, fx: (SKILL_INFO[u.skill] || {}).fx, ctx: $('sdex-cv-' + u.id).getContext('2d'), t: Math.random() * 3, state: {} }));
   }

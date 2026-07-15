@@ -381,17 +381,39 @@ select, .loadout-row select {
 
 /* ---------- 顶部中央大经验条（升级分离：每人一条，1P 弹壳黄 / 2P 蓝） ---------- */
 #hud-xp {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; gap: 5px; width: 430px;
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 6px; width: 580px;
 }
-.xp-row { display: flex; align-items: center; gap: 8px; }
-.xp-lv { font-family: var(--f-mono); font-size: 11px; color: var(--p1); width: 66px; text-align: right; white-space: nowrap; }
-.xp-bar { flex: 1; height: 9px; background: rgba(8,9,4,.85); border: 1px solid var(--hair); }
-.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a20, var(--amber)); }
-.xp-num { font-family: var(--f-mono); font-size: 10px; color: var(--dim); width: 58px; white-space: nowrap; }
+.xp-row { display: flex; align-items: center; gap: 10px; }
+.xp-lv { font-family: var(--f-mono); font-size: 13.5px; font-weight: 700; color: var(--p1); width: 84px; text-align: right; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.xp-bar { flex: 1; height: 15px; background: rgba(8,9,4,.88); border: 1px solid var(--line2); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a20, var(--amber)); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+.xp-num { font-family: var(--f-mono); font-size: 12px; color: var(--sub); width: 66px; white-space: nowrap; }
 .xp-row.p2 .xp-lv { color: var(--p2); }
 .xp-row.p2 .xp-bar i { background: linear-gradient(90deg, #2b5f8f, var(--p2)); }
 .xp-row.out { opacity: .4; }
+
+/* ---------- DOM 准星（鼠标操控：mousemove 直接驱动，零帧延迟） ---------- */
+#aim-cursor {
+  position: fixed; left: 0; top: 0; z-index: 40; pointer-events: none;
+  width: 0; height: 0; will-change: transform;
+}
+#aim-cursor::before {  /* 圆环 */
+  content: ''; position: absolute; left: -10px; top: -10px; width: 20px; height: 20px;
+  border: 1.6px solid rgba(255,217,61,.92); border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0,0,0,.55), inset 0 0 4px rgba(0,0,0,.35);
+}
+#aim-cursor::after {   /* 中心点 + 四向刻线 */
+  content: ''; position: absolute; left: -1.8px; top: -1.8px; width: 3.6px; height: 3.6px;
+  background: rgba(255,217,61,.95); border-radius: 50%;
+}
+#aim-cursor i {
+  position: absolute; background: rgba(255,217,61,.92); box-shadow: 0 0 3px rgba(0,0,0,.5);
+}
+#aim-cursor i:nth-child(1) { left: 7px;  top: -0.8px; width: 6px; height: 1.6px; }
+#aim-cursor i:nth-child(2) { left: -13px; top: -0.8px; width: 6px; height: 1.6px; }
+#aim-cursor i:nth-child(3) { left: -0.8px; top: 7px;  width: 1.6px; height: 6px; }
+#aim-cursor i:nth-child(4) { left: -0.8px; top: -13px; width: 1.6px; height: 6px; }
 
 /* ---------- 世界层（右上，小地图正下方）：天气 / 神话警报 / 击杀播报 ---------- */
 #hud-world { position: absolute; right: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 320px; }
@@ -662,6 +684,12 @@ select, .loadout-row select {
 .lv-fx { display: block; font-family: var(--f-mono); font-size: 11px; color: var(--green2); margin-top: 4px; line-height: 1.5;
   border: 1px dashed var(--line2); background: rgba(0,0,0,.28); padding: 6px 8px; align-self: stretch; }
 
+/* 双人升级：卡组吸附到升级玩家的半屏（1P 左 / 2P 右） */
+#levelup-overlay.side-l { justify-content: flex-start; }
+#levelup-overlay.side-r { justify-content: flex-end; }
+#levelup-overlay.side-l .levelup-box { margin-left: 2vw; transform: scale(.82); transform-origin: left center; }
+#levelup-overlay.side-r .levelup-box { margin-right: 2vw; transform: scale(.82); transform-origin: right center; }
+
 /* ---------- 键位设置 ---------- */
 .keybind-table { width: 100%; border-collapse: collapse; }
 .keybind-table th, .keybind-table td { border: 1px solid var(--line2); padding: 3px 8px; font-size: 13px; text-align: center; }
@@ -786,6 +814,19 @@ select, .loadout-row select {
   padding: 5px 12px 3px; font-family: var(--f-mono); font-size: 10px; letter-spacing: 2px;
   color: var(--mut); border-bottom: 1px solid var(--hair); background: rgba(0,0,0,.25);
 }
+
+/* ---------- 技能学习台（练习场调试） ---------- */
+.sl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+.sl-cell {
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+  background: rgba(0,0,0,.2); border: 1px solid var(--line2);
+}
+.sl-cell.on { border-color: var(--amber2); background: rgba(224,166,60,.07); }
+.sl-icon { font-size: 18px; }
+.sl-name { font-size: 13px; color: var(--ink2); font-weight: 700; }
+.sl-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.sl-lv { font-family: var(--f-num); font-size: 16px; color: var(--amber); min-width: 16px; text-align: center; }
+.sl-ctl i { font-style: normal; font-family: var(--f-mono); font-size: 10px; color: var(--mut); }
 
 /* ---------- 怪物图鉴档案照（生成素材） ---------- */
 .mdex-photo {

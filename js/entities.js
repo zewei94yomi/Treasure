@@ -774,8 +774,16 @@ class Monster {
   moveToward(goal, spd, dt, smart) {
     let tx = goal.x, ty = goal.y;
     this.forcePathT = Math.max(0, (this.forcePathT || 0) - dt);
+    // 割草：目标是玩家时走全场流场（多源BFS梯度下降），任何地形都绕得开
+    const g0 = Game.current;
+    let flowed = false;
+    if (g0 && g0.horde && !g0.versus && g0._flow && this.state === 'chase' &&
+        g0.players.some(p => p.active && Math.hypot(goal.x - p.x, goal.y - p.y) < TILE * 1.3)) {
+      const fd = g0.flowDir(this.x, this.y);
+      if (fd) { tx = fd.x; ty = fd.y; flowed = true; }
+    }
     // 聪明怪常态寻路；笨怪卡墙 0.35 秒后也临时开启寻路（解决"知道位置但被地形卡住"）
-    if (smart >= 2 || this.forcePathT > 0) {
+    if (!flowed && (smart >= 2 || this.forcePathT > 0)) {
       this.pathT -= dt;
       if (this.pathT <= 0) { this.pathT = 0.5; this.path = bfsPath(this.x, this.y, goal.x, goal.y); }
       while (this.path.length && Math.hypot(this.path[0].x - this.x, this.path[0].y - this.y) < TILE * 0.55) this.path.shift();
@@ -906,6 +914,10 @@ class Bullet {
     this.hDist = hb.dist || HOMING.dist;
     // 鼠标操控：你自己瞄，弹道追踪大幅削弱（技能弹不受影响）
     if (owner && owner.mouseAimed && !def.duck) { this.turn *= 0.10; this.hCone *= 0.25; this.hDist *= 0.40; }
+    // 双人键盘协作：适当增强追踪（八方向射击手感补正）
+    else if (owner && owner.weaponDef && Game.current && Game.current.mode === 2 && !def.duck) {
+      this.turn *= 1.5; this.hCone *= 1.3; this.hDist *= 1.25;
+    }
     this.duck = !!def.duck;       // 追踪鸭雷外观
     this.fire = def.id === 'fireball';   // 火球术：贴图弹体 + 火焰拖尾
     this.bone = def.id === 'spear';      // 骨刺：白骨贴图弹体
@@ -1095,9 +1107,11 @@ class Mercenary {
     this.hurtCd = 0.3;
     Sfx.hit();
     if (this.hp <= 0) {
+      const willRevive = game.horde && !game.versus && !this.isPet && !this.noRevive &&
+        this.despawnT === undefined && this.owner && (this.owner.active || this.owner.downed);
       game.floater(this.x, this.y - 24, `${this.def.name} 倒下了…`, '#ff8f8f');
-      game.toast(`${this.def.name} 阵亡了`, '#ff8f8f');
-      if (!this.isPet) {   // 左侧面板：阵亡名单（鸭灵走复活队列不进名单）
+      game.toast(willRevive ? `${this.def.name} 倒下了——10 秒后归队` : `${this.def.name} 阵亡了`, '#ff8f8f');
+      if (!this.isPet && !willRevive) {   // 阵亡名单：割草可复活的不进（鸭灵走复活队列）
         game.allyFallen = game.allyFallen || [];
         game.allyFallen.push({ id: this.def.id, name: this.def.name, icon: this.def.icon });
       }

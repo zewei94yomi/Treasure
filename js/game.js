@@ -207,6 +207,11 @@ class Game {
     if (this.merchant) this.toast('听说这片区域有个神秘商人出没……', '#b48aff');
     Music.play(this.horde ? 'battle' : 'game');
 
+    // 鼠标操控：隐藏系统指针只留准星（设置中心可关）；DOM 准星随局启停
+    this.canvas.style.cursor = (this.mouseAimRun && SAVE.settings.hideCursor !== false) ? 'none' : '';
+    const ac0 = document.getElementById('aim-cursor');
+    if (ac0) ac0.style.display = this.mouseAimRun ? '' : 'none';
+
     this.last = performance.now();
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
@@ -319,7 +324,26 @@ class Game {
     }
 
     for (const mc of this.mercs) mc.update(dt, this);
-    this.mercs = this.mercs.filter(mc => mc.hp > 0);
+    // 割草/大逃亡：招募英雄阵亡 10 秒后在主人身边满血归队（主人阵亡/临时佣兵/宠物除外）
+    for (const mc of this.mercs) {
+      if (mc.hp > 0 || mc.isPet) continue;
+      const canRevive = this.horde && !this.versus && !mc.noRevive && mc.despawnT === undefined &&
+        mc.owner && (mc.owner.active || mc.owner.downed);
+      if (!canRevive) continue;
+      if (mc.reviveT === undefined) { mc.reviveT = 10; continue; }
+      mc.reviveT -= dt;
+      if (mc.reviveT <= 0) {
+        mc.reviveT = undefined;
+        mc.hp = mc.maxHp;
+        mc.stunT = mc.poisonT = mc.burnT = mc.slowT = 0;
+        mc.x = mc.owner.x + (Math.random() - 0.5) * 60;
+        mc.y = mc.owner.y + 42;
+        unstick(mc);
+        this.floater(mc.x, mc.y - 26, `${mc.def.icon} ${mc.def.name.split('·')[0]} 归队！`, '#7dff9a');
+        Sfx.revive();
+      }
+    }
+    this.mercs = this.mercs.filter(mc => mc.hp > 0 || mc.reviveT !== undefined);
 
     // 毒云：范围伤害滴答
     if (this.poisonClouds && this.poisonClouds.length) {
@@ -482,6 +506,7 @@ class Game {
     }
 
     }
+    this.hordeFlowUpdate(dt);
     this.hordeGems(dt);
     this.updateHordeExtraSkills(dt);
 
@@ -1215,6 +1240,57 @@ class Game {
     this.killMonster(m, null);
   }
 
+  // ---------- 割草流场寻路：以全体存活玩家为源的多源 BFS 距离场 ----------
+  // 每 0.4s 重算一次；怪物沿梯度下降绕过任何地形，根治"卡墙角/走廊口扎堆"。
+  hordeFlowUpdate(dt) {
+    this._flowT = (this._flowT || 0) - dt;
+    if (this._flowT > 0) return;
+    this._flowT = 0.4;
+    const W = MapData.w, H = MapData.h, solid = MapData.solid;
+    if (!this._flow || this._flow.length !== W * H) this._flow = new Int16Array(W * H);
+    const F = this._flow;
+    F.fill(32767);
+    const qx = [], qy = [];
+    for (const p of this.players) {
+      if (!p.active) continue;
+      const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
+      if (tx < 0 || ty < 0 || tx >= W || ty >= H || solid[ty][tx]) continue;
+      F[ty * W + tx] = 0; qx.push(tx); qy.push(ty);
+    }
+    let head = 0;
+    while (head < qx.length) {
+      const cx = qx[head], cy = qy[head]; head++;
+      const d = F[cy * W + cx] + 1;
+      if (d > 240) continue;   // 240 格足以覆盖三倍大地图
+      for (let k = 0; k < 4; k++) {
+        const nx = cx + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = cy + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (solid[ny][nx] || F[ny * W + nx] <= d) continue;
+        F[ny * W + nx] = d;
+        qx.push(nx); qy.push(ny);
+      }
+    }
+  }
+  // 当前格朝距离更小的邻格走（禁斜穿墙角）；返回下一个路点或 null（不可达/已贴身）
+  flowDir(x, y) {
+    if (!this._flow) return null;
+    const W = MapData.w, H = MapData.h, solid = MapData.solid, F = this._flow;
+    const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return null;
+    const cur = F[ty * W + tx];
+    if (cur >= 32767 || cur <= 1) return null;
+    let bx = 0, by = 0, best = cur;
+    for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+      const nx = tx + ox, ny = ty + oy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H || solid[ny][nx]) continue;
+      if (ox && oy && (solid[ty][nx] || solid[ny][tx])) continue;
+      const v = F[ny * W + nx];
+      if (v < best) { best = v; bx = ox; by = oy; }
+    }
+    if (!bx && !by) return null;
+    return { x: (tx + bx + 0.5) * TILE, y: (ty + by + 0.5) * TILE };
+  }
+
   emitNoise(x, y, radius) {
     if (radius <= 0) return;
     for (const m of this.monsters) {
@@ -1539,7 +1615,7 @@ class Game {
     // 主人阵亡：其招募的英雄随之离场（鸭灵为技能召唤不受影响）
     let left = 0;
     for (const mc of this.mercs) {
-      if (mc.hp > 0 && mc.owner === p && !mc.isPet) { mc.hp = 0; left++; }
+      if (mc.hp > 0 && mc.owner === p && !mc.isPet) { mc.hp = 0; mc.noRevive = true; left++; }
     }
     if (left) this.toast(`${this.pname(p)} 的 ${left} 位随行英雄黯然离去……`, '#9a90b8');
     p.lostItems = p.bag.slice();
@@ -2561,7 +2637,7 @@ class Game {
     }
     for (const mc of this.mercs) {
       const [sx, sy] = W2S(mc.x, mc.y);
-      if (onScreen(sx, sy)) this.drawMerc(ctx, mc, sx, sy);
+      if (mc.hp > 0 && onScreen(sx, sy)) this.drawMerc(ctx, mc, sx, sy);
     }
     for (const p of this.players) {
       if (!p.alive) continue;
@@ -2919,17 +2995,7 @@ class Game {
     this.drawInteractionUI(ctx, cam);
 
     ctx.textAlign = 'center';
-    // —— 鼠标准星（单人鼠标操控）——
-    if (v.idx === 0 && this.mode === 1 && SAVE.settings.mouseAim !== false && !this.paused) {
-      const mx = Input.mouse.x, my = Input.mouse.y;
-      ctx.strokeStyle = 'rgba(255,217,61,.9)'; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(mx, my, 9, 0, Math.PI * 2); ctx.stroke();
-      for (const [ox, oy] of [[12, 0], [-12, 0], [0, 12], [0, -12]]) {
-        ctx.beginPath(); ctx.moveTo(mx + ox * 0.55, my + oy * 0.55); ctx.lineTo(mx + ox, my + oy); ctx.stroke();
-      }
-      ctx.fillStyle = 'rgba(255,217,61,.9)';
-      ctx.beginPath(); ctx.arc(mx, my, 1.5, 0, Math.PI * 2); ctx.fill();
-    }
+    // 鼠标准星已改为 DOM 元素（#aim-cursor，mousemove 直接驱动，无画布帧延迟）
     // 伤害数字（普通白、重击金色大号、玩家受伤红色）
     for (const n of this.dmgNums) {
       const [sx, sy] = W2S(n.x, n.y);
@@ -3911,6 +3977,14 @@ class Game {
           <div class="ally-hpbar"><i style="width:${Math.round(frac * 100)}%"></i></div>
           <div class="ally-meta">${stat}${mc.despawnT !== undefined ? ` · ⏳${Math.ceil(mc.despawnT)}s` : ''}</div>
         </div>
+      </div>`);
+    }
+    // 招募英雄复活倒计时
+    for (const mc of this.mercs) {
+      if (mc.hp > 0 || mc.reviveT === undefined) continue;
+      rows.push(`<div class="ally-row dead">
+        <img src="${this.allyAvatar(mc.def)}" class="ally-av">
+        <div class="ally-info"><div class="ally-name">${mc.def.name.split('·')[0]}</div><div class="ally-meta">💤 复活 ${Math.max(0, mc.reviveT).toFixed(1)}s</div></div>
       </div>`);
     }
     // 鸭灵复活倒计时
