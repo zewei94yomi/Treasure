@@ -176,7 +176,7 @@ class Game {
       this.merchant = null;
       if (!this.escape) this.monsters = [];   // 大逃亡保留沿途预置怪
       // 双人升级分离：每位玩家独立的 等级/经验/技能/强化（P[idx]）；世界物件数组共享
-      const mkSkills = () => ({ orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0, arty: 0 });
+      const mkSkills = () => ({ orbit: 0, missile: 0, nova: 0, trail: 0, lightning: 0, whirlwind: 0, barrier: 0, mines: 0, meteor: 0, boomerang: 0, chrono: 0, garlic: 0, spears: 0, drone: 0, thorns: 0, fireball: 0, summon: 0, revenge: 0, arty: 0, grenade: 0 });
       const mkMods = () => ({ dmg: 1, rate: 1, multi: 0, pierce: 0, range: 1, knock: 1, speed: 1, magnet: 1, lifesteal: 0, regen: 0 });
       this.hordeState = {
         P: this.players.map(() => ({
@@ -388,23 +388,35 @@ class Game {
     this.xpBuffT = Math.max(0, (this.xpBuffT || 0) - dt);
     // 开发者模式：金钱无限
     if (SAVE.settings.devMode && SAVE.gold < 999999) SAVE.gold = 999999;
-    // —— 掉落武器：走近自动与当前手持互换（1.4s 冷却防止来回横跳） ——
+    // —— 掉落武器：走近自动与当前手持互换（修：空手直接捡走；站着不动不再来回互换，需离开再靠近才会再次交换） ——
     if (this.weaponDrops && this.weaponDrops.length) {
       for (const wd of this.weaponDrops) {
         wd.cd = Math.max(0, wd.cd - dt);
+        if (wd.needExit) {   // 上次交换后：所有玩家离开 46px 才重新武装
+          if (this.players.every(p => !p.active || Math.hypot(p.x - wd.x, p.y - wd.y) > 46)) wd.needExit = false;
+          continue;
+        }
         if (wd.cd > 0) continue;
         for (const p of this.players) {
-          if (!p.active || Math.hypot(p.x - wd.x, p.y - wd.y) > 30) continue;
+          if (!p.active || Math.hypot(p.x - wd.x, p.y - wd.y) > 40) continue;
           const old = p.weapons[p.activeSlot];
           p.weapons[p.activeSlot] = wd.inst;
           p.mags[p.activeSlot] = (WEAPONS[wd.inst.id].mag || 0);
-          wd.inst = old;
-          wd.cd = 1.4;
-          this.toast(`已换上 ${WEAPONS[p.weapons[p.activeSlot].id].icon}【${WEAPONS[p.weapons[p.activeSlot].id].name}】（旧枪落地可换回）`, '#ffd93d');
+          p.reloadT = 0;
+          if (old) {
+            wd.inst = old;
+            wd.cd = 1.4;
+            wd.needExit = true;
+            this.toast(`已换上 ${WEAPONS[p.weapons[p.activeSlot].id].icon}【${WEAPONS[p.weapons[p.activeSlot].id].name}】（旧枪落地可换回）`, '#ffd93d');
+          } else {
+            wd.taken = true;   // 空手：直接捡走，地上不留东西
+            this.toast(`拾起 ${WEAPONS[p.weapons[p.activeSlot].id].icon}【${WEAPONS[p.weapons[p.activeSlot].id].name}】`, '#ffd93d');
+          }
           Sfx.pickup('rare');
           break;
         }
       }
+      this.weaponDrops = this.weaponDrops.filter(wd => !wd.taken);
     }
 
     this.updateWeather(dt);
@@ -616,7 +628,7 @@ class Game {
       for (const job of H.chainJobs) {
         job.hopT -= dt;
         if (job.hopT > 0) continue;
-        job.hopT = tune('zapHop');
+        job.hopT = skillVal('lightning', 'hopT');
         const node = job.node;
         if (!node || job.left <= 0 || node.hp <= 0 || !this.monsters.includes(node)) { job.done = true; continue; }
         job.left--;
@@ -902,6 +914,22 @@ class Game {
     }
 
     const km = KEYMAP[p.idx];
+    // 丢枪：长按换枪键 0.6s 把手中武器丢在脚下（临时武器模式限定；经典模式不丢真家当）
+    if ((this.horde || this.versus) && Input.keys[km.swap]) {
+      p.swapHeldT = (p.swapHeldT || 0) + dt;
+      if (p.swapHeldT >= 0.6 && !p.swapDropped) {
+        p.swapDropped = true;
+        const inst = p.weapons[p.activeSlot];
+        if (inst && !(this.horde && inst.id === 'pistol')) {   // 起家手枪不许丢，防止空手卡死
+          if (!this.weaponDrops) this.weaponDrops = [];
+          this.weaponDrops.push({ x: p.x + Math.cos(p.facing) * 26, y: p.y + Math.sin(p.facing) * 26, inst, cd: 0.8, needExit: true });
+          p.weapons[p.activeSlot] = null;
+          if (p.weapons[1 - p.activeSlot]) p.activeSlot = 1 - p.activeSlot;
+          this.toast(`${this.pname(p)} 丢下了 ${WEAPONS[inst.id].icon}【${WEAPONS[inst.id].name}】`, '#9fd8ff');
+          Sfx.tick();
+        }
+      }
+    } else { p.swapHeldT = 0; p.swapDropped = false; }
     if (this.horde) p.sneak = false;   // 潜行为切换状态：翻滚/开枪/受伤会自动破隐
 
     let dx = 0, dy = 0;
@@ -910,7 +938,10 @@ class Game {
     if (Input.keys[km.left]) dx--;
     if (Input.keys[km.right]) dx++;
     const vsFrozen = this.versus && this.vs && (this.vs.freezeT > 0 || this.vs.roundEndT > 0);
-    const spd = vsFrozen ? 0 : (this.horde
+    // 麻痹：移速骤降至 35% + 电花（之前接线缺失，"看不出效果"）
+    const paraMul = p.paraT > 0 ? 0.35 : 1;
+    if (p.paraT > 0 && Math.random() < dt * 10) this.spark(p.x + (Math.random() - 0.5) * 20, p.y - 10, '#ffd93d');
+    const spd = vsFrozen ? 0 : paraMul * (this.horde
       ? PLAYER_SPEED * 1.06 * this.hsP(p).mods.speed * (p.sodaTime > 0 ? p.sodaMul : 1)
       : PLAYER_SPEED * p.speedMul()) * this.weatherPSpd();
     const mAim = this.mouseAimOn(p);
@@ -1330,11 +1361,12 @@ class Game {
     if (m.type.shroom && !m._boomed) {
       m._boomed = true;
       if (!this.poisonClouds) this.poisonClouds = [];
-      this.poisonClouds.push({ x: m.x, y: m.y, r: 60, t: 4, tick: 0 });
+      this.poisonClouds.push({ x: m.x, y: m.y, r: monsterVal('shroom', 'cloudR') || 60, t: monsterVal('shroom', 'cloudDur') || 4, tick: 0 });
       for (let i = 0; i < 8; i++) this.spark(m.x, m.y, '#7ac74f');
     }
     if (m.type.splits && !m.isMini) {
-      for (let i = 0; i < 2; i++) {
+      const splitN = monsterVal('slime', 'splitN');
+      for (let i = 0; i < (splitN !== undefined ? splitN : 2); i++) {
         const mini = new Monster(m.x + (i ? 18 : -18), m.y + 6, this.cfg, 'slime', true);
         mini.state = 'chase';
         mini.target = owner || this.nearestActivePlayer(m.x, m.y);
@@ -1396,6 +1428,48 @@ class Game {
         this.resetVersusRound();
       }
     }
+    this.versusDropUpdate(dt);
+  }
+  // 对决空投：读秒结束后每 ~8s 场中掉落补给（回血/护盾/换枪），抢到就是赚到
+  versusDropUpdate(dt) {
+    const V = this.vs;
+    if (V.freezeT > 0 || V.matchOver) return;
+    if (!this.vsDrops) this.vsDrops = [];
+    this._vsDropT = (this._vsDropT === undefined ? 5 : this._vsDropT) - dt;
+    if (this._vsDropT <= 0 && this.vsDrops.length < 2) {
+      this._vsDropT = 8;
+      const kinds = ['heart', 'shield', 'weapon'];
+      const kind = kinds[Math.floor(Math.random() * kinds.length)];
+      // 场地中带随机落点（不进墙）
+      for (let tries = 0; tries < 20; tries++) {
+        const x = MapData.pxW * (0.3 + Math.random() * 0.4);
+        const y = MapData.pxH * (0.25 + Math.random() * 0.5);
+        if (isSolidAt(x, y)) continue;
+        this.vsDrops.push({ x, y, kind, t: 12, anim: Math.random() * 9 });
+        this.toast(kind === 'heart' ? '💖 空投：治疗包已落场！' : kind === 'shield' ? '🛡️ 空投：护盾已落场！' : '🎲 空投：神秘武器箱已落场！', '#7ef7ff');
+        Sfx.aggro();
+        break;
+      }
+    }
+    for (const d of this.vsDrops) {
+      d.t -= dt; d.anim += dt;
+      for (const p of this.players) {
+        if (!p.active || Math.hypot(p.x - d.x, p.y - d.y) > 26) continue;
+        d.taken = true;
+        if (d.kind === 'heart') { p.hp = Math.min(p.maxHp, p.hp + 60); this.floater(p.x, p.y - 30, '💖 +60', '#7dff9a'); Sfx.heal(); }
+        else if (d.kind === 'shield') { p.tempShield = Math.min(120, p.tempShield + 50); this.floater(p.x, p.y - 30, '🛡️ +50', '#9fd8ff'); Sfx.buy(); }
+        else {
+          const pool = Object.values(WEAPONS).filter(w => w.price && !w.melee);
+          const def = pool[Math.floor(Math.random() * pool.length)];
+          p.weapons[p.activeSlot] = { uid: -400 - Math.floor(Math.random() * 1e6), id: def.id, dur: 99999, temp: true };
+          p.mags[p.activeSlot] = def.mag || 0;
+          this.floater(p.x, p.y - 30, `${def.icon}【${def.name}】!`, '#ffd93d');
+          Sfx.pickup('epic');
+        }
+        break;
+      }
+    }
+    this.vsDrops = this.vsDrops.filter(d => !d.taken && d.t > 0);
   }
   versusKill(loser) {
     const V = this.vs;
@@ -1422,6 +1496,8 @@ class Game {
       p.dead = false; p.downed = false;
     }
     this.bullets = [];
+    this.vsDrops = [];
+    this._vsDropT = 5;
     V.freezeT = 3.2;
     this.toast(`—— 第 ${V.round} 回合 ——`, '#e0a63c');
   }
@@ -1482,7 +1558,12 @@ class Game {
     p.blindT = Math.max(p.blindT || 0, dur);
     this.floater(p.x, p.y - 44, '🌑 致盲！视野骤缩！', '#b48aff');
     const flash = document.getElementById('hurt-flash');
-    if (flash) { flash.style.opacity = '0.6'; setTimeout(() => flash.style.opacity = '0', 200); }
+    if (flash) {
+      if (this.mode === 2) { flash.style.left = p.idx === 0 ? '0' : '50%'; flash.style.right = p.idx === 0 ? '50%' : '0'; }
+      else { flash.style.left = '0'; flash.style.right = '0'; }
+      flash.style.opacity = '0.6';
+      setTimeout(() => flash.style.opacity = '0', 200);
+    }
     Sfx.banshee();
   }
   // Boss 技能结算（前摇由 Monster.pendingBossSkill 触发）
@@ -1586,7 +1667,13 @@ class Game {
       p.tookDamage = true;
       this.dmgNum(p.x, p.y - 26, dmg, dmg >= 30, '#ff6b6b');   // 玩家受伤红色数字
       const flash = document.getElementById('hurt-flash');
-      if (flash) { flash.style.opacity = '0.45'; setTimeout(() => flash.style.opacity = '0', 120); }
+      if (flash) {
+        // 双人分屏：红闪只盖被打的那半边（对战里被打的是谁一目了然）
+        if (this.mode === 2) { flash.style.left = p.idx === 0 ? '0' : '50%'; flash.style.right = p.idx === 0 ? '50%' : '0'; }
+        else { flash.style.left = '0'; flash.style.right = '0'; }
+        flash.style.opacity = '0.45';
+        setTimeout(() => flash.style.opacity = '0', 120);
+      }
     }
     p.hurtCd = 0.35;
     if (p.sneak && dmg > 0) { p.sneak = false; this.floater(p.x, p.y - 46, '受击破隐', '#ff8f8f'); }
@@ -2672,6 +2759,18 @@ class Game {
         }
       }
     }
+    // 对决空投（呼吸浮动 + 倒计时圈）
+    if (this.versus && this.vsDrops) {
+      for (const d of this.vsDrops) {
+        const [sx, sy] = W2S(d.x, d.y);
+        const bob = Math.sin(d.anim * 3) * 3;
+        ctx.strokeStyle = `rgba(126,247,255,${0.4 + Math.sin(d.anim * 5) * 0.2})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(sx, sy, 17, 0, Math.PI * 2 * Math.min(1, d.t / 12)); ctx.stroke();
+        ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(d.kind === 'heart' ? '💖' : d.kind === 'shield' ? '🛡️' : '🎲', sx, sy + 7 + bob);
+      }
+    }
     // 草丛（画在玩家之上：钻进去有被枝叶盖住的遮蔽感）
     if (MapData.bushes) {
       for (const b of MapData.bushes) {
@@ -3024,7 +3123,7 @@ class Game {
 
   drawMinimap(ctx) {
     const mm = MapData.minimap, S = MapData.minimapScale;
-    const x0 = VIEW_W - mm.width - 14, y0 = 14;   // 大胆版 HUD：小地图居右上（世界层）
+    const x0 = this.versus ? Math.round((VIEW_W - mm.width) / 2) : VIEW_W - mm.width - 14, y0 = 14;   // 大胆版 HUD：小地图居右上；对决居中正上方
     ctx.globalAlpha = 0.92;
     ctx.drawImage(mm, x0, y0);
     ctx.globalAlpha = 1;
@@ -4120,6 +4219,7 @@ class Game {
       const fx = [];
       if (this.bushHides(p)) fx.push('🌿隐匿'); else if (p.sneak) fx.push('🤫潜行');
       if (p.blindT > 0) fx.push(`🌑致盲${Math.ceil(p.blindT)}s`);
+      if (p.paraT > 0) fx.push(`🦂麻痹${Math.ceil(p.paraT)}s`);
       if (p.invisT > 0) fx.push(`🌫️隐身${Math.ceil(p.invisT)}s`);
       if (p.rageT > 0) fx.push('😡狂暴');
       if (p.sodaTime > 0) fx.push('🥤加速');

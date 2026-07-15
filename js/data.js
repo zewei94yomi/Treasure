@@ -652,6 +652,14 @@ const HORDE_UPGRADES = [
   { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
   { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
   { id:'recruit_spirit', name:'招募·鸭灵剑士', icon:'🐥', max:1, special:'recruit', mercId:'spirit', desc:'鸭灵剑士入队：圣剑横扫，越战越勇' },
+  // —— 手雷体系（武器流门槛：投资 2 次武器强化解锁）——
+  { id:'grenade', name:'手雷投掷', icon:'💣', max:3, skill:'grenade',
+    gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split'].reduce((s2, k) => s2 + ((H.picked || {})[k] || 0), 0) >= 2,
+    desc:'周期性向敌群丢手雷，升级 1/3/5 颗齐飞——武器流的战地馈赠' },
+  { id:'gren_big',  name:'手雷·加料', icon:'🧨', max:2, requires:'grenade', desc:'爆炸半径 +35%', mod:m => m.grenR = (m.grenR || 1) + 0.35 },
+  { id:'gren_ice',  name:'手雷·冰冻', icon:'❄️', max:1, requires:'grenade', gate: H => !(H.mods || {}).grenElem, desc:'弹体改装：命中冻结 + 减速（冰/雷/火三选一）', mod:m => m.grenElem = 'ice' },
+  { id:'gren_zap',  name:'手雷·闪电', icon:'⚡', max:1, requires:'grenade', gate: H => !(H.mods || {}).grenElem, desc:'弹体改装：落点电弧跳 3 个目标（冰/雷/火三选一）', mod:m => m.grenElem = 'zap' },
+  { id:'gren_fire', name:'手雷·燃烧', icon:'🔥', max:1, requires:'grenade', gate: H => !(H.mods || {}).grenElem, desc:'弹体改装：灼烧 + 落点留火（冰/雷/火三选一）', mod:m => m.grenElem = 'fire' },
   // —— 英雄专属升级卡（该英雄在场才出现；替代旧的统一晋阶） ——
   { id:'up_mage_water',  name:'法师·双子元素', icon:'💧', max:1, heroUp:'mage', desc:'可同时召唤 2 只水元素', hmod:'mageWater' },
   { id:'up_mage_laser',  name:'法师·激光折射', icon:'⚡', max:2, heroUp:'mage', desc:'施放激光时额外向随机方向再射 1 道', hmod:'mageLaser' },
@@ -712,15 +720,15 @@ const HORDE_UPGRADE_BY_ID = Object.fromEntries(HORDE_UPGRADES.map(u => [u.id, u]
 // ============ 英雄详细调参（每位招募英雄的具体数值，SAVE.heroTuning 持久化） ============
 const HERO_TUNE = {
   guard: { name: '🪖 铁嘴保镖', params: {
-    hp:     { n: '生命上限',   min: 60,  max: 600, step: 10,  def: 150 },
-    dmg:    { n: '平底锅伤害', min: 5,   max: 80,  step: 1,   def: 17 },
-    rate:   { n: '攻速(次/秒)', min: 0.5, max: 4,  step: 0.1, def: 1.5 },
-    range:  { n: '近战距离',   min: 40,  max: 120, step: 2,   def: 58 },
-    speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,   def: 142 },
-    desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
+    hp:     { n: '生命上限',   min: 60,  max: 600, step: 10,  def: 320 },
+    dmg:    { n: '平底锅伤害', min: 5,   max: 80,  step: 1,   def: 15 },
+    rate:   { n: '攻速(次/秒)', min: 0.5, max: 4,  step: 0.1, def: 1.4 },
+    range:  { n: '近战距离',   min: 40,  max: 120, step: 2,   def: 60 },
+    speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,   def: 160 },
+    desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 580 },
   } },
   vet: { name: '🎖️ 独眼老兵', params: {
-    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 200 },
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 210 },
     dmg:    { n: '单发伤害',   min: 5,   max: 60,  step: 1,   def: 15 },
     rate:   { n: '射速(发/秒)', min: 0.5, max: 6,  step: 0.1, def: 2.2 },
     range:  { n: '射程',       min: 200, max: 800, step: 20,  def: 420 },
@@ -740,7 +748,7 @@ const HERO_TUNE = {
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   sniper: { name: '🎯 鹰眼', params: {
-    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,   def: 190 },
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,   def: 210 },
     dmg:    { n: '单发伤害',   min: 30,  max: 500, step: 10,   def: 200 },
     rate:   { n: '射速(发/秒)', min: 0.2, max: 2,   step: 0.05, def: 0.4 },
     range:  { n: '射程',       min: 400, max: 1500, step: 20,  def: 1500 },
@@ -750,14 +758,14 @@ const HERO_TUNE = {
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   priest: { name: '✨ 牧师', params: {
-    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10, def: 170 },
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10, def: 160 },
     heal:   { n: '单次治疗量', min: 5,  max: 60, step: 1,   def: 15 },
     healCd: { n: '治疗间隔(秒)', min: 0.5, max: 8, step: 0.1, def: 2 },
     buffCd: { n: '祝福间隔(秒)', min: 2,  max: 20, step: 0.5, def: 4 },
     speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,  def: 152 },
   } },
   archer: { name: '🏹 箭手', params: {
-    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 210 },
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 180 },
     dmg:    { n: '箭矢伤害',   min: 8,  max: 120, step: 2,    def: 40 },
     rate:   { n: '射速(发/秒)', min: 0.5, max: 4,  step: 0.1,  def: 1.4 },
     range:  { n: '射程',       min: 300, max: 1000, step: 20, def: 740 },
@@ -767,11 +775,11 @@ const HERO_TUNE = {
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   mage: { name: '🔮 法师', params: {
-    hp:          { n: '生命上限',       min: 80, max: 600, step: 10,  def: 190 },
+    hp:          { n: '生命上限',       min: 80, max: 600, step: 10,  def: 160 },
     castCd:      { n: '施法间隔(秒)',   min: 1,  max: 8,   step: 0.2, def: 3.4 },
     range:       { n: '施法距离',       min: 300, max: 1000, step: 20, def: 560 },
     dragonDmg:   { n: '黑龙波伤害',     min: 5,  max: 120, step: 5,   def: 30 },
-    dragonKnock: { n: '黑龙波击退',     min: 0,  max: 1500, step: 50, def: 700 },
+    dragonKnock: { n: '黑龙波击退',     min: 0,  max: 1500, step: 50, def: 900 },
     laserDmg:    { n: '激光伤害',       min: 10, max: 200, step: 5,   def: 60 },
     fireDmg:     { n: '火环每跳伤害',   min: 3,  max: 40,  step: 1,   def: 9 },
     fireR:       { n: '火环半径',       min: 50, max: 220, step: 5,   def: 120 },
@@ -792,7 +800,7 @@ const HERO_TUNE = {
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   marine: { name: '🛡️ 星际战士', params: {
-    hp:     { n: '生命上限',   min: 100, max: 800, step: 10, def: 290 },
+    hp:     { n: '生命上限',   min: 100, max: 800, step: 10, def: 280 },
     dmg:    { n: '单发伤害',   min: 5,  max: 60, step: 1,   def: 11 },
     rate:   { n: '射速(发/秒)', min: 1,  max: 10, step: 0.2, def: 5 },
     range:  { n: '射程',       min: 250, max: 900, step: 20, def: 560 },
@@ -802,25 +810,25 @@ const HERO_TUNE = {
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   flamerguy: { name: '🔥 喷火兵', params: {
-    hp:     { n: '生命上限',   min: 100, max: 800, step: 10, def: 280 },
+    hp:     { n: '生命上限',   min: 100, max: 800, step: 10, def: 260 },
     dmg:    { n: '火舌每跳伤害', min: 2,  max: 30,  step: 1,  def: 8 },
     range:  { n: '火舌射程',    min: 120, max: 420, step: 10, def: 280 },
     burn:   { n: '灼烧时长(秒)', min: 0.5, max: 6,  step: 0.5, def: 2 },
-    speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,  def: 140 },
+    speed:  { n: '移动速度',   min: 90,  max: 260, step: 5,  def: 120 },
     desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   spirit: { name: '🐥 鸭灵剑士', params: {
-    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 220 },
+    hp:     { n: '生命上限',   min: 80,  max: 600, step: 10,  def: 250 },
     dmg:    { n: '横扫伤害',   min: 6,   max: 90,  step: 2,   def: 22 },
-    rate:   { n: '攻速(次/秒)', min: 0.5, max: 4,  step: 0.1, def: 1.6 },
+    rate:   { n: '攻速(次/秒)', min: 0.5, max: 4,  step: 0.1, def: 1.2 },
     range:  { n: '横扫半径',   min: 50,  max: 160, step: 4,   def: 74 },
     speed:  { n: '移动速度',   min: 100, max: 300, step: 5,   def: 178 },
-    desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 380 },
+    desire: { n: '攻击欲望(锁敌距离)', min: 150, max: 900, step: 10, def: 600 },
   } },
   dog: { name: '🐕 汪财', params: {
-    hp:    { n: '生命上限', min: 60,  max: 500, step: 10, def: 130 },
+    hp:    { n: '生命上限', min: 60,  max: 500, step: 10, def: 120 },
     fetch: { n: '拾取范围', min: 200, max: 1400, step: 40, def: 600 },
-    speed: { n: '奔跑速度', min: 120, max: 360, step: 10,  def: 220 },
+    speed: { n: '奔跑速度', min: 120, max: 360, step: 10,  def: 230 },
   } },
 };
 function heroVal(hid, key) {
@@ -832,9 +840,10 @@ function heroVal(hid, key) {
 
 // ============ 怪物详细调参（21 种怪 + Boss 技能参数，SAVE.monsterTuning 持久化） ============
 const _MT_BASE = () => ({
-  hp:  { n: '生命倍率', min: 0.2, max: 3, step: 0.05, def: 1 },
-  dmg: { n: '伤害倍率', min: 0.2, max: 3, step: 0.05, def: 1 },
-  spd: { n: '速度倍率', min: 0.4, max: 2.2, step: 0.05, def: 1 },
+  hp:    { n: '生命倍率',   min: 0.2, max: 3, step: 0.05, def: 1 },
+  dmg:   { n: '伤害倍率',   min: 0.2, max: 3, step: 0.05, def: 1 },
+  spd:   { n: '速度倍率',   min: 0.4, max: 3, step: 0.05, def: 1 },
+  atkCd: { n: '平A间隔(秒)', min: 0.4, max: 4, step: 0.1,  def: 1.1 },
 });
 const MONSTER_TUNE = {};
 for (const [mid, mt] of Object.entries(MONSTER_TYPES)) {
@@ -910,6 +919,7 @@ const SKILL_TUNE = {
     dmgLv: { n: '每级加伤害',   min: 0,   max: 15, step: 1,   def: 3 },
     dur:   { n: '火径留存(秒)', min: 0.8, max: 6,  step: 0.2, def: 2.2 } } },
   lightning: { name: '⚡ 雷霆链爪', params: {
+    hopT:  { n: '传导间隔(秒/跳)', min: 0.05, max: 0.5, step: 0.05, def: 0.35 },
     cd:    { n: '基础冷却(秒)', min: 0.8, max: 6,  step: 0.1, def: 2.6 },
     cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.05, def: 0.3 },
     dmg:   { n: '每跳基础伤害', min: 5,   max: 70, step: 1,   def: 17 },
@@ -986,6 +996,12 @@ const SKILL_TUNE = {
     dmg:   { n: '基础伤害',     min: 5,   max: 80, step: 1,   def: 16 },
     dmgLv: { n: '每级加伤害',   min: 0,   max: 35, step: 1,   def: 10 },
     r:     { n: '怒环半径',     min: 80,  max: 320, step: 10, def: 150 } } },
+  grenade:   { name: '💣 手雷投掷', params: {
+    cd:    { n: '基础冷却(秒)', min: 1.5, max: 8,  step: 0.1, def: 4 },
+    cdLv:  { n: '每级减冷却',   min: 0,   max: 1,  step: 0.1, def: 0.4 },
+    dmg:   { n: '基础伤害',     min: 10,  max: 120, step: 2,  def: 30 },
+    dmgLv: { n: '每级加伤害',   min: 0,   max: 50, step: 2,   def: 12 },
+    r:     { n: '爆炸半径',     min: 40,  max: 200, step: 5,  def: 80 } } },
   arty:      { name: '📡 呼叫支援', params: {
     cd:    { n: '基础冷却(秒)', min: 5,   max: 25, step: 0.5, def: 14 },
     cdLv:  { n: '每级减冷却',   min: 0,   max: 5,  step: 0.5, def: 2 },
@@ -1000,6 +1016,79 @@ function skillVal(sid, key) {
   const saved = (typeof SAVE !== 'undefined' && SAVE && SAVE.skillTuning && SAVE.skillTuning[sid]) || {};
   return saved[key] !== undefined ? saved[key] : sd.params[key].def;
 }
+
+// 用户实战调校固化为出厂默认（第二十三轮：读取自正式站 localStorage）
+const _MT_USER_DEF = {
+  boss_cyclops:     { spd: 2.2, dmg: 2,   quakeR: 300, skillCd: 6.5 },
+  boss_stormdragon: { spd: 2.2, orbN: 20, skillCd: 5 },
+  boss_lich:        { hp: 1.3, dmg: 3, skillCd: 5, summonN: 3, spd: 1.2 },
+  scorpion: { spd: 1.15 }, leapspider: { spd: 1.15 }, direwolf: { spd: 1.15 },
+  stoneling: { spd: 1.1 }, venomsnake: { spd: 1.1 }, warlock: { spd: 1.15 },
+  shroom: { spd: 1.25 }, charger: { spd: 0.95 }, mimic: { spd: 1.05 },
+};
+for (const [mid, kv] of Object.entries(_MT_USER_DEF)) {
+  for (const [k, v] of Object.entries(kv)) {
+    if (MONSTER_TUNE[mid] && MONSTER_TUNE[mid].params[k]) MONSTER_TUNE[mid].params[k].def = v;
+  }
+}
+
+// 第二十三轮：怪物技能参数全面开放（平A间隔全员 + 每个技能怪的专属项）
+Object.assign(MONSTER_TUNE.brute.params, {
+  splashR: { n: '震地溅射半径', min: 40, max: 220, step: 5, def: 95 },
+});
+MONSTER_TUNE.brute.params.atkCd.def = 1.5;
+MONSTER_TUNE.stoneling.params.atkCd.def = 1.5;
+Object.assign(MONSTER_TUNE.wisp.params, {
+  orbCd: { n: '吐弹冷却(秒)', min: 0.8, max: 8, step: 0.2, def: 2.2 },
+});
+Object.assign(MONSTER_TUNE.banshee.params, {
+  screamCd: { n: '尖啸冷却(秒)', min: 3, max: 20, step: 1, def: 8 },
+});
+Object.assign(MONSTER_TUNE.charger.params, {
+  chargeCd:  { n: '冲锋冷却(秒)', min: 1.5, max: 12, step: 0.5, def: 4.5 },
+  chargeSpd: { n: '冲锋速度',     min: 300, max: 1000, step: 20, def: 560 },
+});
+Object.assign(MONSTER_TUNE.leapspider.params, {
+  chargeCd:  { n: '猛扑冷却(秒)', min: 1.5, max: 12, step: 0.5, def: 4.5 },
+  chargeSpd: { n: '猛扑速度',     min: 300, max: 1000, step: 20, def: 500 },
+});
+Object.assign(MONSTER_TUNE.warlock.params, {
+  castCd:  { n: '缚魂冷却(秒)', min: 2, max: 15, step: 0.5, def: 5.5 },
+  rootDur: { n: '定身时长(秒)', min: 0.4, max: 4, step: 0.2, def: 1.2 },
+});
+Object.assign(MONSTER_TUNE.scorpion.params, {
+  paraDur: { n: '麻痹时长(秒)', min: 0.5, max: 6, step: 0.5, def: 2 },
+});
+Object.assign(MONSTER_TUNE.venomsnake.params, {
+  poisonDur: { n: '中毒时长(秒)', min: 1, max: 10, step: 0.5, def: 4 },
+});
+Object.assign(MONSTER_TUNE.slime.params, {
+  splitN: { n: '分裂数量', min: 0, max: 6, step: 1, def: 2 },
+});
+Object.assign(MONSTER_TUNE.shroom.params, {
+  cloudR:   { n: '毒云半径',     min: 30, max: 160, step: 5, def: 60 },
+  cloudDur: { n: '毒云时长(秒)', min: 1, max: 10, step: 0.5, def: 4 },
+});
+Object.assign(MONSTER_TUNE.lurker.params, {
+  ambushR: { n: '伏击触发距离', min: 60, max: 300, step: 10, def: 130 },
+});
+Object.assign(MONSTER_TUNE.watcher.params, {
+  gazeTime: { n: '咒视蓄力(秒)', min: 0.6, max: 5, step: 0.2, def: 1.8 },
+});
+Object.assign(MONSTER_TUNE.boss_cyclops.params, {
+  boulderCd: { n: '掷巨石冷却(秒)', min: 1.5, max: 10, step: 0.5, def: 3.4 },
+  boulderR:  { n: '巨石爆炸半径',   min: 40, max: 200, step: 5, def: 88 },
+});
+Object.assign(MONSTER_TUNE.boss_stormdragon.params, {
+  breathCd:  { n: '吐息冷却(秒)',   min: 1.5, max: 12, step: 0.5, def: 4.2 },
+  breathR:   { n: '吐息射程',       min: 120, max: 500, step: 10, def: 250 },
+  breathArc: { n: '吐息扇形半角(弧度)', min: 0.2, max: 1.4, step: 0.05, def: 0.55 },
+  boltCd:    { n: '召雷冷却(秒)',   min: 2, max: 16, step: 0.5, def: 7.5 },
+});
+Object.assign(MONSTER_TUNE.boss_lich.params, {
+  volleyCd: { n: '暗影三连弹冷却(秒)', min: 1.5, max: 10, step: 0.5, def: 3.2 },
+  minionCd: { n: '召唤仆从冷却(秒)',   min: 2, max: 16, step: 0.5, def: 6.5 },
+});
 
 function monsterVal(mid, key) {
   const m = MONSTER_TUNE[mid];
@@ -1040,7 +1129,6 @@ const TUNE_DEFS = [
   { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.2, abs:true },
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
   { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:10, abs:true },
-  { id:'zapHop',   name:'闪电传导间隔(秒)', min:0.05, max:0.5,  step:0.05, def:0.35, abs:true },
   { id:'mercRange',name:'佣兵攻击范围',    min:0.5,  max:3,    step:0.1,  def:1.1 },
   { id:'devXp',    name:'开发者经验倍率',  min:1,    max:50,   step:1,    def:20, abs:true },
   { id:'wRate',    name:'武器射速倍率',    min:0.5,  max:3,    step:0.1,  def:1 },

@@ -381,39 +381,26 @@ select, .loadout-row select {
 
 /* ---------- 顶部中央大经验条（升级分离：每人一条，1P 弹壳黄 / 2P 蓝） ---------- */
 #hud-xp {
-  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; gap: 6px; width: 580px;
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 7px; width: 800px; max-width: 62vw;
 }
-.xp-row { display: flex; align-items: center; gap: 10px; }
-.xp-lv { font-family: var(--f-mono); font-size: 13.5px; font-weight: 700; color: var(--p1); width: 84px; text-align: right; white-space: nowrap; text-shadow: 0 1px 2px #000; }
-.xp-bar { flex: 1; height: 15px; background: rgba(8,9,4,.88); border: 1px solid var(--line2); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a20, var(--amber)); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
-.xp-num { font-family: var(--f-mono); font-size: 12px; color: var(--sub); width: 66px; white-space: nowrap; }
+.xp-row { display: flex; align-items: center; gap: 12px; }
+.xp-lv { font-family: var(--f-mono); font-size: 16px; font-weight: 700; color: var(--p1); width: 100px; text-align: right; white-space: nowrap; text-shadow: 0 1px 3px #000; }
+.xp-bar { flex: 1; height: 20px; background: rgba(8,9,4,.9); border: 1px solid #565e3a; box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a20, var(--amber)); box-shadow: inset 0 -5px 0 rgba(0,0,0,.28), 0 0 10px rgba(224,166,60,.35); }
+.xp-num { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink2); width: 76px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
 .xp-row.p2 .xp-lv { color: var(--p2); }
 .xp-row.p2 .xp-bar i { background: linear-gradient(90deg, #2b5f8f, var(--p2)); }
 .xp-row.out { opacity: .4; }
 
-/* ---------- DOM 准星（鼠标操控：mousemove 直接驱动，零帧延迟） ---------- */
+/* ---------- DOM 准星（Kenney Crosshair Pack #30，CC0；mousemove 直驱零延迟） ---------- */
 #aim-cursor {
   position: fixed; left: 0; top: 0; z-index: 40; pointer-events: none;
-  width: 0; height: 0; will-change: transform;
+  width: 30px; height: 30px; margin: -15px 0 0 -15px; will-change: transform;
+  background: url('data:image/png;base64,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') center / contain no-repeat;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.9)) drop-shadow(0 1px 3px rgba(0,0,0,.6));
 }
-#aim-cursor::before {  /* 圆环 */
-  content: ''; position: absolute; left: -10px; top: -10px; width: 20px; height: 20px;
-  border: 1.6px solid rgba(255,217,61,.92); border-radius: 50%;
-  box-shadow: 0 0 6px rgba(0,0,0,.55), inset 0 0 4px rgba(0,0,0,.35);
-}
-#aim-cursor::after {   /* 中心点 + 四向刻线 */
-  content: ''; position: absolute; left: -1.8px; top: -1.8px; width: 3.6px; height: 3.6px;
-  background: rgba(255,217,61,.95); border-radius: 50%;
-}
-#aim-cursor i {
-  position: absolute; background: rgba(255,217,61,.92); box-shadow: 0 0 3px rgba(0,0,0,.5);
-}
-#aim-cursor i:nth-child(1) { left: 7px;  top: -0.8px; width: 6px; height: 1.6px; }
-#aim-cursor i:nth-child(2) { left: -13px; top: -0.8px; width: 6px; height: 1.6px; }
-#aim-cursor i:nth-child(3) { left: -0.8px; top: 7px;  width: 1.6px; height: 6px; }
-#aim-cursor i:nth-child(4) { left: -0.8px; top: -13px; width: 1.6px; height: 6px; }
+#aim-cursor i { display: none; }
 
 /* ---------- 世界层（右上，小地图正下方）：天气 / 神话警报 / 击杀播报 ---------- */
 #hud-world { position: absolute; right: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 320px; }
@@ -685,10 +672,9 @@ select, .loadout-row select {
   border: 1px dashed var(--line2); background: rgba(0,0,0,.28); padding: 6px 8px; align-self: stretch; }
 
 /* 双人升级：卡组吸附到升级玩家的半屏（1P 左 / 2P 右） */
-#levelup-overlay.side-l { justify-content: flex-start; }
-#levelup-overlay.side-r { justify-content: flex-end; }
-#levelup-overlay.side-l .levelup-box { margin-left: 2vw; transform: scale(.82); transform-origin: left center; }
-#levelup-overlay.side-r .levelup-box { margin-right: 2vw; transform: scale(.82); transform-origin: right center; }
+#levelup-overlay.side-l { justify-content: center; padding-right: 50vw; }   /* 卡组居左半屏正中 */
+#levelup-overlay.side-r { justify-content: center; padding-left: 50vw; }    /* 卡组居右半屏正中 */
+#levelup-overlay.side-l .levelup-box, #levelup-overlay.side-r .levelup-box { transform: scale(.82); }
 
 /* ---------- 键位设置 ---------- */
 .keybind-table { width: 100%; border-collapse: collapse; }

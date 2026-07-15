@@ -152,7 +152,7 @@ check('奖杯授予幂等', run(`
 check('割草配置存在且无宝箱', run(`HORDE_CFG.id === 'horde' && Object.values(HORDE_CFG.chests).every(v => v === 0)`));
 check('割草基准 900s/上限80/4个Boss波/时长可调', run(`HORDE_DURATION === 900 && HORDE_CAP === 80 && HORDE_BOSS_AT.length === 4 && tune('hordeTime') === 10`));
 check('升级池 40 项字段完整', run(`HORDE_UPGRADES.length >= 39 && HORDE_UPGRADES.every(u => u.name && u.icon && u.desc && u.max > 0 && (u.skill || u.special || u.hmod || typeof u.mod === 'function'))`));
-check('19 个技能项 id 合法（+呼叫支援）', run(`HORDE_UPGRADES.filter(u => u.skill).length === 19 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge','arty'].includes(u.skill))`));
+check('20 个技能项 id 合法（+手雷投掷）', run(`HORDE_UPGRADES.filter(u => u.skill).length === 20 && HORDE_UPGRADES.filter(u => u.skill).every(u => ['orbit','missile','nova','trail','lightning','whirlwind','barrier','mines','meteor','boomerang','chrono','garlic','spears','drone','thorns','fireball','summon','revenge','arty','grenade'].includes(u.skill))`));
 check('刷怪池随时间解锁', run(`hordeSpawnPool(10).length < hordeSpawnPool(400).length && hordeSpawnPool(400).includes('banshee')`));
 
 // ==================== 第五轮：翻滚/弹夹/天气/道具 ====================
@@ -214,7 +214,7 @@ check('变体技能带 requires 且母技能存在', run(`
   HORDE_UPGRADES.filter(u => u.requires).length >= 4 &&
   HORDE_UPGRADES.filter(u => u.requires).every(u => HORDE_UPGRADES.some(o => o.skill === u.requires))`));
 check('调参面板 27 项（英雄改专属详细面板）', run(`
-  TUNE_DEFS.length === 27 && TUNE_DEFS.every(t => t.name && t.min < t.max) && tune('zapHop') === 0.35 &&
+  TUNE_DEFS.length === 26 && TUNE_DEFS.every(t => t.name && t.min < t.max) && skillVal('lightning', 'hopT') === 0.35 &&
   tune('pSpeed') === 1.2 && tune('mimic') === 0.3 && tune('mDmg') === 1.3 && tune('rollCd') === 1 && tune('thorns') === 1.2`));
 check('调参覆盖生效', run(`
   (() => { SAVE.tuning = { pDmg: 1.5 }; const v = tune('pDmg'); delete SAVE.tuning; return v === 1.5; })()`));
@@ -229,7 +229,7 @@ check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
 check('鸭灵变体（成群/战意）带 requires', run(`
   HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
   (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petRate === 1.3 && m.petPow === 1; })()`));
-check('升级池扩至 75 项（+招募·鸭灵剑士）', run(`HORDE_UPGRADES.length === 75 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
+check('升级池扩至 80 项（+手雷体系5张）', run(`HORDE_UPGRADES.length === 80 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
 {
   const fx = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：烘焙纹理 + 五类预设齐全',
@@ -332,7 +332,7 @@ check('XP 曲线超线性 + 后期低级怪退场', run(`
 check('弩/割草弹芯字段', run(`HORDE_UPGRADE_BY_ID.fireshot && HORDE_UPGRADE_BY_ID.iceshot && HORDE_UPGRADE_BY_ID.split && HORDE_UPGRADE_BY_ID.scatter`));
 {
   const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
-  check('闪电逐跳传导引擎（间隔可调）', gameSrc.includes('chainJobs') && gameSrc.includes("job.hopT = tune('zapHop')"));
+  check('闪电逐跳传导引擎（间隔可调，已入技能调参）', gameSrc.includes('chainJobs') && gameSrc.includes("job.hopT = skillVal('lightning', 'hopT')"));
   check('毒雾文字说明 + 玩家中毒状态标识', gameSrc.includes('剧毒毒雾') && gameSrc.includes('🤢 中毒'));
   check('大逃亡紧张感：预警落地/速清奖励/潮汐暴涨/终点冲刺',
     ['escPend', '速清奖励', '死亡之潮即将暴涨', '最后冲刺'].every(k => gameSrc.includes(k)));
@@ -436,7 +436,7 @@ check('新调参默认值', run(`tune('mercRange') === 1.1 && tune('devXp') === 
 
 // ==================== 第十六轮：英雄晋阶/形象重做/练习场增强 ====================
 check('英雄详细调参体系 + 鹰眼超高伤 + 机兵弹夹', run(`
-  Object.keys(HERO_TUNE).length === 12 && HERO_TUNE.mage.params.dragonKnock.def === 700 && heroVal('sniper', 'dmg') === 200 && MERCS.mech.mag === 40`));
+  Object.keys(HERO_TUNE).length === 12 && HERO_TUNE.mage.params.dragonKnock.def === 900 && heroVal('sniper', 'dmg') === 200 && MERCS.mech.mag === 40`));   // dragonKnock 900 = 二十三轮固化
 check('机兵=武器流最高形态（gate 5 次武器强化）', run(`
   typeof HORDE_UPGRADE_BY_ID.recruit_mech.gate === 'function' && !HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: {} }) &&
   HORDE_UPGRADE_BY_ID.recruit_mech.gate({ picked: { dmg: 3, rate: 2 } })`));
@@ -537,7 +537,7 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
     Object.keys(HERO_TUNE).length === 12 &&
     Object.values(HERO_TUNE).filter(h => h.params.desire).length === 10 &&
     Object.values(HERO_TUNE).every(h => h.params.hp || h.params.fetch === undefined ? h.params.hp : true) &&
-    heroVal('vet', 'desire') === 600 && heroVal('guard', 'hp') === 150`));
+    heroVal('vet', 'desire') === 600 && heroVal('guard', 'hp') === 320`));   // 第二十三轮固化用户值
   check('攻击欲望接线（每英雄绝对值×全局缩放·600基准）', entSrc2.includes("hv('desire', 380) * (tune('mercDesire') / 600)"));
   check('牧师治疗间隔接线', entSrc2.includes("hv('healCd', this.def.healCd)"));
   check('调参固化为用户配置（抽查）', run(`
@@ -567,8 +567,8 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('双人对决：互伤管线（子弹/近战/爆炸）',
     entSrc.includes('对决：子弹命中对方玩家') && gameSrc.includes('if (this.versus) {') && gameSrc.includes('bullet.owner === p ? null : bullet.owner'));
   check('决斗场地图 + 玩法卡 + 结算', mapSrc.includes("id: 'duel'") && uiSrc.includes("setGameplay('versus')") && uiSrc.includes('决斗获胜'));
-  check('怪物调参 21 + 技能调参 19+基础强化组', run(`
-    Object.keys(MONSTER_TUNE).length === 21 && Object.keys(SKILL_TUNE).length === 20 && SKILL_TUNE.base.params.dmgUp.def === 0.18 &&
+  check('怪物调参 21 + 技能调参 20+基础强化+手雷', run(`
+    Object.keys(MONSTER_TUNE).length === 21 && Object.keys(SKILL_TUNE).length === 21 && SKILL_TUNE.base.params.dmgUp.def === 0.18 && SKILL_TUNE.grenade.params.r.def === 80 &&
     monsterVal('boss_cyclops', 'blindDur') === 2.5 && skillVal('whirlwind', 'dmg') === 18 && skillVal('arty', 'shellsLv') === 2`));
   check('新怪技能旗标（眼波/毒吐/掷戟/突进）', run(`
     MONSTER_TYPES.watcher.spit === 'blind' && MONSTER_TYPES.venomsnake.spit === 'poison' &&
@@ -601,7 +601,7 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('画布准星已移除（改 DOM）', !gameSrc.includes('鼠标准星（单人鼠标操控）'));
   check('技能学习台（升/降级/清空）', uiSrc.includes('adjSkillLearn') && uiSrc.includes('clearSkillLearn') &&
     idxSrc.includes('skilllearn-overlay') && idxSrc.includes('技能学习'));
-  check('经验条加大加粗', cssSrc.includes('width: 580px') && cssSrc.includes('height: 15px'));
+  check('经验条再扩大(800×20)', cssSrc.includes('width: 800px') && cssSrc.includes('height: 20px'));
   check('割草佣兵 10s 复活+倒计时', gameSrc.includes('mc.reviveT = 10') && gameSrc.includes('归队！') &&
     gameSrc.includes('mc.reviveT !== undefined') && entSrc.includes('10 秒后归队'));
   check('主人阵亡英雄不复活', gameSrc.includes('mc.noRevive = true'));
@@ -615,6 +615,39 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('双人升级卡吸附分屏侧', uiSrc.includes("side-l' : 'side-r'") === false ?
     (uiSrc.includes("'side-l'") && uiSrc.includes("'side-r'") && cssSrc.includes('#levelup-overlay.side-l')) : true);
   check('双人键盘弹道追踪增强', entSrc.includes('this.turn *= 1.5; this.hCone *= 1.3; this.hDist *= 1.25;'));
+}
+
+// ==================== 第二十三轮：手雷/准心素材/怪物参数全开/捡丢枪/对决空投/固化默认 ====================
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  const cssSrc = fs.readFileSync(base + '../css/style.css', 'utf8');
+  const sfxSrc = fs.readFileSync(base + 'sfx.js', 'utf8');
+  check('手雷技能（门槛+等级+元素变体+音效）', run(`
+    HORDE_UPGRADES.filter(u => u.skill).length === 20 && HORDE_UPGRADE_BY_ID.gren_zap.requires === 'grenade' &&
+    SKILL_TUNE.grenade.params.cd.def === 4`) && hordeSrc.includes('ex.grens.push') && sfxSrc.includes('grenBoom'));
+  check('准心素材（Kenney CC0 烘焙 + 文件落盘）', cssSrc.includes('Kenney Crosshair Pack') &&
+    fs.existsSync(base + '../assets/crosshair.png'));
+  check('怪物参数全开（平A间隔/吐息扇形/定身/分裂等）', run(`
+    monsterVal('shade', 'atkCd') === 1.1 && monsterVal('brute', 'atkCd') === 1.5 &&
+    monsterVal('boss_stormdragon', 'breathArc') === 0.55 && monsterVal('slime', 'splitN') === 2 &&
+    monsterVal('warlock', 'rootDur') === 1.2 && monsterVal('shroom', 'cloudR') === 60`));
+  check('怪物参数接线', entSrc.includes("monsterVal(this.type.id, 'atkCd')") && entSrc.includes("monsterVal(this.type.id, 'breathArc')")
+    && entSrc.includes("monsterVal(this.type.id, 'chargeSpd')") && gameSrc.includes("monsterVal('slime', 'splitN')"));
+  check('固化用户调参（英雄/怪物抽查）', run(`
+    heroVal('guard', 'hp') === 320 && heroVal('spirit', 'rate') === 1.2 && heroVal('mage', 'dragonKnock') === 900 &&
+    monsterVal('boss_cyclops', 'skillCd') === 6.5 && monsterVal('charger', 'spd') === 0.95`));
+  check('捡枪丢枪（空手直捡/站桩不回跳/长按丢枪）',
+    gameSrc.includes('needExit') && gameSrc.includes('swapHeldT') && gameSrc.includes('wd.taken = true'));
+  check('对决空投 + 地图居中 + 半屏红闪',
+    gameSrc.includes('versusDropUpdate') && gameSrc.includes('神秘武器箱') &&
+    gameSrc.includes("this.versus ? Math.round((VIEW_W - mm.width) / 2)") && gameSrc.includes("p.idx === 0 ? '0' : '50%'"));
+  check('麻痹接线（移速35% + chip）', gameSrc.includes('paraMul') && gameSrc.includes('🦂麻痹'));
+  check('学习台佣兵直招', uiSrc.includes('adjMercLearn') && uiSrc.includes('调试直招'));
+  check('升级卡吸附半屏正中', cssSrc.includes('padding-right: 50vw') && cssSrc.includes('padding-left: 50vw'));
+  check('面板高亮实时跟手', uiSrc.split("classList.toggle('changed'").length >= 4);
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

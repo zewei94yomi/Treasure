@@ -298,7 +298,7 @@ class Monster {
       for (const p of game.players) {
         if (!p.active || p.invisT > 0) continue;
         if (game.bushHides && game.bushHides(p)) continue;   // 草丛里连潜伏者都嗅不到
-        if (Math.hypot(p.x - this.x, p.y - this.y) < 130 * p.detectMul()) {
+        if (Math.hypot(p.x - this.x, p.y - this.y) < (monsterVal('lurker', 'ambushR') || 130) * p.detectMul()) {
           this.state = 'chase'; this.target = p;
           this.lastKnown = { x: p.x, y: p.y }; this.memoryT = cfg.memory + 3;
           Sfx.lurker();
@@ -320,7 +320,7 @@ class Monster {
       if (seen) {
         this.gazeT += dt;
         this.faceDir = Math.atan2(seen.y - this.y, seen.x - this.x);
-        if (this.gazeT >= 1.8) {
+        if (this.gazeT >= (monsterVal('watcher', 'gazeTime') || 1.8)) {
           this.gazeT = 0;
           Sfx.banshee();
           game.floater(this.x, this.y - 24, '👁 咒视！', '#ff5c5c');
@@ -357,7 +357,7 @@ class Monster {
       this.memoryT = cfg.memory * (this.type.memMul || 1);
       // 尖啸者：看到玩家先尖叫召集，然后逃跑
       if (this.type.screamer && this.screamCd <= 0) {
-        this.screamCd = 8;
+        this.screamCd = monsterVal(this.type.id, 'screamCd') || 8;
         this.fleeT = 4;
         Sfx.banshee();
         game.floater(this.x, this.y - 26, '❗尖啸！', '#ff5c5c');
@@ -423,7 +423,7 @@ class Monster {
             goal = { x: this.x + Math.cos(a) * 90, y: this.y + Math.sin(a) * 90 };
           } else goal = null;  // 停下射击
           if (this.shootCd <= 0) {
-            this.shootCd = 2.2;
+            this.shootCd = monsterVal(this.type.id, 'orbCd') || 2.2;
             this.windupT = 0.5;          // 蓄力硬直后 resolveAttack 发射
             this.pendingRanged = true;
             return;
@@ -465,7 +465,7 @@ class Monster {
       const bd = Math.hypot(this.target.x - this.x, this.target.y - this.y);
       if (this.type.id === 'boss_cyclops' && this.bossT <= 0 && bd > 100) {
         // 独眼巨人：掷巨石（落点预警圈 → 爆炸）
-        this.bossT = 3.4;
+        this.bossT = monsterVal(this.type.id, 'boulderCd') || 3.4;
         this.windupT = 0.6;
         this.pendingBoulder = { x: this.target.x, y: this.target.y };
         Sfx.brute();
@@ -474,7 +474,7 @@ class Monster {
       if (this.type.id === 'boss_stormdragon') {
         if (this.bossT <= 0 && bd < 240) {
           // 吐息：正面扇形灼烧
-          this.bossT = 4.2;
+          this.bossT = monsterVal(this.type.id, 'breathCd') || 4.2;
           this.windupT = 0.5;
           this.pendingBreath = true;
           Sfx.wisp();
@@ -482,7 +482,7 @@ class Monster {
         }
         if (this.bossT2 <= 0) {
           // 召雷：玩家脚下落雷预警
-          this.bossT2 = 7.5;
+          this.bossT2 = monsterVal(this.type.id, 'boltCd') || 7.5;
           for (const p of game.players) if (p.active) game.bossZones.push({ x: p.x, y: p.y, r: 62, t: 0.85, dmg: Math.round(this.cfg.mDmg * 1.6 * (this.hordeDmgMul || 1)), kind: 'bolt' });
           Sfx.banshee();
         }
@@ -490,14 +490,14 @@ class Monster {
       if (this.type.id === 'boss_lich') {
         if (this.bossT <= 0) {
           // 暗影三连弹
-          this.bossT = 3.2;
+          this.bossT = monsterVal(this.type.id, 'volleyCd') || 3.2;
           this.windupT = 0.5;
           this.pendingVolley = true;
           return;
         }
         if (this.bossT2 <= 0 && game.monsters.length < HORDE_CAP + 8) {
           // 召唤幽影仆从
-          this.bossT2 = 6.5;
+          this.bossT2 = monsterVal(this.type.id, 'minionCd') || 6.5;
           for (let i = 0; i < 2; i++) {
             const mn = new Monster(this.x + (i ? 40 : -40), this.y + 20, this.cfg, 'shade');
             mn.hp *= 1.2; mn.maxHp = mn.hp;
@@ -517,7 +517,7 @@ class Monster {
       this.chargeCd = Math.max(0, (this.chargeCd || 0) - dt);
       const minD = this.type.leap ? 80 : 110, maxD = this.type.leap ? 260 : 380;
       if (d > minD && d < maxD && this.chargeCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
-        this.chargeCd = 4.5;
+        this.chargeCd = monsterVal(this.type.id, 'chargeCd') || 4.5;
         this.windupT = this.type.windup;
         this.pendingCharge = Math.atan2(this.target.y - this.y, this.target.x - this.x);
         Sfx.brute();
@@ -529,7 +529,7 @@ class Monster {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
       this.castCd = Math.max(0, (this.castCd || 0) - dt);
       if (d < 340 && d > 120 && this.castCd <= 0 && losClear(this.x, this.y, this.target.x, this.target.y)) {
-        this.castCd = 5.5;
+        this.castCd = monsterVal(this.type.id, 'castCd') || 5.5;
         this.windupT = this.type.windup;
         this.pendingRoot = this.target;
         Sfx.banshee();
@@ -596,7 +596,7 @@ class Monster {
     if (this.state === 'chase' && this.target && this.target.active && !this.type.ranged) {
       const d = Math.hypot(this.target.x - this.x, this.target.y - this.y);
       if (d < PLAYER_R + this.r + 8 && this.attackCd <= 0) {
-        this.attackCd = (this.type.id === 'brute' ? 1.5 : 1.1) * (this.enraged ? HORDE_ENRAGE.atkMul : 1);
+        this.attackCd = (monsterVal(this.type.id, 'atkCd') || (this.type.id === 'brute' ? 1.5 : 1.1)) * (this.enraged ? HORDE_ENRAGE.atkMul : 1);
         this.windupT = this.type.windup || 0.32;
         this.pendingRanged = false;
         Sfx.windup();
@@ -613,7 +613,7 @@ class Monster {
       this.pendingRoot = null;
       if (t.active && t.rollT <= 0 && losClear(this.x, this.y, t.x, t.y) &&
           Math.hypot(t.x - this.x, t.y - this.y) < 400) {
-        t.rootT = Math.max(t.rootT, 1.2);
+        t.rootT = Math.max(t.rootT, monsterVal(this.type.id, 'rootDur') || 1.2);
         game.floater(t.x, t.y - 40, '⛓️ 被缚魂定身！', '#b48aff');
         Sfx.lurker();
       } else game.floater(this.x, this.y - 20, '施法落空', '#9fd8ff');
@@ -621,8 +621,8 @@ class Monster {
     }
     // Boss：巨石落点 / 吐息 / 暗影弹
     if (this.pendingBoulder) {
-      game.bossZones.push({ x: this.pendingBoulder.x, y: this.pendingBoulder.y, r: 88, t: 0.9,
-                            dmg: Math.round(this.cfg.mDmg * 2.2 * (this.hordeDmgMul || 1)), kind: 'boulder' });
+      game.bossZones.push({ x: this.pendingBoulder.x, y: this.pendingBoulder.y, r: monsterVal(this.type.id, 'boulderR') || 88, t: 0.9,
+                            dmg: Math.round(this.cfg.mDmg * 2.2 * (this.hordeDmgMul || 1) * (monsterVal(this.type.id, 'dmg') || 1)), kind: 'boulder' });
       this.pendingBoulder = null;
       return;
     }
@@ -636,8 +636,8 @@ class Monster {
         const d = Math.hypot(p.x - this.x, p.y - this.y);
         let da = Math.atan2(p.y - this.y, p.x - this.x) - fd;
         da = Math.atan2(Math.sin(da), Math.cos(da));
-        if (d < 250 && Math.abs(da) < 0.55) {
-          const dmg = Math.round(this.cfg.mDmg * 1.4 * (this.hordeDmgMul || 1));
+        if (d < (monsterVal(this.type.id, 'breathR') || 250) && Math.abs(da) < (monsterVal(this.type.id, 'breathArc') || 0.55)) {
+          const dmg = Math.round(this.cfg.mDmg * 1.4 * (this.hordeDmgMul || 1) * (monsterVal(this.type.id, 'dmg') || 1));
           if (p.isMerc) p.hurt(dmg, game);
           else { game.damagePlayer(p, dmg, this); if (p.active) { p.burnT2 = Math.max(p.burnT2, 3); game.floater(p.x, p.y - 40, '🔥 灼烧！', '#ff8f5c'); } }
         }
@@ -651,7 +651,7 @@ class Monster {
       if (this.target && this.target.active) {
         const base = Math.atan2(this.target.y - this.y, this.target.x - this.x);
         for (const off of [-0.35, 0, 0.35]) {
-          game.monsterOrbs.push(new MonsterOrb(this.x, this.y, base + off, Math.round(this.cfg.mDmg * 1.2 * (this.hordeDmgMul || 1))));
+          game.monsterOrbs.push(new MonsterOrb(this.x, this.y, base + off, Math.round(this.cfg.mDmg * 1.2 * (this.hordeDmgMul || 1) * (monsterVal(this.type.id, 'dmg') || 1))));
         }
         Sfx.wisp();
       }
@@ -659,7 +659,7 @@ class Monster {
     }
     // 冲撞蛮牛：前摇结束 → 起冲
     if (this.pendingCharge !== undefined && this.pendingCharge !== null) {
-      this.charging = { dir: this.pendingCharge, t: this.type.leap ? 0.42 : 0.6, speed: this.type.leap ? 500 : 560, hit: new Set() };
+      this.charging = { dir: this.pendingCharge, t: this.type.leap ? 0.42 : 0.6, speed: monsterVal(this.type.id, 'chargeSpd') || (this.type.leap ? 500 : 560), hit: new Set() };
       this.pendingCharge = null;
       this.recoverT = 0;
       return;
@@ -734,8 +734,8 @@ class Monster {
       if (victim.isMerc) {
         victim.hurt(hitDmg, game);
         // 怪物技能对佣兵施加状态：中毒/减速/晕眩
-        if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT || 0, this.type.poison); game.floater(victim.x, victim.y - 24, '🟢中毒', '#7ac74f'); }
-        if (this.type.paralyze) { victim.slowT = Math.max(victim.slowT || 0, this.type.paralyze); game.floater(victim.x, victim.y - 24, '🐌减速', '#ffd93d'); }
+        if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT || 0, monsterVal(this.type.id, 'poisonDur') || this.type.poison); game.floater(victim.x, victim.y - 24, '🟢中毒', '#7ac74f'); }
+        if (this.type.paralyze) { victim.slowT = Math.max(victim.slowT || 0, monsterVal(this.type.id, 'paraDur') || this.type.paralyze); game.floater(victim.x, victim.y - 24, '🐌减速', '#ffd93d'); }
         if ((this.type.id === 'brute' || this.type.id === 'stoneling') && Math.random() < 0.35) {
           victim.stunT = Math.max(victim.stunT || 0, 0.9);
           game.floater(victim.x, victim.y - 24, '💫晕眩！', '#ffd93d');
@@ -745,8 +745,8 @@ class Monster {
         game.damagePlayer(victim, hitDmg, this);
         // 附加效果：毒蛇→中毒 / 巨蝎→麻痹
         if (!victim.isMerc && victim.active) {
-          if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT, this.type.poison); game.floater(victim.x, victim.y - 40, '🟢 中毒！', '#7ac74f'); }
-          if (this.type.paralyze) { victim.paraT = Math.max(victim.paraT, this.type.paralyze); game.floater(victim.x, victim.y - 40, '🦂 麻痹！', '#ffd93d'); }
+          if (this.type.poison) { victim.poisonT = Math.max(victim.poisonT, monsterVal(this.type.id, 'poisonDur') || this.type.poison); game.floater(victim.x, victim.y - 40, '🟢 中毒！', '#7ac74f'); }
+          if (this.type.paralyze) { victim.paraT = Math.max(victim.paraT, monsterVal(this.type.id, 'paraDur') || this.type.paralyze); game.floater(victim.x, victim.y - 40, '🦂 麻痹！', '#ffd93d'); }
           if ((this.type.id === 'brute' || this.type.id === 'stoneling') && Math.random() < 0.3) {
             victim.paraT = Math.max(victim.paraT, 0.8);
             game.floater(victim.x, victim.y - 40, '💫 被震慑！', '#ffd93d');
@@ -760,7 +760,7 @@ class Monster {
           if (v === victim) continue;
           const alive = v.isMerc ? v.hp > 0 : v.active;
           if (!alive) continue;
-          if (Math.hypot(v.x - this.x, v.y - this.y) < 95) {
+          if (Math.hypot(v.x - this.x, v.y - this.y) < (monsterVal('brute', 'splashR') || 95)) {
             const splash = Math.round(hitDmg * 0.5);
             if (v.isMerc) v.hurt(splash, game); else game.damagePlayer(v, splash, this);
           }

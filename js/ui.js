@@ -830,8 +830,12 @@ const UI = (() => {
     const p = HERO_TUNE[hid].params[key];
     const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
     const el = $(`ht-val-${hid}-${key}`);
-    const changed = parseFloat(v) !== p.def;
-    if (el) el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+    const changed = Math.abs(parseFloat(v) - p.def) > 1e-9;
+    if (el) {
+      el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+      const row = el.closest('.tuning-row');
+      if (row) row.classList.toggle('changed', changed);   // 行高亮实时跟手（与全局面板一致）
+    }
   }
   function resetHeroTune() {
     SAVE.heroTuning = {};
@@ -870,8 +874,12 @@ const UI = (() => {
     const p = defs[gid].params[key];
     const fmt = n => Number(n).toFixed(2).replace(/\.?0+$/, '') || '0';
     const el = $(`tv-${savedKey}-${gid}-${key}`);
-    const changed = parseFloat(v) !== p.def;
-    if (el) el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+    const changed = Math.abs(parseFloat(v) - p.def) > 1e-9;
+    if (el) {
+      el.innerHTML = changed ? `<span class="dim">${fmt(p.def)}</span>→<span class="cur">${fmt(v)}</span>` : `<span class="cur">${fmt(v)}</span>`;
+      const row = el.closest('.tuning-row');
+      if (row) row.classList.toggle('changed', changed);
+    }
   }
   // ---------- 练习场：技能学习台（升/降级任意技能，实时生效） ----------
   function showSkillLearn() {
@@ -885,7 +893,21 @@ const UI = (() => {
     const S = g.hsP(g.players[0]).skills;
     const byId = {};
     for (const u of HORDE_UPGRADES) if (u.skill) byId[u.skill] = u;
-    $('skilllearn-body').innerHTML = Object.keys(S).map(sid => {
+    // 佣兵招募区：调试用 +/−（+ 直接入队给 1P，− 移一位；无视招募卡门槛）
+    const mercRows = Object.values(MERCS).filter(m => !m.requiresMerc || true).map(md => {
+      const n = g.mercs.filter(mc => mc.hp > 0 && mc.def.id === md.id && mc.owner === g.players[0] && !mc.isPet).length;
+      return `<div class="sl-cell ${n > 0 ? 'on' : ''}">
+        <span class="sl-icon">${md.icon}</span>
+        <span class="sl-name">${md.name.split('·')[0]}</span>
+        <span class="sl-ctl">
+          <button class="btn tiny" onclick="UI.adjMercLearn('${md.id}',-1)">−</button>
+          <b class="sl-lv">${n}</b>
+          <button class="btn tiny" onclick="UI.adjMercLearn('${md.id}',1)">＋</button>
+        </span>
+      </div>`;
+    }).join('');
+    $('skilllearn-body').innerHTML = `<h4 class="section-label">⚔️ 雇佣兵（1P · 调试直招，无视门槛）</h4><div class="sl-grid">${mercRows}</div>
+      <h4 class="section-label">✨ 割草技能</h4><div class="sl-grid">` + Object.keys(S).map(sid => {
       const u = byId[sid] || { icon: '✨', name: sid, max: 5 };
       const lv = S[sid] || 0;
       return `<div class="sl-cell ${lv > 0 ? 'on' : ''}">
@@ -897,7 +919,22 @@ const UI = (() => {
           <button class="btn tiny" onclick="UI.adjSkillLearn('${sid}',1)">＋</button>
         </span>
       </div>`;
-    }).join('');
+    }).join('') + '</div>';
+  }
+  function adjMercLearn(mid, d) {
+    const g = Game.current;
+    if (!g || !g.horde) return;
+    const p1 = g.players[0];
+    if (d > 0) {
+      const mc = new Mercenary(p1.x + 30, p1.y + 30, MERCS[mid], p1);
+      unstick(mc);
+      g.mercs.push(mc);
+      Sfx.revive();
+    } else {
+      const mc = g.mercs.find(m => m.hp > 0 && m.def.id === mid && m.owner === p1 && !m.isPet);
+      if (mc) { mc.hp = 0; mc.noRevive = true; Sfx.tick(); }
+    }
+    renderSkillLearn();
   }
   function adjSkillLearn(sid, d) {
     const g = Game.current;
@@ -1332,7 +1369,7 @@ const UI = (() => {
            showMonsterDex, closeMonsterDex, showDexHub, hideDexHub, showSettingsHub, hideSettingsHub, toggleDevMode, toggleMouseAim, startArena,
            showHeroTune, closeHeroTune, setHeroTune, resetHeroTune, showHeroDex, closeHeroDex,
            showMonsterTune, closeMonsterTune, setMonsterTune, resetMonsterTune,
-           toggleHideCursor, showSkillLearn, closeSkillLearn, adjSkillLearn, clearSkillLearn,
+           toggleHideCursor, showSkillLearn, closeSkillLearn, adjSkillLearn, clearSkillLearn, adjMercLearn,
            showSkillTune, closeSkillTune, setSkillTune, resetSkillTune,
            showTrophies, buyWeaponGuard,
            buyWeapon, buyAmmo, buyConsumable, buyArmor, buyPouch, repairWeapon, repairArmor,

@@ -59,7 +59,8 @@ Object.assign(Game.prototype, {
   // —— 扩展技能引擎：升级分离后每位玩家用自己的等级/强化/冷却；世界物件共享给绘制层 ——
   updateHordeExtraSkills(dt) {
     const H = this.hordeState;
-    if (!H.ex) H.ex = { mines: [], meteors: [], booms: [], whirlFx: [], pets: [], petQueue: [], droneAims: [] };
+    if (!H.ex) H.ex = { mines: [], meteors: [], booms: [], whirlFx: [], pets: [], petQueue: [], droneAims: [], grens: [] };
+    if (!H.ex.grens) H.ex.grens = [];
     if (!H.petQueueAll) H.petQueueAll = () => H.ex.petQueue.map(e => e.t);
     const ex = H.ex;
 
@@ -181,6 +182,23 @@ Object.assign(Game.prototype, {
                 this.floater(dx, dy - 16, '📡 呼叫空袭！', '#7ef7ff');
               }
             }
+          }
+        }
+      }
+      // 💣 手雷投掷（武器流门槛）：抛物线掷向敌群，元素变体冰/雷/火
+      if (S.grenade > 0) {
+        T.grenT = (T.grenT === undefined ? 2 : T.grenT) - dt;
+        if (T.grenT <= 0) {
+          T.grenT = Math.max(1.4, skillVal('grenade', 'cd') - S.grenade * skillVal('grenade', 'cdLv'));
+          const count = 1 + (S.grenade - 1) * 2;
+          const targets = this.monsters.filter(m => Math.hypot(m.x - p.x, m.y - p.y) < 520);
+          for (let i = 0; i < count && targets.length; i++) {
+            const tgt = targets[Math.floor(Math.random() * targets.length)];
+            ex.grens.push({ sx: p.x, sy: p.y, x: p.x, y: p.y, tx: tgt.x + (Math.random() - 0.5) * 44, ty: tgt.y + (Math.random() - 0.5) * 44,
+              t: 0, dur: 0.55, pl: p,
+              dmg: skillVal('grenade', 'dmg') + S.grenade * skillVal('grenade', 'dmgLv'),
+              r: skillVal('grenade', 'r') * (PP.mods.grenR || 1), elem: PP.mods.grenElem });
+            Sfx.grenThrow();
           }
         }
       }
@@ -332,6 +350,48 @@ Object.assign(Game.prototype, {
     }
     ex.booms = ex.booms.filter(b => !b.done);
 
+    // 手雷：飞行 → 落地爆炸（冰冻/电弧/燃烧变体）
+    for (const gr of ex.grens) {
+      gr.t += dt;
+      const k = Math.min(1, gr.t / gr.dur);
+      gr.x = gr.sx + (gr.tx - gr.sx) * k;
+      gr.y = gr.sy + (gr.ty - gr.sy) * k;
+      if (k < 1) continue;
+      gr.done = true;
+      Sfx.grenBoom();
+      this.shake = Math.max(this.shake, 6);
+      this.fxExplosion(gr.x, gr.y, gr.r);
+      for (const m of this.monsters.slice()) {
+        const d = Math.hypot(m.x - gr.x, m.y - gr.y);
+        if (d > gr.r + m.r) continue;
+        m.knock(Math.atan2(m.y - gr.y, m.x - gr.x), 700);
+        if (gr.elem === 'ice') { m.slowT = Math.max(m.slowT, 2.5); m.stunT = Math.max(m.stunT, 0.7); }
+        if (gr.elem === 'fire') { m.burnT = Math.max(m.burnT, 2.5); }
+        if (m.hurt(gr.dmg, this)) this.killMonster(m, gr.pl);
+      }
+      if (gr.elem === 'zap') {
+        const hs = new Set();
+        let from = { x: gr.x, y: gr.y };
+        for (let c2 = 0; c2 < 3; c2++) {
+          let node = null, nd = 200;
+          for (const m of this.monsters) {
+            if (hs.has(m)) continue;
+            const d = Math.hypot(m.x - from.x, m.y - from.y);
+            if (d < nd) { node = m; nd = d; }
+          }
+          if (!node) break;
+          hs.add(node);
+          H.bolts.push({ pts: [{ x: from.x, y: from.y }, { x: node.x, y: node.y }], t: 0.16 });
+          if (node.hurt(Math.round(gr.dmg * 0.5), this)) this.killMonster(node, gr.pl);
+          from = { x: node.x, y: node.y };
+          Sfx.zap();
+        }
+      }
+      if (gr.elem === 'fire') H.firePatches.push({ x: gr.x, y: gr.y, t: 2.5, pl: gr.pl, lv: 2 });
+      if (gr.elem === 'ice') { for (let i2 = 0; i2 < 8; i2++) this.spark(gr.x, gr.y, '#bfe9ff'); }
+    }
+    ex.grens = ex.grens.filter(gr => !gr.done);
+
     for (const fx of ex.whirlFx) fx.t -= dt;
     ex.whirlFx = ex.whirlFx.filter(fx => fx.t > 0);
 
@@ -387,6 +447,32 @@ Object.assign(Game.prototype, {
         ctx.globalAlpha = 0.55;
         ctx.drawImage(FxTex.glow, -9, -11, 18, 18);
       }
+      ctx.restore();
+    }
+    if (ex.grens) for (const gr of ex.grens) {
+      const k = Math.min(1, gr.t / gr.dur);
+      const [sx, sy] = W2S(gr.x, gr.y - Math.sin(k * Math.PI) * 40);
+      const [lx, ly] = W2S(gr.tx, gr.ty);
+      // 落点预告圈
+      ctx.strokeStyle = `rgba(255,160,60,${0.35 + k * 0.3})`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(lx, ly, gr.r * 0.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 弹体（橄榄绿 + 引信闪灯 + 地面影）
+      ctx.fillStyle = 'rgba(0,0,0,.3)';
+      const [gx, gy] = W2S(gr.x, gr.y);
+      ctx.beginPath(); ctx.ellipse(gx, gy + 4, 5, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(gr.t * 9);
+      ctx.fillStyle = gr.elem === 'ice' ? '#7fb8d8' : gr.elem === 'zap' ? '#e8d86a' : gr.elem === 'fire' ? '#c9663a' : '#4a5a34';
+      ctx.beginPath(); ctx.ellipse(0, 0, 6, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#1c2210'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#8a94a0';
+      ctx.fillRect(-2, -10, 4, 4);
+      ctx.fillStyle = Math.sin(gr.t * 30) > 0 ? '#ff5c5c' : '#5c1c1c';
+      ctx.beginPath(); ctx.arc(3, -8, 1.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
     for (const mt of ex.meteors) {

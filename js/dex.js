@@ -154,7 +154,7 @@ const Dex = (() => {
     missile:   { fx: 'missile',   info: lv => `每 ${Math.max(0.5, sv('missile','cd') - lv * sv('missile','cdLv')).toFixed(1)}s 发射 ${1 + Math.floor(lv / 2)} 枚追踪鸭雷，命中 ${sv('missile','dmg') + lv * sv('missile','dmgLv')} 伤害` },
     nova:      { fx: 'nova',      info: lv => `每 ${Math.max(2.6, sv('nova','cd') - lv * sv('nova','cdLv')).toFixed(1)}s 冻结新星：${sv('nova','dmg') + lv * sv('nova','dmgLv')} 伤害 + 冻结 ${(sv('nova','stun') + lv * sv('nova','stunLv')).toFixed(1)}s（半径 ${sv('nova','r') + lv * sv('nova','rLv')}）` },
     trail:     { fx: 'trail',     info: lv => `跑动残留火径 ${sv('trail','dur')}s，踩中每跳 ${sv('trail','dmg') + lv * sv('trail','dmgLv')} 伤害` },
-    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${sv('lightning','hops') + lv} 跳，每跳 ${sv('lightning','dmg') + lv * sv('lightning','dmgLv')} 伤害（${tune('zapHop')}s/跳，面板可调）` },
+    lightning: { fx: 'lightning', info: lv => `闪电逐跳传导 ${sv('lightning','hops') + lv} 跳，每跳 ${sv('lightning','dmg') + lv * sv('lightning','dmgLv')} 伤害（${sv('lightning','hopT')}s/跳，面板可调）` },
     whirlwind: { fx: 'whirlwind', info: lv => `每 ${Math.max(1.2, sv('whirlwind','cd') - lv * sv('whirlwind','cdLv')).toFixed(1)}s 圣剑横扫：半径 ${sv('whirlwind','r') + lv * sv('whirlwind','rLv')}，${sv('whirlwind','dmg') + lv * sv('whirlwind','dmgLv')} 伤害 + 击飞` },
     barrier:   { fx: 'barrier',   info: lv => `每 ${Math.max(5, sv('barrier','cd') - lv * sv('barrier','cdLv'))}s 获得 ${sv('barrier','shield') + lv * sv('barrier','shieldLv')} 点吸收护盾` },
     mines:     { fx: 'mines',     info: lv => `边跑边埋雷（场上至多 ${6 + lv} 颗），踩中 ${sv('mines','dmg') + lv * sv('mines','dmgLv')} 伤害 + 击飞（半径 ${sv('mines','r')}）` },
@@ -168,6 +168,7 @@ const Dex = (() => {
     fireball:  { fx: 'fireball',  info: lv => `火球 ${sv('fireball','dmg') + lv * sv('fireball','dmgLv')} 伤害，爆炸半径 ${sv('fireball','boom') + lv * sv('fireball','boomLv')} + 灼烧 2s` },
     summon:    { fx: 'summon',    info: lv => `${lv} 只鸭灵（${sv('summon','hp') + lv * sv('summon','hpLv')} 血 / ${sv('summon','dmg') + lv * sv('summon','dmgLv')} 伤害），阵亡 5s 复活` },
     revenge:   { fx: 'revenge',   info: lv => `受击炸出火焰云怒环：${sv('revenge','dmg') + lv * sv('revenge','dmgLv')} 伤害 + 灼烧 + 击飞（半径 ${sv('revenge','r')}）` },
+    grenade:   { fx: 'meteor',    info: lv => `每 ${Math.max(1.4, sv('grenade','cd') - lv * sv('grenade','cdLv')).toFixed(1)}s 丢 ${1 + (lv - 1) * 2} 颗手雷，各 ${sv('grenade','dmg') + lv * sv('grenade','dmgLv')} 伤害（半径 ${sv('grenade','r')}，变体：冰冻/闪电/燃烧）` },
     arty:      { fx: 'arty',      info: lv => `每 ${Math.max(7, sv('arty','cd') - lv * sv('arty','cdLv'))}s 呼叫火炮：${sv('arty','shells') + lv * sv('arty','shellsLv')} 发炮弹覆盖射击方向大范围` },
   };
   // 变体强化归到母技能卡下备注
