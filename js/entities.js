@@ -1544,9 +1544,35 @@ class Mercenary {
         const slot = idx * 2.4 + 1.3;
         gx += Math.cos(slot) * 52; gy += Math.sin(slot) * 52;
       }
+      // 跟随寻路（修"卡地形跟丢"）：视线被挡时——割草跟主人走流场（主人即源），其余走 BFS 路径
+      if (!losClear(this.x, this.y, gx, gy)) {
+        let wp = null;
+        if (game.horde && !game.versus && game._flow && goal === o) wp = game.flowDir(this.x, this.y);
+        if (!wp) {
+          this.mPathT = (this.mPathT || 0) - dt;
+          if (this.mPathT <= 0 || !this.mPath || !this.mPath.length) { this.mPathT = 0.6; this.mPath = bfsPath(this.x, this.y, gx, gy); }
+          while (this.mPath.length && Math.hypot(this.mPath[0].x - this.x, this.mPath[0].y - this.y) < TILE * 0.55) this.mPath.shift();
+          while (this.mPath.length > 1 && losClear(this.x, this.y, this.mPath[1].x, this.mPath[1].y)) this.mPath.shift();
+          if (this.mPath.length) { wp = this.mPath[0]; }
+        }
+        if (wp) { gx = wp.x; gy = wp.y; }
+      }
+      const _mbx = this.x, _mby = this.y;
       const a = Math.atan2(gy - this.y, gx - this.x);
       const r = resolveCircle(this.x + Math.cos(a) * spd * dt, this.y + Math.sin(a) * spd * dt, 13);
       this.x = r.x; this.y = r.y;
+      // 卡死解救：位移远小于期望 → 侧滑蹭开（与怪物同款）
+      if (Math.hypot(this.x - _mbx, this.y - _mby) < spd * dt * 0.3) {
+        this.mStuckT = (this.mStuckT || 0) + dt;
+        if (this.mStuckT > 0.3) {
+          this.mStuckT = 0;
+          this.mSlide = -(this.mSlide || 1);
+          const sa = a + Math.PI / 2 * this.mSlide;
+          const sr = resolveCircle(this.x + Math.cos(sa) * 16, this.y + Math.sin(sa) * 16, 13);
+          this.x = sr.x; this.y = sr.y;
+          this.mPathT = 0;   // 立刻重寻路
+        }
+      } else this.mStuckT = 0;
       this.moving = true;
     } else this.moving = false;
     // 相互推挤：避免佣兵重叠共享路线

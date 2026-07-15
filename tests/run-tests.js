@@ -229,7 +229,7 @@ check('存档新增图鉴字段（monsterSeen / stats.mKills）', run(`
 check('鸭灵变体（成群/战意）带 requires', run(`
   HORDE_UPGRADE_BY_ID.summon_flock.requires === 'summon' && HORDE_UPGRADE_BY_ID.summon_war.requires === 'summon' &&
   (() => { const m = {}; HORDE_UPGRADE_BY_ID.summon_flock.mod(m); HORDE_UPGRADE_BY_ID.summon_war.mod(m); return m.petRate === 1.3 && m.petPow === 1; })()`));
-check('升级池扩至 80 项（+手雷体系5张）', run(`HORDE_UPGRADES.length === 80 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
+check('升级池扩至 81 项（+招募·汪财）', run(`HORDE_UPGRADES.length === 81 && HORDE_UPGRADE_BY_ID.arty && HORDE_UPGRADE_BY_ID.merc_dmg.mercOnly === true`));
 {
   const fx = fs.readFileSync(base + 'fx.js', 'utf8');
   check('特效引擎：烘焙纹理 + 五类预设齐全',
@@ -420,8 +420,8 @@ check('呼叫支援带武器投资门槛', run(`
 }
 
 // ==================== 第十五轮：招募卡/练习场/空手起家 ====================
-check('招募卡进升级池（8 位英雄）', run(`
-  HORDE_UPGRADES.filter(u => u.special === 'recruit').length === 8 &&
+check('招募卡进升级池（9 位英雄，含汪财）', run(`
+  HORDE_UPGRADES.filter(u => u.special === 'recruit').length === 9 &&
   HORDE_UPGRADES.filter(u => u.special === 'recruit').every(u => MERCS[u.mercId])`));
 check('新调参默认值', run(`tune('weatherPow') === 1.3 && tune('devXp') === 20 && tune('wRate') === 1 && tune('hordeCap') === 80`));
 {
@@ -674,6 +674,30 @@ check('佣兵王重定义（狙击贴图+猎首+弹夹）', run(`MERCS.ace.sprit
   check('经验条下移防重叠', cssSrc.includes('top: 96px'));
   check('全局面板重复项已清（thorns/mercRange/mercDesire）', run(`
     !TUNE_DEFS.some(t => ['thorns', 'mercRange', 'mercDesire'].includes(t.id))`));
+}
+
+// ==================== 第二十五轮：招募门槛/旺财/佣兵寻路/DDA/箱子加权/平衡固化 ====================
+{
+  const gameSrc = fs.readFileSync(base + 'game.js', 'utf8');
+  const entSrc = fs.readFileSync(base + 'entities.js', 'utf8');
+  const hordeSrc = fs.readFileSync(base + 'horde.js', 'utf8');
+  const uiSrc = fs.readFileSync(base + 'ui.js', 'utf8');
+  const cssSrc = fs.readFileSync(base + '../css/style.css', 'utf8');
+  check('满编不出招募卡 + 旺财前置过滤', hordeSrc.includes('满编（5 位）不再出招募卡') && hordeSrc.includes('旺财等需前置英雄在场'));
+  check('旺财招募卡入池', run(`HORDE_UPGRADE_BY_ID.recruit_dog.mercId === 'dog' && MERCS.dog.requiresMerc === 'sniper'`));
+  check('Boss 血条让开经验条（单/双人）', gameSrc.includes("this.mode === 2 ? 158 : 132"));
+  check('DDA 增强（范围1.0/死区/巡航加压）', run(`TUNE_DEFS.find(t => t.id === 'ddaStr').max === 1 && tune('ddaStr') === 0.3`) &&
+    gameSrc.includes('hurtRecently') && gameSrc.includes('drive = 0'));
+  check('丢枪：最后一把保护（双手枪可丢） + 地面名称标签',
+    gameSrc.includes("inst.id === 'pistol' && !p.weapons[1 - p.activeSlot]") && gameSrc.includes('地面武器'));
+  check('佣兵跟随寻路（流场+BFS+侧滑）', entSrc.includes('game.flowDir(this.x, this.y)') &&
+    entSrc.includes('this.mPath = bfsPath') && entSrc.includes('this.mSlide'));
+  check('开箱武器按品质加权', gameSrc.includes('品质加权') && gameSrc.includes('Math.pow(Math.random(), bias)'));
+  check('升级卡 side 入场动画（修闪缩）', cssSrc.includes('pop-in-side'));
+  check('平衡固化：全怪+10% / Boss+15%', run(`
+    monsterVal('shade', 'dmg') === 1.1 && monsterVal('boss_cyclops', 'dmg') === 2.3 &&
+    monsterVal('boss_cyclops', 'hp') === 1.15 && monsterVal('boss_lich', 'hp') === 1.5 && monsterVal('boss_lich', 'dmg') === 3.45`));
+  check('简报金币自适应字号', uiSrc.includes('SAVE.gold >= 1e6 ? 20'));
 }
 
 console.log(fails === 0 ? '\n全部通过 🎉' : `\n${fails} 项失败`);

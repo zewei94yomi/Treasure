@@ -674,7 +674,11 @@ select, .loadout-row select {
 /* 双人升级：卡组吸附到升级玩家的半屏（1P 左 / 2P 右） */
 #levelup-overlay.side-l { justify-content: center; padding-right: 50vw; }   /* 卡组居左半屏正中 */
 #levelup-overlay.side-r { justify-content: center; padding-left: 50vw; }    /* 卡组居右半屏正中 */
-#levelup-overlay.side-l .levelup-box, #levelup-overlay.side-r .levelup-box { transform: scale(.82); }
+#levelup-overlay.side-l .levelup-box, #levelup-overlay.side-r .levelup-box {
+  transform: scale(.82);
+  animation: pop-in-side .18s ease-out;   /* 修闪缩：入场动画结束态与最终缩放一致，不再先大后小 */
+}
+@keyframes pop-in-side { from { transform: scale(.6); opacity: 0; } to { transform: scale(.82); opacity: 1; } }
 
 /* ---------- 键位设置 ---------- */
 .keybind-table { width: 100%; border-collapse: collapse; }

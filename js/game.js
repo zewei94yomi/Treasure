@@ -460,12 +460,19 @@ class Game {
     if (tune('dda') >= 1) {
       H.ddaT = (H.ddaT || 0) - dt;
       if (H.ddaT <= 0) {
-        H.ddaT = 4;
+        H.ddaT = 3;   // 更快感知局势
         const act = this.players.filter(p => p.active);
         const hpFrac = act.length ? act.reduce((s, p) => s + p.hp / p.maxHp, 0) / act.length : 0.5;
+        // 近期受击压力：3 秒窗口内有没有掉血（满血巡航≠没压力的唯一信号）
+        const hurtRecently = act.some(p => p.tookDamage);
+        for (const p of act) p.tookDamage = false;
         const str = tune('ddaStr');
-        const target = Math.max(1 - str, Math.min(1 + str, 1 + (hpFrac - 0.55) * 2 * str));
-        H.dda = (H.dda || 1) + (target - (H.dda || 1)) * 0.5;
+        // 血线偏离 0.6 基准线的量决定目标压力；带 ±0.08 死区防抖；巡航无伤时再加压
+        let drive = (hpFrac - 0.6) * 2.2;
+        if (Math.abs(drive) < 0.08) drive = 0;
+        if (hpFrac > 0.9 && !hurtRecently) drive += 0.35;   // 完全没挑战 → 明显加压
+        const target = Math.max(1 - str, Math.min(1 + str, 1 + drive * str));
+        H.dda = (H.dda || 1) + (target - (H.dda || 1)) * 0.6;
       }
     } else H.dda = 1;
 
@@ -722,7 +729,9 @@ class Game {
     const PP = this.hsP(owner || this.players[0]);
     const pool = HORDE_UPGRADES.filter(u => {
       const cur = u.skill ? PP.skills[u.skill] : (PP.picked && PP.picked[u.id]) || 0;
-      return cur < u.max;
+      if (cur >= u.max) return false;
+      if (u.special === 'recruit' && !this.canRecruitHero(owner || this.players[0])) return false;
+      return true;
     });
     const choices = [];
     const bag = pool.slice();
@@ -829,7 +838,8 @@ class Game {
     if (!p.active) return;
     const inst = p.weapons[p.activeSlot];
     if (!inst) { Sfx.error(); return; }
-    if (this.horde && inst.id === 'pistol') { this.floater(p.x, p.y - 34, '起家手枪不能丢！', '#ff8f8f'); return; }
+    // 防呆：只有当它是你最后一把武器时不许丢（有第二把时，手枪也可以丢）
+    if (this.horde && inst.id === 'pistol' && !p.weapons[1 - p.activeSlot]) { this.floater(p.x, p.y - 34, '最后一把枪不能丢！', '#ff8f8f'); return; }
     if (!this.weaponDrops) this.weaponDrops = [];
     this.weaponDrops.push({ x: p.x + Math.cos(p.facing) * 26, y: p.y + Math.sin(p.facing) * 26, inst, cd: 0.8, needExit: true });
     p.weapons[p.activeSlot] = null;
@@ -2198,8 +2208,10 @@ class Game {
     if (roll < 0.44) {
       const pool = Object.values(WEAPONS).filter(w => w.price && !w.requires);
       const range = { wood: [0, 1300], silver: [420, 3100], gold: [1800, 99999], mystery: [1000, 99999] }[chest.tier] || [0, 99999];
-      const cands = pool.filter(w => w.price >= range[0] && w.price <= range[1]);
-      const def = cands[Math.floor(Math.random() * cands.length)] || WEAPONS.pistol;
+      const cands = pool.filter(w => w.price >= range[0] && w.price <= range[1]).sort((a, b) => a.price - b.price);
+      // 品质加权：金箱偏贵货（幂<1 偏高位），木箱偏便宜货，神秘居中偏上
+      const bias = { wood: 1.7, silver: 1.0, gold: 0.5, mystery: 0.75 }[chest.tier] || 1;
+      const def = cands.length ? cands[Math.min(cands.length - 1, Math.floor(Math.pow(Math.random(), bias) * cands.length))] : WEAPONS.pistol;
       const inst = { uid: -Math.floor(Math.random() * 1e9), id: def.id, dur: def.dur, temp: true };
       let slot = p.weapons[0] ? (p.weapons[1] ? -1 : 1) : 0;
       if (slot === -1) {
@@ -2554,7 +2566,7 @@ class Game {
       const H = this.hordeState;
       // Boss 血条（保留画布绘制：顶部居中，戏剧感）
       if (H.boss && H.boss.hp > 0) {
-        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = 64;
+        const bbw = 420, bbx = VIEW_W/2 - bbw/2, bby = this.mode === 2 ? 158 : 132;   // 让开顶部经验条（双人两行更低）
         ctx.fillStyle = 'rgba(8,9,4,.85)';
         ctx.fillRect(bbx - 2, bby - 2, bbw + 4, 14);
         ctx.fillStyle = '#c2452a';
@@ -2914,10 +2926,23 @@ class Game {
       for (const wd of this.weaponDrops) {
         const [sx, sy] = W2S(wd.x, wd.y);
         if (!onScreen(sx, sy)) continue;
-        ctx.fillStyle = 'rgba(255,217,61,.12)';
-        ctx.beginPath(); ctx.arc(sx, sy + 4, 14 + Math.sin(this.time * 4) * 2, 0, Math.PI * 2); ctx.fill();
-        ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(WEAPONS[wd.inst.id].icon, sx, sy + Math.sin(this.time * 3) * 2 + 4);
+        const wdef = WEAPONS[wd.inst.id];
+        // 地面武器：垫布 + 呼吸光圈 + 大图标 + 名称标签（一眼可见）
+        ctx.fillStyle = 'rgba(0,0,0,.35)';
+        ctx.beginPath(); ctx.ellipse(sx, sy + 8, 17, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = `rgba(255,217,61,${0.5 + Math.sin(this.time * 4) * 0.25})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath(); ctx.arc(sx, sy + 2, 18 + Math.sin(this.time * 4) * 2, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '24px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(wdef.icon, sx, sy + Math.sin(this.time * 3) * 2 + 6);
+        ctx.font = '10px "Share Tech Mono", monospace';
+        ctx.fillStyle = 'rgba(8,9,4,.8)';
+        const nm = wdef.name;
+        ctx.fillRect(sx - nm.length * 5 - 6, sy + 16, nm.length * 10 + 12, 14);
+        ctx.fillStyle = '#ffd93d';
+        ctx.fillText(nm, sx, sy + 27);
       }
     }
     this.drawFx(ctx, cam, w);   // 高级粒子层（爆炸/枪口焰/烟尘）

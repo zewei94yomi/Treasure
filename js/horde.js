@@ -15,6 +15,9 @@ Object.assign(Game.prototype, {
       if (owned(u) >= u.max) return false;
       if (u.requires && !(PP.skills[u.requires] > 0)) return false;   // 变体：先有母技能
       if (u.mercOnly && !this.mercs.some(mc => mc.hp > 0 && mc.owner === owner)) return false;   // 招募流：自己有佣兵才出
+      if (u.special === 'recruit' && !this.canRecruitHero(owner)) return false;                     // 满编（5 位）不再出招募卡
+      if (u.special === 'recruit' && u.mercId && MERCS[u.mercId].requiresMerc &&
+          !this.mercs.some(mc => mc.hp > 0 && mc.def.id === MERCS[u.mercId].requiresMerc && mc.owner === owner)) return false;   // 旺财等需前置英雄在场
       if (u.gate && !u.gate({ skills: PP.skills, mods: PP.mods, picked: PP.picked, level: PP.level })) return false;
       if (u.heroUp && !this.mercs.some(mc => mc.hp > 0 && mc.def.id === u.heroUp && mc.owner === owner)) return false;   // 英雄专属卡：自己的英雄在场才出
       return true;

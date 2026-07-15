@@ -35,7 +35,7 @@ const UI = (() => {
       <div class="brief-row">
         <div class="brief-cell">
           <label>金币 GOLD</label>
-          <div class="brief-gold"><span class="coin"></span><b>${SAVE.gold.toLocaleString()}</b></div>
+          <div class="brief-gold"><span class="coin"></span><b style="font-size:${SAVE.gold >= 1e7 ? 17 : SAVE.gold >= 1e6 ? 20 : SAVE.gold >= 1e5 ? 24 : 27}px">${SAVE.gold.toLocaleString()}</b></div>
         </div>
         <div class="brief-cell">
           <label>藏家头衔 RANK</label>

@@ -652,6 +652,7 @@ const HORDE_UPGRADES = [
   { id:'recruit_marine', name:'招募·星际战士', icon:'🛡️', max:1, special:'recruit', mercId:'marine', desc:'动力甲步枪兵入队：高射速点射不停火' },
   { id:'recruit_flamer', name:'招募·喷火兵', icon:'🔥', max:1, special:'recruit', mercId:'flamerguy', desc:'喷火兵入队：火舌持续横扫身前' },
   { id:'recruit_spirit', name:'招募·鸭灵剑士', icon:'🐥', max:1, special:'recruit', mercId:'spirit', desc:'鸭灵剑士入队：圣剑横扫，越战越勇' },
+  { id:'recruit_dog',    name:'招募·汪财',     icon:'🐕', max:1, special:'recruit', mercId:'dog',    desc:'金币嗅探犬入队：自动叼回经验宝石与金币（需鹰眼在场——它只认鹰眼当主人）' },
   // —— 手雷体系（武器流门槛：投资 2 次武器强化解锁）——
   { id:'grenade', name:'手雷投掷', icon:'💣', max:3, skill:'grenade',
     gate: H => ['dmg','rate','multi','pierce','range','scatter','bspeed','split'].reduce((s2, k) => s2 + ((H.picked || {})[k] || 0), 0) >= 2,
@@ -841,7 +842,7 @@ function heroVal(hid, key) {
 // ============ 怪物详细调参（21 种怪 + Boss 技能参数，SAVE.monsterTuning 持久化） ============
 const _MT_BASE = () => ({
   hp:    { n: '生命倍率',   min: 0.2, max: 3, step: 0.05, def: 1 },
-  dmg:   { n: '伤害倍率',   min: 0.2, max: 3, step: 0.05, def: 1 },
+  dmg:   { n: '伤害倍率',   min: 0.2, max: 4, step: 0.05, def: 1 },
   spd:   { n: '速度倍率',   min: 0.4, max: 3, step: 0.05, def: 1 },
   atkCd: { n: '平A间隔(秒)', min: 0.4, max: 4, step: 0.1,  def: 1.1 },
 });
@@ -1090,6 +1091,13 @@ Object.assign(MONSTER_TUNE.boss_lich.params, {
   minionCd: { n: '召唤仆从冷却(秒)',   min: 2, max: 16, step: 0.5, def: 6.5 },
 });
 
+// 第二十五轮平衡：全体怪物攻击 +10%；Boss 血量 +15%、攻击/技能伤害 +15%（在既有固化值上叠乘）
+for (const [mid, mt] of Object.entries(MONSTER_TUNE)) {
+  const isBoss = !!(MONSTER_TYPES[mid] && MONSTER_TYPES[mid].boss);
+  mt.params.dmg.def = Math.round(mt.params.dmg.def * (isBoss ? 1.15 : 1.1) * 100) / 100;
+  if (isBoss) mt.params.hp.def = Math.round(mt.params.hp.def * 1.15 * 100) / 100;
+}
+
 function monsterVal(mid, key) {
   const m = MONSTER_TUNE[mid];
   if (!m || !m.params[key]) return undefined;
@@ -1125,7 +1133,7 @@ const TUNE_DEFS = [
   { id:'merchantF',name:'商人出现倍率',    min:0,    max:2,    step:0.1,  def:1.2 },
   { id:'bossHp',   name:'Boss 血量',       min:0.5,  max:2.5,  step:0.1,  def:1.1 },
   { id:'dda',      name:'自适应难度(0关1开)', min:0, max:1,    step:1,    def:1, abs:true },
-  { id:'ddaStr',   name:'自适应强度',      min:0,    max:0.3,  step:0.02, def:0.2, abs:true },
+  { id:'ddaStr',   name:'自适应强度(波动幅度)', min:0, max:1,   step:0.05, def:0.3, abs:true },
   { id:'juice',    name:'打击特效(0关1开)', min:0,   max:1,    step:1,    def:1, abs:true },
   { id:'hordeTime',name:'割草时长(分钟)',   min:5,    max:30,   step:1,    def:10, abs:true },
   { id:'weatherLen',name:'天气时长(秒)',     min:20,   max:600,  step:5,    def:75, abs:true },
